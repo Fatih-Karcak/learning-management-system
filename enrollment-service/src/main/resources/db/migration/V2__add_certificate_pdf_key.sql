@@ -1,0 +1,1 @@
+ALTER TABLE certificates ADD COLUMN pdf_storage_key VARCHAR(500);

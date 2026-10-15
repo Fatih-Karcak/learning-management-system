@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/></head>
+<body style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px;">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;">
+    <h1 style="color:#d97706;">Tebrikler! 🎓</h1>
+    <p>Merhaba <span th:text="${studentName}">Öğrenci</span>,</p>
+    <p><strong th:text="${courseTitle}">Kurs Adı</strong> kursunu tamamladın, sertifikan hazır!</p>
+    <p style="color:#64748b;font-size:14px;">Doğrulama kodu: <strong th:text="${verificationCode}">KOD</strong></p>
+</div>
+</body>
+</html>

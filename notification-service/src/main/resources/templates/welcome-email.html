@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/></head>
+<body style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px;">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;">
+    <h1 style="color:#2563eb;">Hoş Geldin, <span th:text="${firstName}">Ad</span>! 🎉</h1>
+    <p>LMS Platformu'na kaydolduğun için teşekkürler. Hesabını aktifleştirmek için:</p>
+    <p style="text-align:center;margin:32px 0;">
+        <a th:href="${verificationUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
+            E-postamı Doğrula
+        </a>
+    </p>
+    <p style="color:#94a3b8;font-size:12px;">Bu e-postayı sen istemediysen görmezden gelebilirsin.</p>
+</div>
+</body>
+</html>

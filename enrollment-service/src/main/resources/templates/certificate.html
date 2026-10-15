@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            background: #fff;
+            margin: 0;
+            padding: 40px;
+        }
+        .certificate {
+            border: 8px solid #2563eb;
+            padding: 60px;
+            text-align: center;
+            min-height: 600px;
+        }
+        .title {
+            font-size: 42px;
+            color: #1e3a8a;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #64748b;
+            margin-bottom: 40px;
+        }
+        .student-name {
+            font-size: 36px;
+            color: #0f172a;
+            font-weight: bold;
+            border-bottom: 2px solid #2563eb;
+            display: inline-block;
+            padding-bottom: 8px;
+            margin: 20px 0;
+        }
+        .course-title {
+            font-size: 24px;
+            color: #1d4ed8;
+            margin: 20px 0;
+            font-style: italic;
+        }
+        .meta {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 40px;
+        }
+        .verification {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+<div class="certificate">
+    <div class="title">🎓 TAMAMLAMA SERTİFİKASI</div>
+    <div class="subtitle">Bu belge, aşağıdaki kişinin kursu başarıyla tamamladığını onaylar.</div>
+
+    <p style="font-size:16px; color:#475569;">Bu sertifika,</p>
+    <div class="student-name" th:text="${studentName}">Öğrenci Adı</div>
+
+    <p style="font-size:16px; color:#475569;">adlı kursiyerin</p>
+    <div class="course-title" th:text="${courseTitle}">Kurs Başlığı</div>
+    <p style="font-size:16px; color:#475569;">kursunu başarıyla tamamladığını belgelemektedir.</p>
+
+    <div class="meta">
+        <p>Eğitmen: <strong th:text="${instructorName}">Eğitmen Adı</strong></p>
+        <p>Tamamlanma Tarihi: <strong th:text="${issuedAt}">Tarih</strong></p>
+    </div>
+
+    <div class="verification">
+        Doğrulama Kodu: <strong th:text="${verificationCode}">KOD</strong>
+    </div>
+</div>
+</body>
+</html>

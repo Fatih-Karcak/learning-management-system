@@ -1,0 +1,16 @@
+# Gizli ortam değişkenleri
+.env
+.env.*
+!.env.example
+
+# Yerel ve gizli Spring yapılandırmaları
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+**/application-secret.yml
+**/application-secret.yaml
+**/application-secret.properties
+
+# Gizli anahtar ve sertifika dosyaları
+*.key
+*.pem
