@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.lms.courseservice.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -28,11 +30,10 @@ public class CourseController {
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CourseResponse>> createCourse(
             @Valid @RequestBody CreateCourseRequest request,
-            @RequestHeader("X-User-Id") UUID instructorId,
-            @RequestHeader("X-User-Name") String instructorName) {
+            @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        courseService.createCourse(request, instructorId, instructorName),
+                        courseService.createCourse(request, user.id(), user.displayName()),
                         "Kurs oluşturuldu"));
     }
 
@@ -41,24 +42,25 @@ public class CourseController {
     public ResponseEntity<ApiResponse<CourseResponse>> updateCourse(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCourseRequest request,
-            @RequestHeader("X-User-Id") UUID instructorId) {
+            @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.ok(ApiResponse.success(
-                courseService.updateCourse(id, request, instructorId), "Kurs güncellendi"));
+                courseService.updateCourse(id, request, user.id()), "Kurs güncellendi"));
     }
 
     @PostMapping("/{id}/publish")
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CourseResponse>> publishCourse(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID instructorId) {
+            @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.ok(ApiResponse.success(
-                courseService.publishCourse(id, instructorId), "Kurs yayınlandı"));
+                courseService.publishCourse(id, user.id()), "Kurs yayınlandı"));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<CourseResponse>> getCourse(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<CourseResponse>> getCourse(@PathVariable UUID id,
+            @AuthenticationPrincipal AuthenticatedUser viewer) {
         return ResponseEntity.ok(ApiResponse.success(
-                courseService.getCourseById(id), "Başarılı"));
+                courseService.getCourseById(id, viewer), "Başarılı"));
     }
 
     @GetMapping

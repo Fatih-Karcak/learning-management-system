@@ -7,14 +7,15 @@ import java.util.*;
 
 public class HeaderOverrideRequestWrapper extends HttpServletRequestWrapper {
 
-    private final Map<String, String> overrides = new HashMap<>();
-    private final Set<String> removed = new HashSet<>();
+    private final Map<String, String> overrides = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final Set<String> removed = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
     public HeaderOverrideRequestWrapper(HttpServletRequest request) {
         super(request);
     }
 
     public void setHeader(String name, String value) {
+        Objects.requireNonNull(value, "Header value must not be null");
         overrides.put(name, value);
         removed.remove(name);
     }
@@ -44,8 +45,9 @@ public class HeaderOverrideRequestWrapper extends HttpServletRequestWrapper {
 
     @Override
     public Enumeration<String> getHeaderNames() {
-        Set<String> names = new LinkedHashSet<>(Collections.list(super.getHeaderNames()));
-        names.removeAll(removed);
+        Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(Collections.list(super.getHeaderNames()));
+        names.removeIf(removed::contains);
         names.addAll(overrides.keySet());
         return Collections.enumeration(names);
     }

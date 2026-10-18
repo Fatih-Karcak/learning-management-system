@@ -137,12 +137,15 @@ public class MediaService {
             throw new UnauthorizedMediaAccessException("Bu medyayı silme yetkiniz yok");
         }
 
-        storageService.delete(rawBucket, asset.getRawStorageKey());
+        storageService.delete(asset.getType() == AssetType.IMAGE ? imagesBucket : rawBucket,
+                asset.getRawStorageKey());
         if (asset.getThumbnailKey() != null) {
             storageService.delete(imagesBucket, asset.getThumbnailKey());
         }
-        // Not: HLS segmentleri (.ts) tek tek silinmiyor — demo kapsamı.
-        // Gerçek projede prefix bazlı toplu silme (ListObjects + RemoveObjects) eklenmeli.
+        if (asset.getHlsMasterKey() != null) {
+            String prefix = asset.getHlsMasterKey().substring(0, asset.getHlsMasterKey().lastIndexOf('/') + 1);
+            storageService.deletePrefix(hlsBucket, prefix);
+        }
 
         mediaAssetRepository.delete(asset);
     }

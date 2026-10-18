@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.lms.courseservice.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -27,13 +29,12 @@ public class ReviewController {
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
             @PathVariable UUID courseId,
             @Valid @RequestBody CreateReviewRequest request,
-            @RequestHeader("X-User-Id") UUID studentId,
-            @RequestHeader("X-User-Name") String studentName,
+            @AuthenticationPrincipal AuthenticatedUser user,
             @RequestHeader(value = "X-User-Avatar", required = false) String avatarUrl) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        reviewService.createReview(courseId, request, studentId,
-                                studentName, avatarUrl),
+                        reviewService.createReview(courseId, request, user.id(),
+                                user.displayName(), avatarUrl),
                         "Yorum eklendi"));
     }
 
@@ -47,8 +48,8 @@ public class ReviewController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID studentId) {
-        reviewService.deleteReview(id, studentId);
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        reviewService.deleteReview(id, user.id());
         return ResponseEntity.ok(ApiResponse.success(null, "Yorum silindi"));
     }
 }

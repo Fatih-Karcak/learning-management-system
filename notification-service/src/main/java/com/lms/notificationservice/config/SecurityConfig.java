@@ -28,4 +28,8 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+    @Bean
+    public org.springframework.security.core.userdetails.UserDetailsService disabledPasswordLogin() {
+        return username -> { throw new org.springframework.security.core.userdetails.UsernameNotFoundException("Password authentication disabled"); };
+    }
 }

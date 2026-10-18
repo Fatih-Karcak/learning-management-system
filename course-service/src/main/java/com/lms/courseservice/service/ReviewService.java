@@ -25,11 +25,13 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final CourseRepository courseRepository;
     private final ReviewMapper reviewMapper;
+    private final CourseAccessPolicy accessPolicy;
 
     @Transactional
     public ReviewResponse createReview(UUID courseId, CreateReviewRequest request,
                                        UUID studentId, String studentName,
                                        String studentAvatarUrl) {
+        accessPolicy.requireEnrolled(courseId, studentId);
         if (reviewRepository.existsByCourseIdAndStudentId(courseId, studentId)) {
             throw new IllegalStateException("Bu kursa zaten yorum yaptınız");
         }

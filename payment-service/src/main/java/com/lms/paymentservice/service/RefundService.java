@@ -31,7 +31,7 @@ public class RefundService {
 
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
     private final PaymentMapper paymentMapper;
 
     // 30 günlük iade politikası
@@ -39,7 +39,7 @@ public class RefundService {
 
     @Transactional
     public RefundResponse createRefund(RefundRequest request, UUID studentId) {
-        Payment payment = paymentRepository.findById(request.getPaymentId())
+        Payment payment = paymentRepository.findByIdForUpdate(request.getPaymentId())
                 .orElseThrow(() -> new PaymentNotFoundException(
                         "Ödeme bulunamadı: " + request.getPaymentId()));
 
@@ -64,7 +64,7 @@ public class RefundService {
 
         // Stripe'tan iade işle
         com.stripe.model.Refund stripeRefund = processStripeRefund(
-                payment.getStripeChargeId(), request.getReason());
+                payment.getId(), payment.getStripeChargeId(), request.getReason());
 
         // Refund kaydı oluştur
         Refund refund = Refund.builder()
@@ -83,7 +83,7 @@ public class RefundService {
         paymentRepository.save(payment);
 
         // Enrollment Service'i bilgilendir
-        kafkaTemplate.send("payment-refunded",
+        outboxService.enqueue("payment-refunded",
                 payment.getId().toString(),
                 new RefundCompletedEvent(
                         payment.getId(),
@@ -99,7 +99,7 @@ public class RefundService {
     }
 
     private com.stripe.model.Refund processStripeRefund(
-            String chargeId, String reason) {
+            UUID paymentId, String chargeId, String reason) {
         try {
             RefundCreateParams params = RefundCreateParams.builder()
                     .setCharge(chargeId)
@@ -107,7 +107,8 @@ public class RefundService {
                     .putMetadata("reason", reason)
                     .build();
 
-            return com.stripe.model.Refund.create(params);
+            return com.stripe.model.Refund.create(params, com.stripe.net.RequestOptions.builder()
+                    .setIdempotencyKey("refund-" + paymentId).build());
 
         } catch (StripeException e) {
             log.error("Stripe iade hatası: {}", e.getMessage());

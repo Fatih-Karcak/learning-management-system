@@ -1,6 +1,8 @@
 package com.lms.userservice.security;
 
 import com.lms.userservice.domain.entity.User;
+import com.lms.userservice.domain.enums.UserStatus;
+import org.springframework.security.authentication.DisabledException;
 import com.lms.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,6 +22,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
         User user = userRepository.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new UsernameNotFoundException("Kullanıcı bulunamadı: " + userId));
+
+        if (user.getStatus() == UserStatus.INACTIVE || user.getStatus() == UserStatus.BANNED) {
+            throw new DisabledException("Hesap aktif değil");
+        }
 
         return new org.springframework.security.core.userdetails.User(
                 user.getId().toString(),

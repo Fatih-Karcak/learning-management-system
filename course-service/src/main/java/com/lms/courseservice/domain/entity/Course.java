@@ -66,24 +66,31 @@ public class Course {
     @CollectionTable(name = "course_requirements",
             joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "requirement")
+    @Builder.Default
     private List<String> requirements = new ArrayList<>();
 
     @ElementCollection
     @CollectionTable(name = "course_outcomes",
             joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "outcome")
+    @Builder.Default
     private List<String> outcomes = new ArrayList<>();
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
+    @Builder.Default
     private List<Section> sections = new ArrayList<>();
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Review> reviews = new ArrayList<>();
 
     // Denormalize — Enrollment Service'ten güncellenir
+    @Builder.Default
     private Integer totalEnrollments = 0;
+    @Builder.Default
     private Double averageRating = 0.0;
+    @Builder.Default
     private Integer totalReviews = 0;
 
     @CreatedDate

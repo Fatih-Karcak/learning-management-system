@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -25,10 +26,10 @@ public class NotificationController {
 
     @GetMapping("/my")
     public ResponseEntity<ApiResponse<Page<NotificationLogResponse>>> getMyNotifications(
-            @RequestHeader("X-User-Id") UUID userId,
+            Authentication authentication,
             Pageable pageable) {
         Page<NotificationLogResponse> result = notificationService
-                .getMyNotifications(userId, pageable)
+                .getMyNotifications(UUID.fromString(authentication.getName()), pageable)
                 .map(mapper::toResponse);
         return ResponseEntity.ok(ApiResponse.success(result, "Başarılı"));
     }

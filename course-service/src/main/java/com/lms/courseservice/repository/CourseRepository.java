@@ -15,6 +15,14 @@ import java.util.UUID;
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
 
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "INSERT INTO processed_course_enrollments(enrollment_id, course_id) VALUES (:enrollmentId, :courseId) ON CONFLICT DO NOTHING", nativeQuery = true)
+    int claimEnrollment(UUID enrollmentId, UUID courseId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Course c SET c.totalEnrollments = COALESCE(c.totalEnrollments, 0) + 1 WHERE c.id = :courseId")
+    int incrementEnrollmentCount(UUID courseId);
+
     Page<Course> findByStatus(CourseStatus status, Pageable pageable);
 
     Page<Course> findByInstructorIdAndStatus(

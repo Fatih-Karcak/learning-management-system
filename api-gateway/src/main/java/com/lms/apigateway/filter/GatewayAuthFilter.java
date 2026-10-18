@@ -1,6 +1,8 @@
 package com.lms.apigateway.filter;
 
 import com.lms.apigateway.security.JwtTokenProvider;
+import com.lms.apigateway.security.UserAccountClient;
+import org.springframework.web.client.RestClientException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +33,7 @@ import java.util.UUID;
 public class GatewayAuthFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final UserAccountClient userAccountClient;
 
     private static final List<String> PUBLIC_PREFIXES = List.of(
             "/api/v1/auth/",
@@ -38,6 +41,7 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
             "/api/v1/sections",
             "/api/v1/lessons",
             "/api/v1/reviews",
+            "/api/v1/enrollments/certificates/verify/",
             "/api/v1/webhooks/stripe",
             "/actuator/"
     );
@@ -54,19 +58,35 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean isPublic = PUBLIC_PREFIXES.stream().anyMatch(path::startsWith);
+        boolean isPublic = PUBLIC_PREFIXES.stream().anyMatch(prefix ->
+                path.equals(prefix) || path.startsWith(prefix.endsWith("/") ? prefix : prefix + "/"));
+        if (!"GET".equals(request.getMethod()) && !path.startsWith("/api/v1/auth/")
+                && !path.equals("/api/v1/webhooks/stripe")) {
+            isPublic = false;
+        }
 
         String token = extractToken(request);
         UUID userId = null;
         String role = null;
-        String name = null;
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             userId = jwtTokenProvider.getUserIdFromToken(token);
             role = jwtTokenProvider.getRoleFromToken(token);
-            name = jwtTokenProvider.getNameFromToken(token);
+            try {
+                if (!userAccountClient.isActive(userId, role)) {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
+            } catch (RestClientException ex) {
+                response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                return;
+            }
         } else if (!isPublic) {
-
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        } else if (StringUtils.hasText(token)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
         HeaderOverrideRequestWrapper wrapped = new HeaderOverrideRequestWrapper(request);
@@ -77,7 +97,6 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         if (userId != null) {
             wrapped.setHeader("X-User-Id", userId.toString());
             wrapped.setHeader("X-User-Role", role);
-            if (name != null) wrapped.setHeader("X-User-Name", name);   // ← eklendi
         }
         filterChain.doFilter(wrapped, response);
     }

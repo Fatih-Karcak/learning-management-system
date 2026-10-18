@@ -38,7 +38,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final CourseClient courseClient;
     private final FraudDetectionService fraudDetectionService;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxService outboxService;
     private final PaymentMapper paymentMapper;
 
     @Transactional
@@ -54,8 +54,24 @@ public class PaymentService {
         // Kurs fiyatını mutlaka önce almalıyız çünkü sonraki fraud
         // kontrolü buna bağımlı. Bu adımı paralelleştirmek anlamsız
         // ve yanlıştı (önceki halde placeholder 999 kullanılıyordu).
-        CoursePriceResponse course = courseClient.getCoursePrice(request.getCourseId());
+        com.lms.paymentservice.dto.response.CoursePriceResult result;
+        try {
+            result = courseClient.getCoursePrice(request.getCourseId());
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) throw new PaymentNotFoundException("Kurs bulunamadı");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Kurs servisine ulaşılamadı", ex);
+        }
+        if (result == null || !result.success() || result.data() == null
+                || !request.getCourseId().equals(result.data().id())
+                || !"PUBLISHED".equals(result.data().status()) || result.data().price() == null) {
+            throw new PaymentFailedException("Satın alınabilir kurs bilgisi bulunamadı");
+        }
+        CoursePriceResponse course = result.data();
         BigDecimal amount = course.effectivePrice();
+        if (amount.signum() < 0 || amount.compareTo(course.price()) > 0) {
+            throw new PaymentFailedException("Kurs fiyatı geçersiz");
+        }
 
         // ── ADIM 2: GERÇEK PARALEL İŞ ──
         // Şimdi elimizde gerçek tutar var. Tutar bazlı kural kontrolü
@@ -124,10 +140,15 @@ public class PaymentService {
     public void handlePaymentSucceeded(String stripeIntentId, String chargeId,
                                        String receiptUrl) {
         Payment payment = paymentRepository
-                .findByStripePaymentIntentId(stripeIntentId)
+                .findByStripePaymentIntentIdForUpdate(stripeIntentId)
                 .orElseThrow(() -> new PaymentNotFoundException(
                         "Ödeme bulunamadı: " + stripeIntentId));
 
+        if (payment.getStatus() != PaymentStatus.PENDING
+                && payment.getStatus() != PaymentStatus.PROCESSING
+                && payment.getStatus() != PaymentStatus.FAILED) {
+            return;
+        }
         payment.setStatus(PaymentStatus.COMPLETED);
         payment.setStripeChargeId(chargeId);
         payment.setReceiptUrl(receiptUrl);
@@ -135,7 +156,7 @@ public class PaymentService {
         paymentRepository.save(payment);
 
         // Enrollment Service e bildir
-        kafkaTemplate.send("payment-completed",
+        outboxService.enqueue("payment-completed",
                 payment.getId().toString(),
                 new PaymentCompletedEvent(
                         payment.getId(),
@@ -148,7 +169,7 @@ public class PaymentService {
                 ));
 
         // Notification Service e bildir
-        kafkaTemplate.send("payment-receipt",
+        outboxService.enqueue("payment-receipt",
                 payment.getId().toString(),
                 new PaymentCompletedEvent(
                         payment.getId(),
@@ -166,8 +187,10 @@ public class PaymentService {
 
     @Transactional
     public void handlePaymentFailed(String stripeIntentId, String failureReason) {
-        paymentRepository.findByStripePaymentIntentId(stripeIntentId)
+        paymentRepository.findByStripePaymentIntentIdForUpdate(stripeIntentId)
                 .ifPresent(payment -> {
+                    if (payment.getStatus() != PaymentStatus.PENDING
+                            && payment.getStatus() != PaymentStatus.PROCESSING) return;
                     payment.setStatus(PaymentStatus.FAILED);
                     payment.setFailureReason(failureReason);
                     paymentRepository.save(payment);

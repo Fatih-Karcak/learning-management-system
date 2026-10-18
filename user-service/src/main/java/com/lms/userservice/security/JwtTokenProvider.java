@@ -64,8 +64,14 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            parseToken(token);
-            return true;
+            Claims claims = parseToken(token);
+            String role = claims.get("role", String.class);
+            if (claims.getSubject() == null || role == null) return false;
+            UUID.fromString(claims.getSubject());
+            return "access".equals(claims.get("type", String.class))
+                    && role != null
+                    && java.util.Set.of("STUDENT", "INSTRUCTOR", "ADMIN").contains(role)
+                    && claims.getExpiration() != null && claims.getIssuedAt() != null;
         } catch (JwtException | IllegalArgumentException e) {
             log.error("Geçersiz JWT token: {}", e.getMessage());
             return false;
