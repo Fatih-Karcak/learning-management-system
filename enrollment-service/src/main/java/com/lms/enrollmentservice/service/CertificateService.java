@@ -2,15 +2,17 @@ package com.lms.enrollmentservice.service;
 
 import com.lms.enrollmentservice.client.UserClient;
 import com.lms.enrollmentservice.domain.entity.Certificate;
-import com.lms.enrollmentservice.domain.entity.Enrollment;
+import com.lms.enrollmentservice.domain.enums.EnrollmentStatus;
 import com.lms.enrollmentservice.dto.response.CertificateResponse;
 import com.lms.enrollmentservice.dto.response.UserInfoResult;
 import com.lms.enrollmentservice.exception.EnrollmentNotFoundException;
 import com.lms.enrollmentservice.repository.CertificateRepository;
+import com.lms.enrollmentservice.repository.EnrollmentRepository;
+
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.TemplateEngine;
@@ -20,124 +22,269 @@ import java.io.ByteArrayOutputStream;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CertificateService {
 
     private final CertificateRepository certificateRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final TemplateEngine templateEngine;
+    private final EnrollmentRepository enrollmentRepository;
     private final UserClient userClient;
     private final StorageService storageService;
+    private final TemplateEngine templateEngine;
+    private final OutboxService outboxService;
 
     @Transactional
-    public Certificate generateCertificate(Enrollment enrollment) {
-        if (certificateRepository.existsByEnrollmentId(enrollment.getId())) {
-            return certificateRepository.findByEnrollmentId(enrollment.getId()).get();
+    public void issueForEnrollment(UUID enrollmentId) {
+
+        var enrollment = enrollmentRepository
+                .findByIdForUpdate(enrollmentId)
+                .orElseThrow(() ->
+                        new EnrollmentNotFoundException(
+                                "Kayıt bulunamadı"
+                        )
+                );
+
+        if (enrollment.getStatus()
+                != EnrollmentStatus.COMPLETED) {
+            return;
         }
 
-        String verificationCode = UUID.randomUUID().toString().replace("-", "").toUpperCase();
-        String studentName = fetchStudentName(enrollment.getStudentId());
+        var existing = certificateRepository
+                .findByEnrollmentId(enrollmentId);
 
-        Certificate certificate = Certificate.builder()
-                .verificationCode(verificationCode)
-                .enrollment(enrollment)
-                .studentId(enrollment.getStudentId())
-                .studentName(studentName)
-                .courseId(enrollment.getCourseId())
-                .courseTitle(enrollment.getCourseTitle())
-                .instructorName(enrollment.getInstructorName())
-                .build();
-
-        certificate = certificateRepository.save(certificate);
-
-        byte[] pdfBytes = generatePdf(certificate);
-        if (pdfBytes.length > 0) {
-            String pdfKey = "certificates/" + certificate.getId() + ".pdf";
-            storageService.upload(pdfKey, pdfBytes, "application/pdf");
-            certificate.setPdfStorageKey(pdfKey);
-            certificate = certificateRepository.save(certificate);
-        } else {
-            log.warn("PDF oluşturulamadı, pdfStorageKey boş kalacak: {}", certificate.getId());
+        if (existing.isPresent()
+                && existing.get().getPdfStorageKey() != null) {
+            return;
         }
 
-        kafkaTemplate.send("certificate-issued", certificate.getId().toString(),
-                new CertificateIssuedEvent(certificate.getId(), enrollment.getStudentId(),
-                        enrollment.getCourseTitle(), verificationCode));
+        Certificate certificate = existing.orElseGet(() ->
+                Certificate.builder()
+                        .verificationCode(
+                                UUID.randomUUID()
+                                        .toString()
+                                        .replace("-", "")
+                                        .toUpperCase()
+                        )
+                        .enrollment(enrollment)
+                        .studentId(enrollment.getStudentId())
+                        .studentName(
+                                fetchStudentName(
+                                        enrollment.getStudentId()
+                                )
+                        )
+                        .courseId(enrollment.getCourseId())
+                        .courseTitle(enrollment.getCourseTitle())
+                        .instructorName(
+                                enrollment.getInstructorName()
+                        )
+                        .build()
+        );
 
-        log.info("Sertifika oluşturuldu: {} - öğrenci: {}", certificate.getId(), studentName);
-        return certificate;
-    }
+        certificate = certificateRepository
+                .saveAndFlush(certificate);
 
-    public CertificateResponse getCertificate(UUID enrollmentId, UUID studentId) {
-        Certificate cert = certificateRepository.findByEnrollmentId(enrollmentId)
-                .orElseThrow(() -> new EnrollmentNotFoundException("Sertifika henüz oluşturulmamış"));
+        byte[] pdf = generatePdf(certificate);
 
-        if (!cert.getStudentId().equals(studentId)) {
-            throw new EnrollmentNotFoundException("Bu sertifikaya erişim yetkiniz yok");
+        if (pdf.length == 0) {
+            throw new IllegalStateException(
+                    "Boş sertifika üretildi"
+            );
         }
-        return toCertificateResponse(cert);
+
+        String storageKey =
+                "certificates/" + certificate.getId() + ".pdf";
+
+        storageService.upload(
+                storageKey,
+                pdf,
+                "application/pdf"
+        );
+
+        certificate.setPdfStorageKey(storageKey);
+        certificateRepository.save(certificate);
+
+        outboxService.enqueue(
+                "certificate-issued",
+                certificate.getId().toString(),
+                new CertificateIssuedEvent(
+                        certificate.getId(),
+                        enrollment.getStudentId(),
+                        enrollment.getCourseTitle(),
+                        certificate.getVerificationCode()
+                )
+        );
     }
 
-    public CertificateResponse verifyCertificate(String verificationCode) {
-        Certificate cert = certificateRepository.findByVerificationCode(verificationCode)
-                .orElseThrow(() -> new EnrollmentNotFoundException("Geçersiz doğrulama kodu"));
-        return toCertificateResponse(cert);
-    }
+    @Transactional(readOnly = true)
+    public CertificateResponse getCertificate(
+            UUID enrollmentId,
+            UUID studentId) {
 
-    private String fetchStudentName(UUID studentId) {
-        try {
-            UserInfoResult result = userClient.getUserById(studentId);
-            if (result != null && result.data() != null) {
-                return result.data().firstName() + " " + result.data().lastName();
-            }
-        } catch (Exception e) {
-            log.warn("Öğrenci adı alınamadı: {} - {}", studentId, e.getMessage());
+        Certificate certificate = certificateRepository
+                .findByEnrollmentId(enrollmentId)
+                .orElseThrow(() ->
+                        new EnrollmentNotFoundException(
+                                "Sertifika bulunamadı"
+                        )
+                );
+
+        if (!certificate.getStudentId().equals(studentId)) {
+            throw new EnrollmentNotFoundException(
+                    "Sertifika bulunamadı"
+            );
         }
-        return "Öğrenci";
-    }
 
-    private byte[] generatePdf(Certificate certificate) {
-        try {
-            Context ctx = new Context();
-            ctx.setVariable("studentName", certificate.getStudentName());
-            ctx.setVariable("courseTitle", certificate.getCourseTitle());
-            ctx.setVariable("instructorName", certificate.getInstructorName());
-            ctx.setVariable("issuedAt", certificate.getIssuedAt() != null
-                    ? certificate.getIssuedAt().format(DateTimeFormatter.ofPattern("dd MMMM yyyy")) : "");
-            ctx.setVariable("verificationCode", certificate.getVerificationCode());
+        if (certificate.getEnrollment().getStatus()
+                != EnrollmentStatus.COMPLETED) {
 
-            String html = templateEngine.process("certificate", ctx);
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            PdfRendererBuilder builder = new PdfRendererBuilder();
-            builder.withHtmlContent(html, null);
-            builder.toStream(baos);
-            builder.run();
-            return baos.toByteArray();
-        } catch (Exception e) {
-            log.error("PDF oluşturma hatası: {}", e.getMessage());
-            return new byte[0];
+            throw new EnrollmentNotFoundException(
+                    "Sertifika geçerli değil"
+            );
         }
+
+        return toResponse(certificate, true);
     }
 
-    private CertificateResponse toCertificateResponse(Certificate cert) {
-        String pdfUrl = cert.getPdfStorageKey() != null
-                ? storageService.presignedGetUrl(cert.getPdfStorageKey(), 3600)
-                : null;
+    @Transactional(readOnly = true)
+    public CertificateResponse verifyCertificate(
+            String code) {
+
+        Certificate certificate = certificateRepository
+                .findByVerificationCode(code)
+                .orElseThrow(() ->
+                        new EnrollmentNotFoundException(
+                                "Geçersiz doğrulama kodu"
+                        )
+                );
+
+        if (certificate.getEnrollment().getStatus()
+                != EnrollmentStatus.COMPLETED) {
+
+            throw new EnrollmentNotFoundException(
+                    "Sertifika geçerli değil"
+            );
+        }
+
+        // Public endpoint PDF indirme bağlantısı döndürmez.
+        return toResponse(certificate, false);
+    }
+
+    private CertificateResponse toResponse(
+            Certificate certificate,
+            boolean includePdfUrl) {
+
+        String pdfUrl = null;
+
+        if (includePdfUrl
+                && certificate.getPdfStorageKey() != null) {
+
+            pdfUrl = storageService.presignedGetUrl(
+                    certificate.getPdfStorageKey(),
+                    900
+            );
+        }
 
         return CertificateResponse.builder()
-                .id(cert.getId())
-                .verificationCode(cert.getVerificationCode())
-                .studentName(cert.getStudentName())
-                .courseTitle(cert.getCourseTitle())
-                .instructorName(cert.getInstructorName())
-                .issuedAt(cert.getIssuedAt())
+                .id(certificate.getId())
+                .verificationCode(
+                        certificate.getVerificationCode()
+                )
+                .studentName(certificate.getStudentName())
+                .courseTitle(certificate.getCourseTitle())
+                .instructorName(
+                        certificate.getInstructorName()
+                )
+                .issuedAt(certificate.getIssuedAt())
                 .pdfUrl(pdfUrl)
                 .build();
     }
 
+    private String fetchStudentName(UUID studentId) {
+
+        UserInfoResult result =
+                userClient.getUserById(studentId);
+
+        if (result == null
+                || !result.success()
+                || result.data() == null
+                || result.data().firstName() == null
+                || result.data().lastName() == null) {
+
+            throw new IllegalStateException(
+                    "Öğrenci adı alınamadı"
+            );
+        }
+
+        return result.data().firstName()
+                + " "
+                + result.data().lastName();
+    }
+
+    private byte[] generatePdf(Certificate certificate) {
+
+        try {
+            Context context = new Context();
+
+            context.setVariable(
+                    "studentName",
+                    certificate.getStudentName()
+            );
+
+            context.setVariable(
+                    "courseTitle",
+                    certificate.getCourseTitle()
+            );
+
+            context.setVariable(
+                    "instructorName",
+                    certificate.getInstructorName()
+            );
+
+            context.setVariable(
+                    "verificationCode",
+                    certificate.getVerificationCode()
+            );
+
+            context.setVariable(
+                    "issuedAt",
+                    certificate.getIssuedAt() == null
+                            ? ""
+                            : certificate.getIssuedAt().format(
+                            DateTimeFormatter.ofPattern(
+                                    "dd MMMM yyyy"
+                            )
+                    )
+            );
+
+            String html = templateEngine.process(
+                    "certificate",
+                    context
+            );
+
+            ByteArrayOutputStream output =
+                    new ByteArrayOutputStream();
+
+            PdfRendererBuilder builder =
+                    new PdfRendererBuilder();
+
+            builder.withHtmlContent(html, null);
+            builder.toStream(output);
+            builder.run();
+
+            return output.toByteArray();
+
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Sertifika PDF oluşturulamadı",
+                    e
+            );
+        }
+    }
+
     public record CertificateIssuedEvent(
-            UUID certificateId, UUID studentId, String courseTitle, String verificationCode) {}
+            UUID certificateId,
+            UUID studentId,
+            String courseTitle,
+            String verificationCode
+    ) {}
 }

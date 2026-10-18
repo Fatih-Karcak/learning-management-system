@@ -1,13 +1,13 @@
 package com.lms.enrollmentservice.kafka;
 
 import com.lms.enrollmentservice.event.PaymentCompletedEvent;
+import com.lms.enrollmentservice.event.RefundCompletedEvent;
 import com.lms.enrollmentservice.service.EnrollmentService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -23,17 +23,29 @@ public class EnrollmentEventConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handlePaymentCompleted(
-            @Payload PaymentCompletedEvent event,
-            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+            PaymentCompletedEvent event) {
 
-        log.info("Ödeme tamamlandı eventi alındı - Topic: {}, StudentId: {}, CourseId: {}",
-                topic, event.studentId(), event.courseId());
+        log.info(
+                "Payment event alındı: {}",
+                event.paymentId()
+        );
 
-        try {
-            enrollmentService.createEnrollmentFromPayment(event);
-        } catch (Exception e) {
-            log.error("Enrollment oluşturma hatası: {}", e.getMessage(), e);
-            // Dead Letter Queue'ya gönderilecek (Aşama 4'te ekleyeceğiz)
-        }
+        enrollmentService.createEnrollmentFromPayment(event);
+    }
+
+    @KafkaListener(
+            topics = "payment-refunded",
+            groupId = "enrollment-service",
+            containerFactory = "refundKafkaListenerContainerFactory"
+    )
+    public void handleRefundCompleted(
+            RefundCompletedEvent event) {
+
+        log.info(
+                "Refund event alındı: {}",
+                event.paymentId()
+        );
+
+        enrollmentService.handleRefund(event);
     }
 }

@@ -1,22 +1,29 @@
 package com.lms.enrollmentservice.config;
 
 import com.lms.enrollmentservice.event.PaymentCompletedEvent;
+import com.lms.enrollmentservice.event.RefundCompletedEvent;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.*;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.*;
+import org.springframework.kafka.support.serializer.*;
 
-import org.springframework.kafka.support.serializer.JacksonJsonDeserializer;
-import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
-import java.util.Map;
-@EnableKafka
+import org.springframework.util.backoff.FixedBackOff;
+
+import java.util.*;
+
 @Configuration
+@EnableKafka
 public class KafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers}")
@@ -24,37 +31,162 @@ public class KafkaConfig {
 
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
-        return new DefaultKafkaProducerFactory<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class
-        ));
+
+        Map<String, Object> config = new HashMap<>();
+
+        config.put(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                bootstrapServers
+        );
+
+        config.put(ProducerConfig.ACKS_CONFIG, "all");
+        config.put(
+                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                true
+        );
+
+        config.put(
+                JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS,
+                false
+        );
+
+        // Normal olaylar JSON olarak, deserialize edilemeyen
+        // Kafka payload'ları ham byte[] olarak DLT'ye yazılabilir.
+        Map<Class<?>, Serializer<?>> serializers =
+                new LinkedHashMap<>();
+
+        serializers.put(
+                byte[].class,
+                new ByteArraySerializer()
+        );
+
+        serializers.put(
+                Object.class,
+                new JacksonJsonSerializer<>()
+        );
+
+        var valueSerializer =
+                new DelegatingByTypeSerializer(
+                        serializers,
+                        true
+                );
+
+        return new DefaultKafkaProducerFactory<>(
+                config,
+                new StringSerializer(),
+                valueSerializer
+        );
     }
 
     @Bean
-    public KafkaTemplate<String, Object> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+    public KafkaTemplate<String, Object> kafkaTemplate(
+            ProducerFactory<String, Object> producerFactory) {
+
+        return new KafkaTemplate<>(producerFactory);
+    }
+
+    private <T> ConsumerFactory<String, T> consumerFactory(
+            Class<T> type) {
+
+        Map<String, Object> config = new HashMap<>();
+
+        config.put(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                bootstrapServers
+        );
+
+        config.put(
+                ConsumerConfig.GROUP_ID_CONFIG,
+                "enrollment-service"
+        );
+
+        config.put(
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                false
+        );
+
+        config.put(
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest"
+        );
+
+        var json = new JacksonJsonDeserializer<>(
+                type,
+                false
+        );
+
+        var errorHandling =
+                new ErrorHandlingDeserializer<T>(json);
+
+        return new DefaultKafkaConsumerFactory<>(
+                config,
+                new StringDeserializer(),
+                errorHandling
+        );
     }
 
     @Bean
-    public ConsumerFactory<String, PaymentCompletedEvent> consumerFactory() {
-        JacksonJsonDeserializer<PaymentCompletedEvent> deserializer =
-                new JacksonJsonDeserializer<>(PaymentCompletedEvent.class, false);
+    public DefaultErrorHandler kafkaErrorHandler(
+            KafkaTemplate<String, Object> kafkaTemplate) {
 
-        return new DefaultKafkaConsumerFactory<>(Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                ConsumerConfig.GROUP_ID_CONFIG, "enrollment-service",
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class
-        ), new StringDeserializer(), deserializer);
+        var recoverer =
+                new DeadLetterPublishingRecoverer(
+                        kafkaTemplate,
+                        (record, exception) ->
+                                new TopicPartition(
+                                        record.topic() + ".DLT",
+                                        record.partition()
+                                )
+                );
+
+        return new DefaultErrorHandler(
+                recoverer,
+                new FixedBackOff(
+                        2000L,
+                        4L
+                )
+        );
     }
 
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, PaymentCompletedEvent>
-    kafkaListenerContainerFactory() {
-        var factory = new ConcurrentKafkaListenerContainerFactory<String, PaymentCompletedEvent>();
-        factory.setConsumerFactory(consumerFactory());
+    @Bean("kafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory
+            <String, PaymentCompletedEvent>
+    paymentCompletedFactory(
+            DefaultErrorHandler kafkaErrorHandler) {
+
+        var factory =
+                new ConcurrentKafkaListenerContainerFactory
+                        <String, PaymentCompletedEvent>();
+
+        factory.setConsumerFactory(
+                consumerFactory(PaymentCompletedEvent.class)
+        );
+
+        factory.setCommonErrorHandler(
+                kafkaErrorHandler
+        );
+
+        return factory;
+    }
+
+    @Bean("refundKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory
+            <String, RefundCompletedEvent>
+    refundFactory(
+            DefaultErrorHandler kafkaErrorHandler) {
+
+        var factory =
+                new ConcurrentKafkaListenerContainerFactory
+                        <String, RefundCompletedEvent>();
+
+        factory.setConsumerFactory(
+                consumerFactory(RefundCompletedEvent.class)
+        );
+
+        factory.setCommonErrorHandler(
+                kafkaErrorHandler
+        );
+
         return factory;
     }
 }

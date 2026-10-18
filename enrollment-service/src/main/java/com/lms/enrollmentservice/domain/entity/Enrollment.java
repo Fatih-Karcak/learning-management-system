@@ -28,7 +28,8 @@ public class Enrollment {
 
     @Column(nullable = false)
     private UUID studentId;
-
+    @Column(name = "payment_id", unique = true)
+    private UUID paymentId;
     @Column(nullable = false)
     private UUID courseId;
 
@@ -51,9 +52,14 @@ public class Enrollment {
     private LocalDateTime lastAccessedAt;
     private LocalDateTime completedAt;
 
-    @OneToMany(mappedBy = "enrollment",
-            cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<LessonProgress> lessonProgressList = new ArrayList<>();
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "enrollment",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<LessonProgress> lessonProgressList =
+            new ArrayList<>();
 
     @OneToOne(mappedBy = "enrollment",
             cascade = CascadeType.ALL, orphanRemoval = true)

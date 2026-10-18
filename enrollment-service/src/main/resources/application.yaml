@@ -4,19 +4,16 @@ server:
 spring:
   application:
     name: enrollment-service
-  threads:
-    virtual:
-      enabled: true
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:5432/lms_enrollments
     username: ${DB_USERNAME:lms_user}
-    password: ${DB_PASSWORD:lms_pass}
+    password: ${DB_PASSWORD}
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
-    show-sql: false
 
   flyway:
     enabled: true
@@ -24,15 +21,16 @@ spring:
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
       group-id: enrollment-service
+      enable-auto-commit: false
       auto-offset-reset: earliest
 
 jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  secret: ${JWT_SECRET}
+
+internal:
+  api-key: ${INTERNAL_API_KEY}
 
 services:
   course:
@@ -42,13 +40,12 @@ services:
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY:lms_minio_admin}
-  secret-key: ${MINIO_SECRET_KEY:lms_minio_secret123}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
   bucket:
-    certificates: lms-certificates
+    certificates: ${MINIO_CERTIFICATES_BUCKET:lms-certificates}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
+enrollment:
+  outbox-interval-ms: 5000
+  certificate-interval-ms: 30000
+  refund-reconciliation-interval-ms: 30000
