@@ -22,6 +22,7 @@ public class UpdateCourseRequest {
     @DecimalMin(value = "0.0")
     private BigDecimal price;
 
+    @DecimalMin(value = "0.0")
     private BigDecimal discountPrice;
     private String thumbnailUrl;
     private CourseLevel level;

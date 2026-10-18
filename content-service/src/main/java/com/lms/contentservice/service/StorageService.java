@@ -94,7 +94,26 @@ public class StorageService {
             minioClient.removeObject(RemoveObjectArgs.builder()
                     .bucket(bucket).object(key).build());
         } catch (Exception e) {
-            log.warn("Dosya silinemedi (yok sayılıyor): {}/{} - {}", bucket, key, e.getMessage());
+            throw new StorageException("Dosya silinemedi: " + e.getMessage());
+        }
+    }
+
+    public void deletePrefix(String bucket, String prefix) {
+        try {
+            var objects = new java.util.ArrayList<io.minio.messages.DeleteObject>();
+            for (var result : minioClient.listObjects(ListObjectsArgs.builder()
+                    .bucket(bucket).prefix(prefix).recursive(true).build())) {
+                objects.add(new io.minio.messages.DeleteObject(result.get().objectName()));
+            }
+            if (objects.isEmpty()) return;
+            for (var result : minioClient.removeObjects(RemoveObjectsArgs.builder()
+                    .bucket(bucket).objects(objects).build())) {
+                throw new StorageException("HLS dosyası silinemedi: " + result.get().message());
+            }
+        } catch (StorageException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new StorageException("HLS dosyaları silinemedi: " + ex.getMessage());
         }
     }
 }

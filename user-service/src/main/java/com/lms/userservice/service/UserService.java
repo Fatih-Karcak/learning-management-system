@@ -41,8 +41,9 @@ public class UserService {
         if (StringUtils.hasText(request.getLastName())) {
             user.setLastName(request.getLastName());
         }
-        if (StringUtils.hasText(request.getBio())) {
-        }            user.setBio(request.getBio());
+        if (request.getBio() != null) {
+            user.setBio(request.getBio());
+        }
 
         if (StringUtils.hasText(request.getPhoneNumber())) {
             user.setPhoneNumber(request.getPhoneNumber());

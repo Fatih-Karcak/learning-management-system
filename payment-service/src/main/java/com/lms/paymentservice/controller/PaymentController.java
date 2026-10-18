@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -28,34 +29,34 @@ public class PaymentController {
     @PostMapping("/intent")
     public ResponseEntity<ApiResponse<PaymentIntentResponse>> createPaymentIntent(
             @Valid @RequestBody CreatePaymentIntentRequest request,
-            @RequestHeader("X-User-Id") UUID studentId) {
+            Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.createPaymentIntent(request, studentId),
+                paymentService.createPaymentIntent(request, UUID.fromString(authentication.getName())),
                 "PaymentIntent oluşturuldu"));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPayment(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID studentId) {
+            Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.getPayment(id, studentId), "Başarılı"));
+                paymentService.getPayment(id, UUID.fromString(authentication.getName())), "Başarılı"));
     }
 
     @GetMapping("/my")
     public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getMyPayments(
-            @RequestHeader("X-User-Id") UUID studentId,
+            Authentication authentication,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.getStudentPayments(studentId, pageable), "Başarılı"));
+                paymentService.getStudentPayments(UUID.fromString(authentication.getName()), pageable), "Başarılı"));
     }
 
     @PostMapping("/refund")
     public ResponseEntity<ApiResponse<RefundResponse>> requestRefund(
             @Valid @RequestBody RefundRequest request,
-            @RequestHeader("X-User-Id") UUID studentId) {
+            Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
-                refundService.createRefund(request, studentId),
+                refundService.createRefund(request, UUID.fromString(authentication.getName())),
                 "İade talebiniz alındı"));
     }
 }

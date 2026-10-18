@@ -12,6 +12,7 @@ import com.lms.courseservice.exception.UnauthorizedException;
 import com.lms.courseservice.mapper.CourseMapper;
 import com.lms.courseservice.repository.CategoryRepository;
 import com.lms.courseservice.repository.CourseRepository;
+import com.lms.courseservice.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,11 +33,13 @@ public class CourseService {
     private final CategoryRepository categoryRepository;
     private final CourseMapper courseMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final CourseAccessPolicy accessPolicy;
 
     @Transactional
     public CourseResponse createCourse(CreateCourseRequest request,
                                        UUID instructorId,
                                        String instructorName) {
+        validatePrice(request.getPrice(), request.getDiscountPrice());
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("Kategori bulunamadı"));
 
@@ -68,9 +71,10 @@ public class CourseService {
         Course course = findCourseById(courseId);
         validateInstructor(course, instructorId);
 
-        if (course.getSections().isEmpty()) {
+        if (course.getSections().stream().noneMatch(section ->
+                section.getLessons() != null && !section.getLessons().isEmpty())) {
             throw new IllegalStateException(
-                    "Kurs yayınlanabilmesi için en az bir bölüm gerekli");
+                    "Kurs yayınlanabilmesi için en az bir ders gerekli");
         }
 
         course.setStatus(CourseStatus.PUBLISHED);
@@ -103,12 +107,21 @@ public class CourseService {
         if (request.getLevel() != null) course.setLevel(request.getLevel());
         if (request.getRequirements() != null) course.setRequirements(request.getRequirements());
         if (request.getOutcomes() != null) course.setOutcomes(request.getOutcomes());
+        validatePrice(course.getPrice(), course.getDiscountPrice());
 
         return courseMapper.toResponse(courseRepository.save(course));
     }
 
-    public CourseResponse getCourseById(UUID courseId) {
-        return courseMapper.toResponse(findCourseById(courseId));
+    @Transactional(readOnly = true)
+    public CourseResponse getCourseById(UUID courseId, AuthenticatedUser viewer) {
+        Course course = findCourseById(courseId);
+        accessPolicy.requireVisible(course, viewer);
+        CourseResponse response = courseMapper.toResponse(course);
+        boolean fullAccess = accessPolicy.canReadContent(course, viewer);
+        if (response.getSections() != null) {
+            response.getSections().forEach(section -> accessPolicy.filterLessons(section.getLessons(), fullAccess));
+        }
+        return response;
     }
 
     public Page<CourseSummaryResponse> getPublishedCourses(Pageable pageable) {
@@ -141,10 +154,22 @@ public class CourseService {
 
     // Enrollment Service'ten Kafka ile çağrılır
     @Transactional
-    public void incrementEnrollmentCount(UUID courseId) {
-        Course course = findCourseById(courseId);
-        course.setTotalEnrollments(course.getTotalEnrollments() + 1);
-        courseRepository.save(course);
+    public void incrementEnrollmentCount(UUID courseId, UUID enrollmentId) {
+        if (courseId == null || enrollmentId == null) {
+            throw new IllegalArgumentException("Geçersiz kayıt olayı");
+        }
+        if (courseRepository.claimEnrollment(enrollmentId, courseId) == 1) {
+            if (courseRepository.incrementEnrollmentCount(courseId) != 1) {
+                throw new CourseNotFoundException("Kurs bulunamadı");
+            }
+        }
+    }
+
+    private void validatePrice(java.math.BigDecimal price, java.math.BigDecimal discount) {
+        if (price == null || price.signum() < 0 || discount != null
+                && (discount.signum() < 0 || discount.compareTo(price) > 0)) {
+            throw new IllegalArgumentException("Kurs fiyatı veya indirimli fiyat geçersiz");
+        }
     }
 
     private Course findCourseById(UUID courseId) {

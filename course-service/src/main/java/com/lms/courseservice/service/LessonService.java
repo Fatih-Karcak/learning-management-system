@@ -9,6 +9,8 @@ import com.lms.courseservice.exception.UnauthorizedException;
 import com.lms.courseservice.mapper.CourseMapper;
 import com.lms.courseservice.repository.LessonRepository;
 import com.lms.courseservice.repository.SectionRepository;
+import com.lms.courseservice.security.AuthenticatedUser;
+import com.lms.courseservice.domain.enums.CourseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class LessonService {
     private final LessonRepository lessonRepository;
     private final SectionRepository sectionRepository;
     private final CourseMapper courseMapper;
+    private final CourseAccessPolicy accessPolicy;
 
     @Transactional
     public LessonResponse createLesson(CreateLessonRequest request, UUID instructorId) {
@@ -51,11 +54,18 @@ public class LessonService {
         return courseMapper.toLessonResponse(lessonRepository.save(lesson));
     }
 
-    public List<LessonResponse> getLessonsBySection(UUID sectionId) {
-        return lessonRepository.findBySectionIdOrderByOrderIndexAsc(sectionId)
+    @Transactional(readOnly = true)
+    public List<LessonResponse> getLessonsBySection(UUID sectionId, AuthenticatedUser viewer) {
+        Section section = sectionRepository.findById(sectionId)
+                .orElseThrow(() -> new CourseNotFoundException("Bölüm bulunamadı"));
+        accessPolicy.requireVisible(section.getCourse(), viewer);
+        boolean fullAccess = accessPolicy.canReadContent(section.getCourse(), viewer);
+        List<LessonResponse> responses = lessonRepository.findBySectionIdOrderByOrderIndexAsc(sectionId)
                 .stream()
                 .map(courseMapper::toLessonResponse)
                 .toList();
+        accessPolicy.filterLessons(responses, fullAccess);
+        return responses;
     }
 
     @Transactional
@@ -67,6 +77,10 @@ public class LessonService {
             throw new UnauthorizedException("Bu dersi silme yetkiniz yok");
         }
 
+        if (lesson.getSection().getCourse().getStatus() == CourseStatus.PUBLISHED
+                && lessonRepository.countBySectionCourseId(lesson.getSection().getCourse().getId()) <= 1) {
+            throw new IllegalStateException("Yayımlanmış kursun son dersi silinemez");
+        }
         lessonRepository.delete(lesson);
     }
 }

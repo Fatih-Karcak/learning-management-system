@@ -14,6 +14,14 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Optional<Payment> findByStripePaymentIntentId(String intentId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.stripePaymentIntentId = :intentId")
+    Optional<Payment> findByStripePaymentIntentIdForUpdate(String intentId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.id = :id")
+    Optional<Payment> findByIdForUpdate(UUID id);
+
     Page<Payment> findByStudentId(UUID studentId, Pageable pageable);
 
     Page<Payment> findByStudentIdAndStatus(

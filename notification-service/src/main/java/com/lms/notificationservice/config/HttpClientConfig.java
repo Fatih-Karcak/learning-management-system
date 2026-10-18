@@ -13,9 +13,13 @@ public class HttpClientConfig {
     @Value("${services.user.base-url}")
     private String userServiceUrl;
 
+    @Value("${internal.api-key}")
+    private String internalApiKey;
+
     @Bean
     public UserClient userClient(WebClient.Builder builder) {
-        WebClient webClient = builder.baseUrl(userServiceUrl).build();
+        WebClient webClient = builder.baseUrl(userServiceUrl)
+                .defaultHeader("X-Internal-Service-Key", internalApiKey).build();
 
         HttpServiceProxyFactory factory = HttpServiceProxyFactory
                 .builderFor(WebClientAdapter.create(webClient))

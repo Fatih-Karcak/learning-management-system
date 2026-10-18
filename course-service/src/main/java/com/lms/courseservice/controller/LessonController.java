@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.lms.courseservice.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,25 +27,25 @@ public class LessonController {
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<LessonResponse>> createLesson(
             @Valid @RequestBody CreateLessonRequest request,
-            @RequestHeader("X-User-Id") UUID instructorId) {
+            @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        lessonService.createLesson(request, instructorId), "Ders oluşturuldu"));
+                        lessonService.createLesson(request, user.id()), "Ders oluşturuldu"));
     }
 
     @GetMapping("/section/{sectionId}")
     public ResponseEntity<ApiResponse<List<LessonResponse>>> getLessons(
-            @PathVariable UUID sectionId) {
+            @PathVariable UUID sectionId, @AuthenticationPrincipal AuthenticatedUser viewer) {
         return ResponseEntity.ok(ApiResponse.success(
-                lessonService.getLessonsBySection(sectionId), "Başarılı"));
+                lessonService.getLessonsBySection(sectionId, viewer), "Başarılı"));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteLesson(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID instructorId) {
-        lessonService.deleteLesson(id, instructorId);
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        lessonService.deleteLesson(id, user.id());
         return ResponseEntity.ok(ApiResponse.success(null, "Ders silindi"));
     }
 }

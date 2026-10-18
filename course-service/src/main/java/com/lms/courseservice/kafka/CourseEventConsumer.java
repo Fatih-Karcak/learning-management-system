@@ -22,10 +22,6 @@ public class CourseEventConsumer {
     public void handleCourseEnrolled(CourseEnrolledEvent event) {
         log.info("Kursa kayıt eventi alındı - CourseId: {}, StudentId: {}",
                 event.courseId(), event.studentId());
-        try {
-            courseService.incrementEnrollmentCount(event.courseId());
-        } catch (Exception e) {
-            log.error("Enrollment sayısı güncellenemedi: {}", e.getMessage(), e);
-        }
+        courseService.incrementEnrollmentCount(event.courseId(), event.enrollmentId());
     }
 }

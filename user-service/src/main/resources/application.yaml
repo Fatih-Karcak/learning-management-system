@@ -53,3 +53,6 @@ logging:
   level:
     com.lms: DEBUG
     org.springframework.security: INFO
+
+internal:
+  api-key: ${INTERNAL_API_KEY:}

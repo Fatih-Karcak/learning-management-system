@@ -41,6 +41,7 @@ public class JwtTokenProvider {
         try {
             Claims claims = parseToken(token);
 
+            if (claims.getSubject() == null) return false;
             UUID.fromString(claims.getSubject());
 
             String type =
@@ -50,6 +51,7 @@ public class JwtTokenProvider {
                     claims.get("role", String.class);
 
             return "access".equals(type)
+                    && role != null
                     && ROLES.contains(role)
                     && claims.getExpiration() != null
                     && claims.getIssuedAt() != null;

@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/v1/media")
@@ -28,10 +29,10 @@ public class MediaController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) UUID courseId,
             @RequestParam(required = false) UUID lessonId,
-            @RequestHeader("X-User-Id") UUID instructorId) {
+            Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        mediaService.uploadVideo(file, courseId, lessonId, instructorId),
+                        mediaService.uploadVideo(file, courseId, lessonId, UUID.fromString(authentication.getName())),
                         "Video yüklendi, işleniyor"));
     }
 
@@ -41,28 +42,26 @@ public class MediaController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) UUID courseId,
             @RequestParam(required = false) UUID lessonId,
-            @RequestHeader("X-User-Id") UUID ownerId) {
+            Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        mediaService.uploadImage(file, courseId, lessonId, ownerId),
+                        mediaService.uploadImage(file, courseId, lessonId, UUID.fromString(authentication.getName())),
                         "Resim yüklendi"));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<MediaAssetResponse>> getMedia(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID requesterId,
-            @RequestHeader(value = "X-User-Role", required = false) String role) {
+            Authentication authentication) {
         return ResponseEntity.ok(
-                ApiResponse.success(mediaService.getMedia(id, requesterId, role), "Başarılı"));
+                ApiResponse.success(mediaService.getMedia(id, UUID.fromString(authentication.getName()), role(authentication)), "Başarılı"));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteMedia(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID requesterId,
-            @RequestHeader(value = "X-User-Role", required = false) String role) {
-        mediaService.deleteMedia(id, requesterId, role);
+            Authentication authentication) {
+        mediaService.deleteMedia(id, UUID.fromString(authentication.getName()), role(authentication));
         return ResponseEntity.ok(ApiResponse.success(null, "Medya silindi"));
     }
 
@@ -71,20 +70,24 @@ public class MediaController {
     @GetMapping(value = "/{id}/manifest.m3u8", produces = "application/vnd.apple.mpegurl")
     public ResponseEntity<String> getManifest(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID requesterId,
-            @RequestHeader(value = "X-User-Role", required = false) String role) {
-        return ResponseEntity.ok(mediaService.getManifestContent(id, requesterId, role));
+            Authentication authentication) {
+        return ResponseEntity.ok(mediaService.getManifestContent(id, UUID.fromString(authentication.getName()), role(authentication)));
     }
 
     @GetMapping("/{id}/{segmentName:.+\\.ts}")
     public ResponseEntity<InputStreamResource> getSegment(
             @PathVariable UUID id,
             @PathVariable String segmentName,
-            @RequestHeader("X-User-Id") UUID requesterId,
-            @RequestHeader(value = "X-User-Role", required = false) String role) {
-        InputStream stream = mediaService.getSegmentStream(id, segmentName, requesterId, role);
+            Authentication authentication) {
+        InputStream stream = mediaService.getSegmentStream(id, segmentName, UUID.fromString(authentication.getName()), role(authentication));
         return ResponseEntity.ok()
                 .contentType(MediaType.valueOf("video/mp2t"))
                 .body(new InputStreamResource(stream));
+    }
+    private String role(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .filter(value -> value.startsWith("ROLE_"))
+                .map(value -> value.substring(5)).findFirst().orElse("");
     }
 }

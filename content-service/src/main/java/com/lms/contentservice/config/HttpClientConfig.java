@@ -14,9 +14,13 @@ public class HttpClientConfig {
     @Value("${services.enrollment.base-url}")
     private String enrollmentServiceUrl;
 
+    @Value("${internal.api-key}")
+    private String internalApiKey;
+
     @Bean
     public EnrollmentClient enrollmentClient(WebClient.Builder builder) {
-        WebClient webClient = builder.baseUrl(enrollmentServiceUrl).build();
+        WebClient webClient = builder.baseUrl(enrollmentServiceUrl)
+                .defaultHeader("X-Internal-Service-Key", internalApiKey).build();
 
         HttpServiceProxyFactory factory = HttpServiceProxyFactory
                 .builderFor(WebClientAdapter.create(webClient))

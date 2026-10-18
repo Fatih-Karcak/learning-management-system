@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.lms.courseservice.security.AuthenticatedUser;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,26 +27,26 @@ public class SectionController {
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<SectionResponse>> createSection(
             @Valid @RequestBody CreateSectionRequest request,
-            @RequestHeader("X-User-Id") UUID instructorId) {
+            @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        sectionService.createSection(request, instructorId),
+                        sectionService.createSection(request, user.id()),
                         "Bölüm oluşturuldu"));
     }
 
     @GetMapping("/course/{courseId}")
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getSections(
-            @PathVariable UUID courseId) {
+            @PathVariable UUID courseId, @AuthenticationPrincipal AuthenticatedUser viewer) {
         return ResponseEntity.ok(ApiResponse.success(
-                sectionService.getSectionsByCourse(courseId), "Başarılı"));
+                sectionService.getSectionsByCourse(courseId, viewer), "Başarılı"));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteSection(
             @PathVariable UUID id,
-            @RequestHeader("X-User-Id") UUID instructorId) {
-        sectionService.deleteSection(id, instructorId);
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        sectionService.deleteSection(id, user.id());
         return ResponseEntity.ok(ApiResponse.success(null, "Bölüm silindi"));
     }
 }

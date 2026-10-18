@@ -40,6 +40,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             if (timestamps.size() >= MAX_REQUESTS) {
                 response.setContentType("application/json");
+                response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
                 response.setStatus(429);
                 response.getWriter().write(
                         "{\"success\":false,\"message\":\"Çok fazla istek, lütfen biraz sonra tekrar deneyin\"}");

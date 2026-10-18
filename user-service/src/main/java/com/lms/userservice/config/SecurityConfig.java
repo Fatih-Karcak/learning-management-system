@@ -1,6 +1,8 @@
 package com.lms.userservice.config;
 
 import com.lms.userservice.security.JwtAuthenticationFilter;
+import com.lms.userservice.security.InternalServiceAuthFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +24,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final InternalServiceAuthFilter internalServiceAuthFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -32,19 +35,28 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/v1/auth/**",
-                                "/api/v1/internal/**"
-
-                                ,
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers("/api/v1/internal/**").hasRole("SERVICE")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((request, response, ex) -> response.setStatus(401))
+                        .accessDeniedHandler((request, response, ex) -> response.setStatus(403)))
+                .addFilterBefore(internalServiceAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<InternalServiceAuthFilter> internalFilterRegistration() {
+        var registration = new FilterRegistrationBean<>(internalServiceAuthFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

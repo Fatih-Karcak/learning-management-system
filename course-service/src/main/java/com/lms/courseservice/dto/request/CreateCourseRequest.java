@@ -25,6 +25,7 @@ public class CreateCourseRequest {
     @DecimalMin(value = "0.0")
     private BigDecimal price;
 
+    @DecimalMin(value = "0.0")
     private BigDecimal discountPrice;
 
     @NotNull

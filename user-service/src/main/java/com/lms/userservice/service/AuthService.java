@@ -2,6 +2,7 @@ package com.lms.userservice.service;
 
 import com.lms.userservice.domain.entity.User;
 import com.lms.userservice.domain.enums.UserStatus;
+import com.lms.userservice.domain.enums.UserRole;
 import com.lms.userservice.dto.request.LoginRequest;
 import com.lms.userservice.dto.request.RegisterRequest;
 import com.lms.userservice.dto.response.AuthResponse;
@@ -33,6 +34,9 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (request.getRole() == null || request.getRole() == UserRole.ADMIN) {
+            throw new IllegalArgumentException("Bu rol herkese açık kayıtta kullanılamaz");
+        }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new EmailAlreadyExistsException(
                     "Bu e-posta adresi zaten kayıtlı: " + request.getEmail());
@@ -67,8 +71,8 @@ public class AuthService {
             throw new BadCredentialsException("Geçersiz e-posta veya şifre");
         }
 
-        if (user.getStatus() == UserStatus.BANNED) {
-            throw new BadCredentialsException("Hesabınız askıya alınmış");
+        if (user.getStatus() == UserStatus.BANNED || user.getStatus() == UserStatus.INACTIVE) {
+            throw new BadCredentialsException("Hesabınız aktif değil");
         }
 
         log.info("Kullanıcı giriş yaptı: {}", user.getEmail());
