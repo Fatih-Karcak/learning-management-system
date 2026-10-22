@@ -23,6 +23,14 @@ public class MediaController {
 
     private final MediaService mediaService;
 
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<MediaAssetResponse>>> getOwnMedia(
+            Authentication authentication, org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                mediaService.getOwnMedia(UUID.fromString(authentication.getName()), pageable), "Başarılı"));
+    }
+
     @PostMapping(value = "/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<MediaAssetResponse>> uploadVideo(

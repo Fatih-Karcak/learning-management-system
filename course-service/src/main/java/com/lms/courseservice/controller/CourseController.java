@@ -26,6 +26,19 @@ public class CourseController {
 
     private final CourseService courseService;
 
+    @GetMapping("/mine")
+    @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<CourseSummaryResponse>>> getOwnCourses(
+            @AuthenticationPrincipal AuthenticatedUser user, Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                courseService.getOwnCourses(user.id(), pageable), "Başarılı"));
+    }
+
+    @GetMapping("/categories")
+    public ResponseEntity<ApiResponse<java.util.List<CourseService.CategorySummary>>> getCategories() {
+        return ResponseEntity.ok(ApiResponse.success(courseService.getCategories(), "Başarılı"));
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<CourseResponse>> createCourse(

@@ -30,6 +30,8 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
     List<Course> findByInstructorId(UUID instructorId);
 
+    Page<Course> findByInstructorId(UUID instructorId, Pageable pageable);
+
     @Query("""
         SELECT c FROM Course c
         WHERE c.status = 'PUBLISHED'

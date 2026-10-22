@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -128,6 +129,21 @@ public class CourseService {
         return courseRepository.findByStatus(CourseStatus.PUBLISHED, pageable)
                 .map(courseMapper::toSummaryResponse);
     }
+
+    @Transactional(readOnly = true)
+    public Page<CourseSummaryResponse> getOwnCourses(UUID instructorId, Pageable pageable) {
+        return courseRepository.findByInstructorId(instructorId, pageable)
+                .map(courseMapper::toSummaryResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CategorySummary> getCategories() {
+        return categoryRepository.findAll(org.springframework.data.domain.Sort.by("name")).stream()
+                .map(category -> new CategorySummary(category.getId(), category.getName(), category.getDescription()))
+                .toList();
+    }
+
+    public record CategorySummary(Long id, String name, String description) {}
 
     public Page<CourseSummaryResponse> searchCourses(String query, Pageable pageable) {
         return courseRepository.searchPublishedCourses(query, pageable)

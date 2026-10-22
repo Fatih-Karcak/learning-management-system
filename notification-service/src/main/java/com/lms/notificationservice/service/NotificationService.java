@@ -30,11 +30,19 @@ public class NotificationService {
     @Value("${app.public-base-url}")
     private String publicBaseUrl;
 
+    @Value("${app.frontend-base-url:}")
+    private String frontendBaseUrl = "";
+
     public void sendWelcomeEmail(UserRegisteredEvent event) {
         Context ctx = new Context();
         ctx.setVariable("firstName", event.firstName());
-        ctx.setVariable("verificationUrl",
-                publicBaseUrl + "/api/v1/auth/verify-email?token=" + event.verificationToken());
+        boolean useFrontend = frontendBaseUrl != null && !frontendBaseUrl.isBlank();
+        String baseUrl = (useFrontend ? frontendBaseUrl : publicBaseUrl).replaceAll("/+$", "");
+        ctx.setVariable("verificationUrl", org.springframework.web.util.UriComponentsBuilder
+                .fromUriString(baseUrl)
+                .path(useFrontend ? "/verify-email" : "/api/v1/auth/verify-email")
+                .queryParam("token", event.verificationToken())
+                .build().encode().toUriString());
 
         sendAndLog(event.userId(), event.email(), "LMS'e Hoş Geldiniz!",
                 "welcome-email", ctx, "USER_REGISTERED");

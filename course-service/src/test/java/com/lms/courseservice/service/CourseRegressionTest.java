@@ -95,4 +95,23 @@ class CourseRegressionTest {
         when(enrollment.check(courseId, studentId)).thenReturn(new EnrollmentClient.Result(true, false));
         assertThrows(UnauthorizedException.class, () -> access.requireEnrolled(courseId, studentId));
     }
+
+    @Test void ownCourseListIncludesDraftsAndUsesAuthenticatedInstructorScope() {
+        UUID owner = UUID.randomUUID();
+        var draft = course(CourseStatus.DRAFT);
+        draft.setInstructorId(owner);
+        var published = course(CourseStatus.PUBLISHED);
+        published.setInstructorId(owner);
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        when(courses.findByInstructorId(owner, pageable)).thenReturn(
+                new org.springframework.data.domain.PageImpl<>(List.of(draft, published), pageable, 2));
+
+        var result = service.getOwnCourses(owner, pageable);
+
+        assertEquals(2, result.getTotalElements());
+        assertEquals(CourseStatus.DRAFT, result.getContent().getFirst().getStatus());
+        verify(courses).findByInstructorId(owner, pageable);
+        verify(courses, never()).findByStatus(any(), any());
+        verifyNoInteractions(enrollment);
+    }
 }

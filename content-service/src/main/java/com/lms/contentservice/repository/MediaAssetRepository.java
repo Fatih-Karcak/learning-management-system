@@ -10,4 +10,6 @@ public interface MediaAssetRepository extends JpaRepository<MediaAsset, UUID> {
     List<MediaAsset> findByLessonId(UUID lessonId);
     List<MediaAsset> findByCourseId(UUID courseId);
     List<MediaAsset> findByOwnerId(UUID ownerId);
+    org.springframework.data.domain.Page<MediaAsset> findByOwnerId(
+            UUID ownerId, org.springframework.data.domain.Pageable pageable);
 }

@@ -130,6 +130,12 @@ public class MediaService {
         return toResponse(asset);
     }
 
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<MediaAssetResponse> getOwnMedia(
+            UUID ownerId, org.springframework.data.domain.Pageable pageable) {
+        return mediaAssetRepository.findByOwnerId(ownerId, pageable).map(this::toResponse);
+    }
+
     @Transactional
     public void deleteMedia(UUID mediaId, UUID requesterId, String requesterRole) {
         MediaAsset asset = findById(mediaId);
