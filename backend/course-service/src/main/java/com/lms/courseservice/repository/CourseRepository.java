@@ -14,6 +14,11 @@ import java.util.UUID;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
+    long countByStatus(CourseStatus status);
+    boolean existsByCategoryId(Long categoryId);
+    @Query("select c from Course c where (:status is null or c.status=:status) and " +
+            "(lower(c.title) like lower(concat('%',:query,'%')) or lower(c.instructorName) like lower(concat('%',:query,'%')))")
+    Page<Course> adminSearch(String query, CourseStatus status, Pageable pageable);
 
     @org.springframework.data.jpa.repository.Modifying
     @Query(value = "INSERT INTO processed_course_enrollments(enrollment_id, course_id) VALUES (:enrollmentId, :courseId) ON CONFLICT DO NOTHING", nativeQuery = true)

@@ -16,5 +16,8 @@ public class ProgressResponse {
     private CompletionStatus status;
     private Integer watchedSeconds;
     private Integer totalSeconds;
+    private int positionSeconds;
+    private long watchedDurationSeconds;
     private LocalDateTime completedAt;
+    private LocalDateTime lastWatchedAt;
 }

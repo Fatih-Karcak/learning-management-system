@@ -22,6 +22,12 @@ public class ProgressController {
 
     private final ProgressService progressService;
 
+    @PostMapping("/{enrollmentId}/lesson/{lessonId}/playback")
+    public ApiResponse<ProgressResponse> playback(@PathVariable UUID enrollmentId,@PathVariable UUID lessonId,
+            @Valid @RequestBody ProgressService.PlaybackRequest request,Authentication auth) {
+        return ApiResponse.success(progressService.recordPlayback(enrollmentId,lessonId,request,UUID.fromString(auth.getName())),"İzleme kaydedildi");
+    }
+
     @PutMapping("/{enrollmentId}/lesson/{lessonId}")
     public ResponseEntity<ApiResponse<ProgressResponse>>
     updateProgress(

@@ -71,7 +71,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("Geçersiz doğrulama token'ı"));
 
         user.setEmailVerified(true);
-        user.setStatus(UserStatus.ACTIVE);
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION) user.setStatus(UserStatus.ACTIVE);
         user.setEmailVerificationToken(null);
         userRepository.save(user);
         log.info("E-posta doğrulandı: {}", user.getEmail());
@@ -85,6 +85,9 @@ public class UserService {
     @Transactional
     public void deactivateUser(UUID id) {
         User user = findUserById(id);
+        if (user.getRole() == com.lms.userservice.domain.enums.UserRole.ADMIN) {
+            throw new IllegalArgumentException("Yönetici hesabını başka bir yönetici devre dışı bırakmalıdır");
+        }
         user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
     }

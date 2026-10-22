@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useRef, useEffect, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -26,6 +26,7 @@ import {
   Submit,
 } from '../ui';
 import VideoPlayer from '../VideoPlayer';
+import { QuizLesson, AssignmentLesson, LessonNotes, CourseDiscussion } from './LearningFeatures';
 
 export function MyLearning() {
   const [page, setPage] = useState(0);
@@ -99,9 +100,14 @@ export function Learning() {
   const { enrollmentId } = useParams();
   const [params, setParams] = useSearchParams();
   const client = useQueryClient();
+  const [position, setPosition] = useState(0);
+  const [seekTo, setSeekTo] = useState<{ seconds: number; nonce: number }>();
+  const [playbackError, setPlaybackError] = useState<unknown>();
+  const playbackQueue = useRef<Promise<unknown>>(Promise.resolve());
   const enrollment = useQuery({
     queryKey: ['enrollment', enrollmentId],
     queryFn: () => api<Enrollment>(`/enrollments/${enrollmentId}`),
+    refetchInterval: 15000,
   });
   const course = useQuery({
     queryKey: ['course', enrollment.data?.courseId],
@@ -111,13 +117,37 @@ export function Learning() {
   const progress = useQuery({
     queryKey: ['progress', enrollmentId],
     queryFn: () => api<Progress[]>(`/progress/${enrollmentId}`),
+    refetchInterval: 15000,
   });
   const lessons =
     course.data?.sections?.flatMap((s) =>
       (s.lessons || []).map((l) => ({ ...l, sectionId: s.id, sectionTitle: s.title })),
     ) || [];
-  const lesson = lessons.find((l) => l.id === params.get('lesson')) || lessons[0];
+  const recent = progress.data
+    ?.filter((p) => p.status === 'IN_PROGRESS')
+    .sort((a, b) => (b.lastWatchedAt || '').localeCompare(a.lastWatchedAt || ''))[0];
+  const nextLesson =
+    lessons.find((l) => l.id === recent?.lessonId) ||
+    lessons.find(
+      (l) => !progress.data?.some((p) => p.lessonId === l.id && p.status === 'COMPLETED'),
+    ) ||
+    lessons[0];
+  const lesson = lessons.find((l) => l.id === params.get('lesson')) || nextLesson;
+  useEffect(() => {
+    if (!params.get('lesson') && lesson && course.data && progress.data)
+      setParams({ lesson: lesson.id }, { replace: true });
+  }, [params, lesson, course.data, progress.data, setParams]);
   const current = progress.data?.find((p) => p.lessonId === lesson?.id);
+  useEffect(() => {
+    setPosition(0);
+    setSeekTo(undefined);
+    setPlaybackError(null);
+  }, [lesson?.id]);
+  const refreshProgress = () => {
+    void client.invalidateQueries({ queryKey: ['progress', enrollmentId] });
+    void client.invalidateQueries({ queryKey: ['enrollment', enrollmentId] });
+    void client.invalidateQueries({ queryKey: ['enrollments'] });
+  };
   const update = useMutation({
     mutationFn: ({
       lessonId,
@@ -192,17 +222,28 @@ export function Learning() {
                 <VideoPlayer
                   key={lesson.id}
                   src={lesson.videoUrl}
-                  initialTime={current?.watchedSeconds || 0}
-                  onSave={(seconds) => {
-                    if (!update.isPending && e.status === 'ACTIVE')
-                      update.mutate({
-                        lessonId: lesson.id,
-                        sectionId: lesson.sectionId,
-                        watchedSeconds: Math.max(
-                          current?.watchedSeconds || 0,
-                          Math.min(seconds, lesson.durationSeconds || seconds),
-                        ),
-                      });
+                  initialTime={current?.positionSeconds ?? current?.watchedSeconds ?? 0}
+                  seekTo={seekTo}
+                  onPosition={setPosition}
+                  onPlayback={(seconds, playing) => {
+                    const path = `/progress/${enrollmentId}/lesson/${lesson.id}/playback`;
+                    const data = { sectionId: lesson.sectionId, positionSeconds: seconds, playing };
+                    playbackQueue.current = playbackQueue.current
+                      .catch(() => {})
+                      .then(async () => {
+                        const saved = await api<Progress>(path, {
+                          method: 'POST',
+                          body: body(data),
+                          keepalive: true,
+                        });
+                        setPlaybackError(null);
+                        client.setQueryData<Progress[]>(['progress', enrollmentId], (old) => [
+                          ...(old || []).filter((p) => p.lessonId !== saved.lessonId),
+                          saved,
+                        ]);
+                        if (saved.status === 'COMPLETED') refreshProgress();
+                      })
+                      .catch((error) => setPlaybackError(error));
                   }}
                 />
               )}
@@ -216,6 +257,25 @@ export function Learning() {
                   {lesson.content || (lesson.videoUrl ? '' : 'Bu derse henüz içerik eklenmemiş.')}
                 </ReactMarkdown>
               </div>
+              {!!playbackError && <ErrorBox error={playbackError} />}
+              {lesson.type === 'QUIZ' && (
+                <QuizLesson
+                  key={lesson.id}
+                  courseId={e.courseId}
+                  lessonId={lesson.id}
+                  enrollmentId={e.id}
+                  onCompleted={refreshProgress}
+                />
+              )}
+              {lesson.type === 'ASSIGNMENT' && (
+                <AssignmentLesson
+                  key={lesson.id}
+                  courseId={e.courseId}
+                  lessonId={lesson.id}
+                  enrollmentId={e.id}
+                  onCompleted={refreshProgress}
+                />
+              )}
               {update.error && <ErrorBox error={update.error} />}
               <div className="lesson-footer">
                 {current?.status === 'COMPLETED' ? (
@@ -239,8 +299,10 @@ export function Learning() {
                 ) : (
                   <p className="muted">
                     {lesson.type === 'VIDEO'
-                      ? 'İzleme konumun kaydedilir. Dersin tamamlanması eğitimin doğrulama sürecine bağlıdır.'
-                      : 'Bu dersin tamamlanması eğitmen değerlendirmesiyle doğrulanır.'}
+                      ? 'İzleme konumun kaydedilir. Videonun %90’ı izlenince ders otomatik tamamlanır.'
+                      : lesson.type === 'QUIZ'
+                        ? 'Geçme puanına ulaştığında ders tamamlanır.'
+                        : 'Ödevin eğitmen tarafından kabul edilince ders tamamlanır.'}
                   </p>
                 )}
                 {lessons.indexOf(lesson) + 1 < lessons.length && (
@@ -252,6 +314,20 @@ export function Learning() {
                   </button>
                 )}
               </div>
+              <LessonNotes
+                key={`notes-${lesson.id}`}
+                enrollmentId={e.id}
+                lessonId={lesson.id}
+                sectionId={lesson.sectionId}
+                position={lesson.videoUrl ? position : 0}
+                onSeek={(seconds) => setSeekTo({ seconds, nonce: Date.now() })}
+              />
+              <CourseDiscussion
+                key={`discussion-${lesson.id}`}
+                courseId={e.courseId}
+                lessonId={lesson.id}
+                instructorId={course.data?.instructorId}
+              />
             </>
           ) : (
             <Empty title="Dersler hazırlanıyor" text="Dersler eklendiğinde burada görünecek." />

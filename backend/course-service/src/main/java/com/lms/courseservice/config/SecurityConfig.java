@@ -34,6 +34,7 @@ public class SecurityConfig {
                                 "/api/v1/reviews/**"
                         ).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/api/v1/internal/courses/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter,

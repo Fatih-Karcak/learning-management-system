@@ -28,15 +28,25 @@ public class InternalMediaController {
 
     public record LinkRequest(@NotNull UUID courseId, @NotNull UUID lessonId, @NotNull UUID ownerId) {}
 
+    private void requireKey(String key) {
+        if (internalKey.isBlank() || key == null || !MessageDigest.isEqual(
+                internalKey.getBytes(StandardCharsets.UTF_8), key.getBytes(StandardCharsets.UTF_8))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Servis kimliği doğrulanamadı");
+        }
+    }
+
+    @GetMapping("/{id}/metadata")
+    public ApiResponse<MediaAssetResponse> metadata(@PathVariable UUID id,@RequestHeader(value="X-Internal-Service-Key",required=false) String key) {
+        requireKey(key);
+        return ApiResponse.success(mediaService.getInternalMetadata(id),"Başarılı");
+    }
+
     @PutMapping("/{id}/lesson")
     public ApiResponse<MediaAssetResponse> linkVideo(
             @PathVariable UUID id,
             @RequestHeader(value = "X-Internal-Service-Key", required = false) String key,
             @Valid @RequestBody LinkRequest request) {
-        if (internalKey.isBlank() || key == null || !MessageDigest.isEqual(
-                internalKey.getBytes(StandardCharsets.UTF_8), key.getBytes(StandardCharsets.UTF_8))) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Servis kimliği doğrulanamadı");
-        }
+        requireKey(key);
         return ApiResponse.success(mediaService.linkVideoToLesson(
                 id, request.courseId(), request.lessonId(), request.ownerId()), "Video derse bağlandı");
     }

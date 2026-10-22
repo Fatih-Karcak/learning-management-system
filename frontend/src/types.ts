@@ -54,6 +54,7 @@ export interface Course {
   id: string;
   title: string;
   shortDescription: string;
+  reviewFeedback?: string;
   description?: string;
   thumbnailUrl?: string;
   previewVideoUrl?: string;
@@ -95,6 +96,8 @@ export interface Enrollment {
   completedLessons: number;
   progressPercentage: number;
   enrolledAt: string;
+  lastAccessedAt?: string;
+  completedAt?: string;
 }
 export interface Progress {
   enrollmentId: string;
@@ -103,6 +106,9 @@ export interface Progress {
   status: string;
   watchedSeconds: number;
   totalSeconds: number;
+  positionSeconds?: number;
+  watchedDurationSeconds?: number;
+  lastWatchedAt?: string;
 }
 export interface Certificate {
   id: string;
@@ -156,4 +162,68 @@ export interface Media {
   streamUrl?: string;
   thumbnailUrl?: string;
   failureReason?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctOption?: number;
+  explanation?: string;
+}
+export interface Quiz {
+  passingScore: number;
+  questions: QuizQuestion[];
+}
+export interface QuizAttempt {
+  id: string;
+  score: number;
+  passed: boolean;
+  correct?: number;
+  total?: number;
+  createdAt?: string;
+}
+export interface AssignmentSubmission {
+  id: string;
+  studentId: string;
+  studentName: string;
+  enrollmentId: string;
+  content: string;
+  attachmentUrl?: string;
+  status: 'SUBMITTED' | 'ACCEPTED' | 'CHANGES_REQUESTED';
+  score?: number;
+  feedback?: string;
+  submittedAt: string;
+  gradedAt?: string;
+}
+export interface LessonNote {
+  id: string;
+  lessonId: string;
+  positionSeconds: number;
+  content: string;
+  updatedAt: string;
+}
+export interface CourseQuestion {
+  id: string;
+  lessonId?: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  content: string;
+  acceptedReplyId?: string;
+  replyCount: number;
+  createdAt: string;
+}
+export interface QuestionReply {
+  id: string;
+  authorId: string;
+  authorName: string;
+  instructor: boolean;
+  content: string;
+  createdAt: string;
+}
+export interface RosterRow {
+  enrollment: Enrollment;
+  studentName: string;
+  email: string;
 }

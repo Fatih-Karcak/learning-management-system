@@ -9,10 +9,14 @@ import java.util.UUID;
 
 @HttpExchange("/api/v1/internal/media")
 public interface ContentClient {
+    @org.springframework.web.service.annotation.GetExchange("/{id}/metadata")
+    Result metadata(@PathVariable UUID id);
     @PutExchange("/{id}/lesson")
     Result linkVideo(@PathVariable UUID id, @RequestBody LinkRequest request);
 
     record LinkRequest(UUID courseId, UUID lessonId, UUID ownerId) {}
-    record Media(String streamUrl, Integer durationSeconds) {}
+    record Media(String streamUrl, Integer durationSeconds,String status) {
+        public Media(String streamUrl,Integer durationSeconds){this(streamUrl,durationSeconds,"READY");}
+    }
     record Result(boolean success, String message, Media data) {}
 }

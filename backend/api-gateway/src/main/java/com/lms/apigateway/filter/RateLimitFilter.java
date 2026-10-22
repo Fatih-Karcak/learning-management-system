@@ -29,7 +29,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String clientIp = request.getRemoteAddr();
+        // GatewayAuthFilter (order 1) replaces this header using a verified JWT.
+        // Students sharing a classroom/NAT must not consume each other's playback quota.
+        String userId=request.getHeader("X-User-Id");
+        String clientIp = userId==null?"ip:"+request.getRemoteAddr():"user:"+userId;
         long now = System.currentTimeMillis();
 
         Deque<Long> timestamps = requestLog.computeIfAbsent(clientIp, k -> new ConcurrentLinkedDeque<>());

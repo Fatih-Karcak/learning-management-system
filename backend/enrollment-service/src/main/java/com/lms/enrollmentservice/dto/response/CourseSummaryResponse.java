@@ -16,8 +16,13 @@ public record CourseSummaryResponse(
         String instructorName,
         BigDecimal price,
         String status,
-        List<Section> sections
+        List<Section> sections,
+        UUID instructorId,
+        BigDecimal discountPrice
 ) {
+    public CourseSummaryResponse(UUID id,String title,String thumbnailUrl,String instructorName,BigDecimal price,String status,List<Section> sections) {
+        this(id,title,thumbnailUrl,instructorName,price,status,sections,null,null);
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Section(

@@ -66,7 +66,13 @@ public class CourseController {
             @PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.ok(ApiResponse.success(
-                courseService.publishCourse(id, user.id()), "Kurs yayınlandı"));
+                courseService.publishCourse(id, user.id()), "Kurs yönetici incelemesine gönderildi"));
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<CourseResponse>> archive(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
+        return ResponseEntity.ok(ApiResponse.success(courseService.archiveCourse(id,user.id()),"Kurs arşivlendi"));
     }
 
     @GetMapping("/{id}")

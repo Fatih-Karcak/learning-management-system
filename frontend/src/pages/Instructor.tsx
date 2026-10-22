@@ -17,6 +17,12 @@ import { api, body, lessonTypes, levels, money, safeUrl } from '../api';
 import type { Category, Course, Lesson, Media, Page, Section } from '../types';
 import VideoPlayer from '../VideoPlayer';
 import {
+  QuizEditor,
+  AssignmentGrading,
+  CourseStudents,
+  CourseDiscussion,
+} from './LearningFeatures';
+import {
   Badge,
   Cover,
   Empty,
@@ -250,6 +256,8 @@ export function Editor() {
   const [addSection, setAddSection] = useState(false);
   const [lessonSection, setLessonSection] = useState<Section>();
   const [videoLesson, setVideoLesson] = useState<Lesson>();
+  const [assessment, setAssessment] = useState<Lesson>();
+  const [tool, setTool] = useState<'students' | 'discussion'>();
   const course = useQuery({
     queryKey: ['course', courseId],
     queryFn: () => api<Course>(`/courses/${courseId}`),
@@ -261,6 +269,10 @@ export function Editor() {
   };
   const publish = useMutation({
     mutationFn: () => api(`/courses/${courseId}/publish`, { method: 'POST' }),
+    onSuccess: reload,
+  });
+  const archive = useMutation({
+    mutationFn: () => api(`/courses/${courseId}/archive`, { method: 'POST' }),
     onSuccess: reload,
   });
   const remove = useMutation({
@@ -292,15 +304,32 @@ export function Editor() {
             <Link className="button secondary" to={`/courses/${c.id}`}>
               Ön izle
             </Link>
-            {c.status !== 'PUBLISHED' && (
+            {!['PUBLISHED', 'PENDING_REVIEW'].includes(c.status) && (
               <button
                 className="button primary"
                 disabled={publish.isPending || !c.sections?.some((s) => s.lessons?.length)}
                 onClick={() => {
-                  if (window.confirm('Kursunuz katalogda yayınlansın mı?')) publish.mutate();
+                  if (window.confirm('Kursunuz yönetici incelemesine gönderilsin mi?'))
+                    publish.mutate();
                 }}
               >
-                <Send size={16} /> Yayınla
+                <Send size={16} /> İncelemeye gönder
+              </button>
+            )}
+            {c.status !== 'ARCHIVED' && (
+              <button
+                className="text-button danger"
+                disabled={archive.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Kurs yeni kayıtlara kapatılsın mı? Mevcut öğrenciler erişmeye devam eder.',
+                    )
+                  )
+                    archive.mutate();
+                }}
+              >
+                Kursu arşivle
               </button>
             )}
           </div>
@@ -308,6 +337,14 @@ export function Editor() {
       </PageTitle>
       {saved && <Success>Kurs bilgileri kaydedildi.</Success>}
       {publish.error && <ErrorBox error={publish.error} />}
+      {archive.error && <ErrorBox error={archive.error} />}
+      {c && (
+        <div className="notice">
+          <Badge value={c.status} />
+          {c.status === 'PENDING_REVIEW' && <p>Kurs yönetici onayı bekliyor.</p>}
+          {c.reviewFeedback && <p>Yönetici geri bildirimi: {c.reviewFeedback}</p>}
+        </div>
+      )}
       <CourseForm key={c?.id || 'new'} course={c} onSaved={onSaved} />
       {c && (
         <section className="panel curriculum-editor">
@@ -353,6 +390,11 @@ export function Editor() {
                       {lessonTypes[l.type]}
                       {l.previewAllowed ? ' · Ön izleme' : ''}
                     </small>
+                    {['QUIZ', 'ASSIGNMENT'].includes(l.type) && (
+                      <button className="text-button" onClick={() => setAssessment(l)}>
+                        {l.type === 'QUIZ' ? 'Testi düzenle' : 'Ödevleri değerlendir'}
+                      </button>
+                    )}
                     {['VIDEO', 'ARTICLE'].includes(l.type) && (
                       <button
                         className="text-button"
@@ -387,6 +429,40 @@ export function Editor() {
             <Upload size={16} /> Kurs için medya yükle
           </Link>
         </section>
+      )}
+      {c && (
+        <>
+          <div className="form-actions">
+            <button
+              className="button secondary"
+              onClick={() => setTool(tool === 'students' ? undefined : 'students')}
+            >
+              Öğrenciler ve ilerleme
+            </button>
+            <button
+              className="button secondary"
+              onClick={() => setTool(tool === 'discussion' ? undefined : 'discussion')}
+            >
+              Kurs soru-cevap
+            </button>
+          </div>
+          {tool === 'students' && <CourseStudents courseId={c.id} />}{' '}
+          {tool === 'discussion' && (
+            <CourseDiscussion courseId={c.id} instructorId={c.instructorId} />
+          )}
+        </>
+      )}
+      {assessment && c && (
+        <Modal
+          title={`${assessment.title} — ${assessment.type === 'QUIZ' ? 'Test hazırlama' : 'Ödev değerlendirme'}`}
+          onClose={() => setAssessment(undefined)}
+        >
+          {assessment.type === 'QUIZ' ? (
+            <QuizEditor courseId={c.id} lessonId={assessment.id} />
+          ) : (
+            <AssignmentGrading courseId={c.id} lessonId={assessment.id} />
+          )}
+        </Modal>
       )}
       {videoLesson && c && (
         <Modal
@@ -449,6 +525,8 @@ function VideoFields({
   const media = useQuery({
     queryKey: ['video-picker', page],
     queryFn: () => api<Page<Media>>(`/media/my?size=12&page=${page}&sort=createdAt,desc`),
+    refetchInterval: (q) =>
+      q.state.data?.content.some((m) => m.status === 'PROCESSING') ? 3000 : false,
   });
   const videos =
     media.data?.content.filter(

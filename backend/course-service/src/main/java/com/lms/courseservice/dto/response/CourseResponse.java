@@ -17,6 +17,7 @@ public class CourseResponse {
     private String shortDescription;
     private String thumbnailUrl;
     private String previewVideoUrl;
+    private String reviewFeedback;
     private UUID instructorId;
     private String instructorName;
     private String categoryName;

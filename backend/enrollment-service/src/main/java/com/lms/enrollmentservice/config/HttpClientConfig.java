@@ -51,6 +51,7 @@ public class HttpClientConfig {
 
         WebClient client = newBuilder()
                 .baseUrl(courseUrl)
+                .defaultHeader("X-Internal-Service-Key",internalApiKey)
                 .build();
 
         return HttpServiceProxyFactory

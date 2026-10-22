@@ -39,6 +39,17 @@ const MediaLibrary = lazy(() =>
   import('./pages/Instructor').then((m) => ({ default: m.MediaLibrary })),
 );
 const AdminUsers = lazy(() => import('./pages/Account').then((m) => ({ default: m.AdminUsers })));
+const AdminDashboard = lazy(() =>
+  import('./pages/Admin').then((m) => ({ default: m.AdminDashboard })),
+);
+const AdminCourses = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminCourses })));
+const AdminCategories = lazy(() =>
+  import('./pages/Admin').then((m) => ({ default: m.AdminCategories })),
+);
+const AdminEnrollments = lazy(() =>
+  import('./pages/Admin').then((m) => ({ default: m.AdminEnrollments })),
+);
+const AdminAudit = lazy(() => import('./pages/Admin').then((m) => ({ default: m.AdminAudit })));
 const Notifications = lazy(() =>
   import('./pages/Account').then((m) => ({ default: m.Notifications })),
 );
@@ -165,9 +176,9 @@ function Layout() {
                 Hesap ayarları
               </NavLink>
               {user.role === 'ADMIN' && (
-                <NavLink className="nav-link" to="/admin/users">
+                <NavLink className="nav-link" to="/admin">
                   <Shield size={20} />
-                  Kullanıcılar
+                  Yönetici paneli
                 </NavLink>
               )}
             </nav>
@@ -303,7 +314,12 @@ export default function App() {
             <Route path="media" element={<MediaLibrary />} />
           </Route>
           <Route element={<Guard roles={['ADMIN']} />}>
+            <Route path="admin" element={<AdminDashboard />} />
             <Route path="admin/users" element={<AdminUsers />} />
+            <Route path="admin/courses" element={<AdminCourses />} />
+            <Route path="admin/categories" element={<AdminCategories />} />
+            <Route path="admin/enrollments" element={<AdminEnrollments />} />
+            <Route path="admin/audit" element={<AdminAudit />} />
           </Route>
           <Route
             path="*"

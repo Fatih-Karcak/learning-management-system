@@ -9,9 +9,15 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import java.util.List;
 
 @Repository
 public interface UserRepository extends JpaRepository<User,UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.role = 'ADMIN' and u.status = 'ACTIVE' order by u.id")
+    List<User> lockActiveAdmins();
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
     Optional<User> findByEmailVerificationToken(String token);

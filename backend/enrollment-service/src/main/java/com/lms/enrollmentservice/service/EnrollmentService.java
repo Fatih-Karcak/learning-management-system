@@ -302,6 +302,12 @@ public class EnrollmentService {
           );
  }
 
+ @Transactional(readOnly=true)
+ public boolean verifyEnrollment(UUID enrollmentId,UUID courseId,UUID studentId) {
+  return enrollmentRepository.findById(enrollmentId).filter(e->e.getCourseId().equals(courseId)&&e.getStudentId().equals(studentId)
+          &&(e.getStatus()==EnrollmentStatus.ACTIVE||e.getStatus()==EnrollmentStatus.COMPLETED)).isPresent();
+ }
+
  @Transactional
  public void updateLastAccessed(UUID enrollmentId) {
 

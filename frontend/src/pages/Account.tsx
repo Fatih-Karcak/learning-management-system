@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Bell, CreditCard, ExternalLink, Mail, Search, Shield, UserRound } from 'lucide-react';
 import { api, body, date, money, safeUrl } from '../api';
 import { useAuth } from '../auth';
+import { AdminNavigation } from './Admin';
 import type { Notification, Page, Payment, Refund, User } from '../types';
 import {
   Avatar,
@@ -378,6 +379,8 @@ export function Notifications() {
   );
 }
 export function AdminUsers() {
+  const { session } = useAuth();
+  const client = useQueryClient();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -392,13 +395,23 @@ export function AdminUsers() {
     queryFn: () => api<User>(`/users/${selected}`),
     enabled: !!selected,
   });
+  const update = useMutation({
+    mutationFn: (data: unknown) =>
+      api(`/users/admin/${selected}`, { method: 'PUT', body: body(data) }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['users'] });
+      void client.invalidateQueries({ queryKey: ['user', selected] });
+      void client.invalidateQueries({ queryKey: ['admin-summary'] });
+    },
+  });
   return (
     <>
       <PageTitle
         eyebrow="YÖNETİCİ ALANI"
         title="Kullanıcılar"
-        description="Kullanıcıları ara ve hesap bilgilerini incele."
+        description="Kullanıcıları ara; rol, erişim durumu ve yönetici işlemlerini yönet."
       />
+      <AdminNavigation />
       <form
         className="search-form admin-search"
         onSubmit={(e) => {
@@ -494,6 +507,42 @@ export function AdminUsers() {
                   <Shield size={16} />{' '}
                   {details.data.emailVerified ? 'E-posta doğrulandı' : 'E-posta doğrulanmadı'}
                 </p>
+                {selected !== session?.user.id && (
+                  <form
+                    key={`${selected}-${details.data.role}-${details.data.status}`}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (window.confirm('Kullanıcının rolü ve erişim durumu güncellensin mi?'))
+                        update.mutate(Object.fromEntries(new FormData(e.currentTarget)));
+                    }}
+                  >
+                    <Field label="Kullanıcı rolü">
+                      <select name="role" defaultValue={details.data.role}>
+                        <option value="STUDENT">Öğrenci</option>
+                        <option value="INSTRUCTOR">Eğitmen</option>
+                        <option value="ADMIN">Yönetici</option>
+                      </select>
+                    </Field>
+                    <Field label="Hesap durumu">
+                      <select name="status" defaultValue={details.data.status}>
+                        <option value="ACTIVE">Aktif</option>
+                        <option value="INACTIVE">Pasif</option>
+                        <option value="BANNED">Yasaklandı</option>
+                        <option value="PENDING_VERIFICATION">E-posta doğrulaması bekliyor</option>
+                      </select>
+                    </Field>
+                    <Field label="Kullanıcı değişikliği gerekçesi">
+                      <textarea name="reason" minLength={3} maxLength={1000} required />
+                    </Field>
+                    {update.error && <ErrorBox error={update.error} />}{' '}
+                    {update.isSuccess && (
+                      <Success>
+                        Kullanıcı güncellendi. Eski yetkiler sonraki istekte geçersizleşir.
+                      </Success>
+                    )}
+                    <Submit busy={update.isPending}>Kullanıcı yetkilerini kaydet</Submit>
+                  </form>
+                )}
               </div>
             )
           )}

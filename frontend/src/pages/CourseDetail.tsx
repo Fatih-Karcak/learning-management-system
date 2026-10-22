@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,7 +17,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { api, body, date, lessonTypes, levels, money } from '../api';
 import { useAuth } from '../auth';
-import type { Course, Lesson, Page, Review } from '../types';
+import type { Course, Lesson, Page, Review, Enrollment } from '../types';
 import {
   Avatar,
   Badge,
@@ -36,6 +36,15 @@ export default function CourseDetail() {
   const { courseId } = useParams();
   const { session } = useAuth();
   const client = useQueryClient();
+  const navigate = useNavigate();
+  const join = useMutation({
+    mutationFn: () => api<Enrollment>(`/enrollments/free/${courseId}`, { method: 'POST' }),
+    onSuccess: (e) => {
+      void client.invalidateQueries({ queryKey: ['enrollments'] });
+      void client.invalidateQueries({ queryKey: ['enrolled', courseId] });
+      navigate(`/learn/${e.id}`);
+    },
+  });
   const [reviewPage, setReviewPage] = useState(0);
   const [preview, setPreview] = useState<Lesson>();
   const [showTrailer, setShowTrailer] = useState(false);
@@ -271,11 +280,27 @@ export default function CourseDetail() {
               <Link className="button primary" to="/my-learning">
                 Öğrenim alanına git <ArrowRight size={17} />
               </Link>
+            ) : c.status !== 'PUBLISHED' ? (
+              <p className="notice">Bu kurs yeni kayıtlara kapalı.</p>
+            ) : price === 0 && session ? (
+              <button
+                className="button primary"
+                disabled={join.isPending}
+                onClick={() => join.mutate()}
+              >
+                {join.isPending ? 'Kayıt yapılıyor…' : 'Ücretsiz kursa katıl'}{' '}
+                <ArrowRight size={17} />
+              </button>
             ) : (
-              <Link className="button primary" to={`/checkout/${c.id}`}>
+              <Link
+                className="button primary"
+                to={price === 0 ? '/login' : `/checkout/${c.id}`}
+                state={price === 0 ? { from: `/courses/${c.id}` } : undefined}
+              >
                 {price === 0 ? 'Kursa katıl' : 'Kursa kaydol'} <ArrowRight size={17} />
               </Link>
             )}
+            {join.error && <ErrorBox error={join.error} />}
             <p className="purchase-note">Kendi hızında öğren, istediğin zaman devam et.</p>
             <div className="purchase-features">
               <span>

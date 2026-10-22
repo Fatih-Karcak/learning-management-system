@@ -132,6 +132,8 @@ public class MediaService {
         return toResponse(asset);
     }
 
+    public MediaAssetResponse getInternalMetadata(UUID mediaId) {return toResponse(findById(mediaId));}
+
     @Transactional
     public MediaAssetResponse linkVideoToLesson(UUID mediaId, UUID courseId, UUID lessonId, UUID ownerId) {
         MediaAsset asset = findById(mediaId);

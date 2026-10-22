@@ -95,5 +95,10 @@ export const statusLabels: Record<string, string> = {
   NOT_STARTED: 'Başlanmadı',
   APPROVED: 'Onaylandı',
   REJECTED: 'Reddedildi',
+  SUBMITTED: 'Değerlendirme bekliyor',
+  ACCEPTED: 'Kabul edildi',
+  CHANGES_REQUESTED: 'Düzeltme istendi',
+  BANNED: 'Yasaklandı',
+  INACTIVE: 'Pasif',
   PENDING_VERIFICATION: 'E-posta bekleniyor',
 };

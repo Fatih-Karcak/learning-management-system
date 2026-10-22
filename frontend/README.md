@@ -40,18 +40,19 @@ Erişim token'ı sekmeye ait `sessionStorage` içinde tutulur ve API'ye `Authori
 
 ## Kapsam
 
-| Alan          | Ekranlar ve işlemler                                                                                                                           |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hesap         | Öğrenci/eğitmen kaydı, giriş, e-posta doğrulama, çıkış, profil/avatar/telefon/biyografi, parola değişikliği, hesabı devre dışı bırakma.        |
-| Keşif         | Yayındaki/popüler kurslar, arama, dinamik kategori filtresi, sayfalama, eğitmenin kursları, kurs ayrıntıları, tanıtım videosu ve ön izlemeler. |
-| Öğrenim       | Kayıtlar, ders/bölüm menüsü, Markdown içerik, korumalı HLS video, izleme konumu kaydı, makale tamamlama, kurs ilerlemesi.                      |
-| Değerlendirme | Kurs yorumlarını görüntüleme; kayıtlı öğrencinin puan/yorum eklemesi ve kendi yorumunu silmesi.                                                |
-| Ödeme         | PaymentIntent, Stripe Elements, asenkron ödeme durumu, ödeme geçmişi/ayrıntısı, makbuz ve iade talebi.                                         |
-| Sertifika     | Tamamlanan kursun sertifikasını görüntüleme, süreli PDF bağlantısı ve herkese açık doğrulama kodu sorgusu.                                     |
-| Eğitmen       | Taslak/yayınlanmış kurslar; kurs oluşturma/güncelleme/yayınlama; bölüm ve video/makale/test/ödev türündeki dersleri oluşturma/silme.           |
-| Medya         | Kullanıcıya ait dosyaların listesi; kurs/dersle ilişkilendirilen görsel/video yükleme; işleme durumu, ayrıntı, bağlantı kopyalama ve silme.    |
-| Bildirim      | Kullanıcının e-posta bildirim kayıtları ve gönderim durumları. Backend'de okundu/okunmadı işlemi yoktur.                                       |
-| Yönetim       | Yalnızca yöneticiye açık kullanıcı arama/listesi/ayrıntısı. Backend'de rol değiştirme veya kullanıcı yasaklama endpoint'i yoktur.              |
+| Alan          | Ekranlar ve işlemler                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hesap         | Öğrenci/eğitmen kaydı, giriş, e-posta doğrulama, çıkış, profil/avatar/telefon/biyografi, parola değişikliği, hesabı devre dışı bırakma.             |
+| Keşif         | Yayındaki/popüler kurslar, arama, dinamik kategori filtresi, sayfalama, eğitmenin kursları, kurs ayrıntıları, tanıtım videosu ve ön izlemeler.      |
+| Öğrenim       | Ücretsiz kayıt, ders/bölüm menüsü, korumalı HLS, zaman ve benzersiz aralıklarla video tamamlama, kaldığın yerden devam, makale tamamlama, ilerleme. |
+| Etkileşim     | Sunucuda puanlanan testler; ödev teslimi, düzeltme ve kabul; kişisel zaman damgalı notlar; ders/kurs soru-cevap ve kabul edilen yanıtlar.           |
+| Değerlendirme | Kurs yorumlarını görüntüleme; kayıtlı öğrencinin puan/yorum eklemesi ve kendi yorumunu silmesi.                                                     |
+| Ödeme         | PaymentIntent, Stripe Elements, asenkron ödeme durumu, ödeme geçmişi/ayrıntısı, makbuz ve iade talebi.                                              |
+| Sertifika     | Tamamlanan kursun sertifikasını görüntüleme, süreli PDF bağlantısı ve herkese açık doğrulama kodu sorgusu.                                          |
+| Eğitmen       | Kurs/müfredat yönetimi, yönetici incelemesine gönderme, arşivleme, test hazırlama, ödev değerlendirme, öğrenciler ve ilerleme listesi.              |
+| Medya         | Kullanıcıya ait dosyaların listesi; kurs/dersle ilişkilendirilen görsel/video yükleme; işleme durumu, ayrıntı, bağlantı kopyalama ve silme.         |
+| Bildirim      | Kullanıcının e-posta bildirim kayıtları ve gönderim durumları. Backend'de okundu/okunmadı işlemi yoktur.                                            |
+| Yönetim       | Yönetici özeti, kullanıcı rolü/durumu ve işlem kaydı, kurs onayı/ret/arşiv, kategori yönetimi, gerekçeli kayıt verme/iptal ve öğrenci ilerlemesi.   |
 
 Backend entegrasyonunu tamamlamak için eklenen küçük API uzantıları:
 
@@ -62,10 +63,10 @@ Backend entegrasyonunu tamamlamak için eklenen küçük API uzantıları:
 
 ## Backend'in mevcut sınırları
 
-- Video/test/ödev derslerinin tamamlanması güvenilir bir iç servis tarafından doğrulanır. Arayüz yalnızca makaleleri manuel tamamlar; video süresinden sahte tamamlama sonucu üretmez. Test sorusu/yanıtı ve ödev teslimi için backend'de öğrenci endpoint'i bulunmadığından bu ders türleri içerik olarak gösterilir.
-- Ücretsiz kurs için ayrı bir kayıt endpoint'i yoktur; mevcut ödeme servisi sıfır tutarı da Stripe'a yollar. Ücretsiz kayıt desteği için backend'de ayrı bir akış gerekir. Arayüz kendi başına kayıt oluşturmaz.
+- Video bildirimleri beş saniyede bir gönderilir; backend süre ve izlenen aralıkları kontrol eder. İleri sarmak veya aynı bölümü tekrar izlemek tamamlanmamış aralıklara kredi vermez. Test ve ödev tamamlaması backend sonucundan alınır. Arayüz kendisi kurs yüzdesi veya sertifika üretmez.
+- Ücretsiz kayıt `/enrollments/free/{courseId}` kullanır; kart formuna gönderilmez. Yönetici ayrıca gerekçeli kayıt verebilir. Ücretli ödeme ve iade akışı mevcut yapısını korur.
 - Kupon alanı mevcut istek sözleşmesine gönderilir; tutar olarak yalnızca sunucunun döndürdüğü değer kullanılır. Backend şu anda kupon hesaplaması uygulamaz.
-- Kurs/bölüm/ders silme ve düzenleme seçenekleri mevcut endpoint'lerle sınırlıdır: kurs silme/arşivleme, bölüm/ders güncelleme endpoint'i bulunmaz.
+- Bölüm/ders genel düzenleme seçenekleri mevcut endpoint'lerle sınırlıdır. Video bağlama/değiştirme, test içeriğini düzenleme ve kurs arşivleme desteklenir; genel bölüm/ders güncellemesi ve kursu kalıcı silme bu sürümde bulunmaz.
 - Görseller için MinIO'nun döndürdüğü bağlantılar sürelidir. Kalıcı kurs kapaklarında kalıcı, herkese açık bir görsel URL'si kullanın.
 - PDF, e-posta, video dönüştürme ve kurs kaydı asenkron olabilir; servis ve ağ yapılandırmasına bağlı hatalar kullanıcıya gösterilir.
 
@@ -80,7 +81,7 @@ E2E_REAL_BACKEND=1 npm run test:e2e -- tests/backend.spec.ts
 npm run format:check
 ```
 
-Playwright varsayılan olarak bu ortamda bulunan `/usr/bin/chromium` kullanır. Farklı bir kurulumda `PLAYWRIGHT_CHROMIUM_PATH` verin. Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve `frontend-e2e-…@example.test` adresli yerel bir eğitmen ile yayınlanmış test kursu oluşturur; üretim veritabanında çalıştırmayın. Diğer tarayıcı testleri backend'i taklit eder ve gerçek Stripe/S3 işlemi doğrulamaz.
+Playwright varsayılan olarak bu ortamda bulunan `/usr/bin/chromium` kullanır. Farklı bir kurulumda `PLAYWRIGHT_CHROMIUM_PATH` verin. Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve `frontend-e2e-…@example.test` adresli yerel bir eğitmen ile incelemeye gönderilmiş test kursu oluşturur; üretim veritabanında çalıştırmayın. Diğer tarayıcı testleri backend'i taklit eder ve gerçek Stripe/S3 işlemi doğrulamaz.
 
 `E2E_VIDEO=1` için PATH'te FFmpeg gerekir. İki ek test, yüklenen videonun seçilen metin dersine bağlanmasını ve öğrenci hesabında HLS manifest/segment isteklerinin yetkili gönderilmesini sınar; görüntü genişliğini ve ilerleyen oynatma süresini ölçer. İşlenen videonun hazır olana kadar beklemesi de kontrol edilir. Bu testlerde API yanıtları taklit edilir, video verisi gerçekten çözülür.
 

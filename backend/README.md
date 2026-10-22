@@ -2,6 +2,8 @@
 
 Bu klasör yalnızca Java 25 / Spring Boot backend'ini içerir. React + TypeScript arayüzü ayrı [frontend/](../frontend/) klasöründedir. Buradaki komutlar `backend/` çalışma dizininden çalıştırılır.
 
+Yeni yönetici/kurs onayı, ücretsiz kayıt, test/ödev, video ilerlemesi, soru-cevap, kişisel notlar ve ilk yönetici kurulumu [LMS_FEATURES.md](LMS_FEATURES.md) içinde açıklanır. Eğitmen yayın isteği artık yönetici incelemesine gönderilir.
+
 ## Bağımlılıklar ve altyapı
 
 - Java 25; derleme ve çalışma sırasında preview özellikleri açık olmalıdır.
@@ -51,15 +53,15 @@ java --enable-preview -jar user-service/target/user-service-1.0.0.jar
 
 Alternatif olarak bir modülün içinden `sh mvnw spring-boot:run` çalıştırılabilir; preview JVM parametresi ortak POM'da tanımlıdır.
 
-| Servis | Port |
-| --- | --- |
-| API gateway | 8080 |
-| Kullanıcı | 8081 |
-| Kurs | 8082 |
+| Servis            | Port |
+| ----------------- | ---- |
+| API gateway       | 8080 |
+| Kullanıcı         | 8081 |
+| Kurs              | 8082 |
 | Kayıt ve ilerleme | 8083 |
-| Ödeme | 8084 |
-| İçerik ve medya | 8085 |
-| Bildirim | 8086 |
+| Ödeme             | 8084 |
+| İçerik ve medya   | 8085 |
+| Bildirim          | 8086 |
 
 Frontend yalnızca gateway'e bağlanır. İç servis portlarını dışarıya açmayın. PostgreSQL ve Kafka ortak altyapıdır; içerik/video/sertifika işlemleri ayrıca çalışan MinIO/S3 gerektirir. Bu bulut ortamındaki MinIO indirme engeli, klasör düzeninden bağımsız olarak devam eder.
 

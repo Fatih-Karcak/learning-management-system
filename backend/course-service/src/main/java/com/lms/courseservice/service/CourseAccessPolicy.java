@@ -22,7 +22,8 @@ public class CourseAccessPolicy {
     private final EnrollmentClient enrollmentClient;
 
     public void requireVisible(Course course, AuthenticatedUser viewer) {
-        if (course.getStatus() != CourseStatus.PUBLISHED && !isOwnerOrAdmin(course, viewer)) {
+        if (course.getStatus() != CourseStatus.PUBLISHED && !isOwnerOrAdmin(course, viewer)
+                && !(viewer!=null && isEnrolled(course.getId(),viewer.id()))) {
             throw new CourseNotFoundException("Kurs bulunamadı");
         }
     }

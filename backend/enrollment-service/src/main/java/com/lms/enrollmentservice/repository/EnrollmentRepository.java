@@ -18,6 +18,7 @@ import java.util.UUID;
 
 public interface EnrollmentRepository
         extends JpaRepository<Enrollment, UUID> {
+    Page<Enrollment> findByCourseId(UUID courseId,Pageable pageable);
 
     Optional<Enrollment> findByPaymentId(UUID paymentId);
 

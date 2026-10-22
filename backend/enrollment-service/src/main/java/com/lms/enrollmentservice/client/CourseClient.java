@@ -8,7 +8,7 @@ import org.springframework.web.service.annotation.HttpExchange;
 
 import java.util.UUID;
 
-@HttpExchange(url = "/api/v1/courses")
+@HttpExchange(url = "/api/v1/internal/courses")
 public interface CourseClient {
 
     @GetExchange("/{id}")

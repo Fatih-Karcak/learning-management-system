@@ -9,10 +9,16 @@ export default function VideoPlayer({
   src,
   initialTime = 0,
   onSave,
+  onPlayback,
+  onPosition,
+  seekTo,
 }: {
   src: string;
   initialTime?: number;
   onSave?: (seconds: number) => void;
+  onPlayback?: (seconds: number, playing: boolean) => void;
+  onPosition?: (seconds: number) => void;
+  seekTo?: { seconds: number; nonce: number };
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -34,6 +40,20 @@ export default function VideoPlayer({
   const ready = !mediaId || media.data?.status === 'READY';
   const save = useRef(onSave);
   save.current = onSave;
+  const playback = useRef(onPlayback);
+  playback.current = onPlayback;
+  const position = useRef(onPosition);
+  position.current = onPosition;
+  const lastReport = useRef(0);
+  const lastPosition = useRef(-1);
+  function report(video: HTMLVideoElement, playing: boolean) {
+    lastReport.current = performance.now();
+    playback.current?.(video.currentTime, playing);
+  }
+  useEffect(() => {
+    if (seekTo && ref.current && Number.isFinite(ref.current.duration))
+      ref.current.currentTime = Math.min(Math.max(0, seekTo.seconds), ref.current.duration);
+  }, [seekTo]);
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -135,8 +155,27 @@ export default function VideoPlayer({
         controls
         playsInline
         preload="metadata"
-        onPause={(e) => save.current?.(Math.floor(e.currentTarget.currentTime))}
-        onEnded={(e) => save.current?.(Math.floor(e.currentTarget.currentTime))}
+        onPlay={(e) => report(e.currentTarget, true)}
+        onPause={(e) => {
+          report(e.currentTarget, false);
+          save.current?.(Math.floor(e.currentTarget.currentTime));
+        }}
+        onEnded={(e) => {
+          report(e.currentTarget, false);
+          save.current?.(Math.floor(e.currentTarget.currentTime));
+        }}
+        onSeeking={(e) => report(e.currentTarget, false)}
+        onSeeked={(e) => report(e.currentTarget, !e.currentTarget.paused)}
+        onTimeUpdate={(e) => {
+          const video = e.currentTarget;
+          const current = Math.floor(video.currentTime);
+          if (current !== lastPosition.current) {
+            lastPosition.current = current;
+            position.current?.(current);
+          }
+          if (!video.paused && !video.seeking && performance.now() - lastReport.current >= 5000)
+            report(video, true);
+        }}
         onError={() =>
           setError(new Error('Video oynatılamadı. Dosya adresini ve erişim iznini kontrol edin.'))
         }

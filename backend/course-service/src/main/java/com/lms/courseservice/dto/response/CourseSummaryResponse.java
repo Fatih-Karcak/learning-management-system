@@ -12,6 +12,7 @@ public class CourseSummaryResponse {
     private UUID id;
     private String title;
     private String shortDescription;
+    private String reviewFeedback;
     private String thumbnailUrl;
     private String instructorName;
     private String categoryName;

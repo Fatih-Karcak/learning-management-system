@@ -1,5 +1,7 @@
 LMS geliştirme kontrolleri
 
+Yönetici, kurs inceleme, ücretsiz kayıt, video/test/ödev ilerlemesi, soru-cevap, kişisel notlar ve sertifika entegrasyonunun iş kuralları ve çalıştırma komutları [LMS_FEATURES.md](LMS_FEATURES.md) içindedir. `RUN_LMS_E2E=1 node --test scripts/lms-features.test.mjs` çalışan geliştirme servislerinde 13 senaryo yürütür; yönetici kimliği güvenli ortamdan verilmelidir.
+
 Projeyi Java 25 ve modüllerdeki Maven 3.9.16 wrapper ile çalıştırın. Derleme ve çalışma sırasında preview özellikleri açık olmalıdır. PostgreSQL, Kafka ve S3 uyumlu nesne deposu; bildirim denemelerinde ayrıca yerel SMTP yakalayıcısı gerekir. Veritabanları `init-db` betikleriyle oluşturulur; yeni Flyway migration dosyaları mevcut kayıtları koruyarak uygulanır.
 
 Tüm servislerde aynı `JWT_SECRET` ve en az 32 karakterlik aynı `INTERNAL_API_KEY` kullanılmalıdır. `INTERNAL_API_KEY`, gateway'in hesap durumu kontrolünde ve servisler arası çağrılarda kullanılır. Anahtarlar yalnızca güvenli ortam değişkenlerinde veya Git tarafından yok sayılan yerel yapılandırmada tutulmalıdır. `DB_PASSWORD`, `MINIO_ACCESS_KEY` ve `MINIO_SECRET_KEY`, kullanılan PostgreSQL/S3 hizmetinin ayarlarıyla eşleşmelidir. Örnek yerel altyapı ayarları `docker-compose.yml` içindedir. Depo kökünden `node backend/scripts/setup-local-env.mjs` komutu ortak `backend/.env` dosyasını oluşturur; Spring yapılandırması bu dosyayı otomatik yükler. Mevcut süreç ortamı değerleri önceliklidir.

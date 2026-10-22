@@ -22,6 +22,8 @@ learning-management-system/
 
 Frontend'in Node bağımlılıkları ve derlemesi `frontend/` içinde; Spring servisleri, Maven dosyaları, veritabanı betikleri ve altyapı yapılandırması `backend/` içindedir. Depo kökünde Maven projesi bulunmaz.
 
+Ödeme dışındaki LMS işlevleri: yönetici paneli ve kurs onayı, kullanıcı/kategori yönetimi, ücretsiz kayıt, video ilerlemesi ve kaldığın yerden devam etme, puanlanan testler, ödev teslimi/değerlendirme, eğitmen öğrenci takibi, soru-cevap, kişisel ders notları ve sertifika üretimi. İş kuralları, ilk yönetici kurulumu ve API listesi: [LMS özellikleri](backend/LMS_FEATURES.md).
+
 ## Frontend
 
 Node.js 20.19+ veya 22.12+ ile:

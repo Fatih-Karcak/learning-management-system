@@ -115,7 +115,18 @@ async function mockApi(page: Page, role = 'STUDENT') {
     else if (path === '/api/v1/enrollments/my') data = pageData([enrollment]);
     else if (path === '/api/v1/enrollments/enrollment-1') data = enrollment;
     else if (path.endsWith('/check')) data = true;
-    else if (path.startsWith('/api/v1/progress/')) data = [];
+    else if (path.endsWith('/playback') && route.request().method() === 'POST') {
+      const input = route.request().postDataJSON();
+      data = {
+        enrollmentId: 'enrollment-1',
+        lessonId: 'lesson-1',
+        sectionId: 'section-1',
+        status: 'IN_PROGRESS',
+        positionSeconds: Math.floor(input.positionSeconds),
+        watchedSeconds: Math.floor(input.positionSeconds),
+        totalSeconds: 3,
+      };
+    } else if (path.startsWith('/api/v1/progress/')) data = [];
     await route.fulfill({ json: envelope(data) });
   });
 }
@@ -163,6 +174,59 @@ test('video lesson without a URL explains that an instructor must attach its vid
   await mockApi(page);
   await page.goto('/learn/enrollment-1?lesson=lesson-2');
   await expect(page.getByText('Bu derse henüz video bağlanmamış.', { exact: false })).toBeVisible();
+});
+
+test('continue learning opens the most recently watched unfinished lesson', async ({ page }) => {
+  await session(page);
+  await mockApi(page);
+  await page.route('**/api/v1/progress/enrollment-1', (route) =>
+    route.fulfill({
+      json: envelope([
+        {
+          enrollmentId: 'enrollment-1',
+          sectionId: 'section-1',
+          lessonId: 'lesson-2',
+          status: 'IN_PROGRESS',
+          positionSeconds: 42,
+          watchedSeconds: 60,
+          lastWatchedAt: '2026-10-22T12:00:00',
+        },
+      ]),
+    }),
+  );
+  await page.goto('/learn/enrollment-1');
+  await expect(
+    page.getByRole('heading', { name: 'Birlikte keşfedelim', exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL('/learn/enrollment-1?lesson=lesson-2');
+});
+
+test('quiz editor retains the saved questions when reopened', async ({ page }) => {
+  await session(page, 'INSTRUCTOR');
+  await mockApi(page, 'INSTRUCTOR');
+  const copy = structuredClone(course);
+  copy.sections[0].lessons[0].type = 'QUIZ';
+  await page.route('**/api/v1/courses/course-1', (route) =>
+    route.fulfill({ json: envelope(copy) }),
+  );
+  let definition = {
+    passingScore: 70,
+    questions: [
+      { id: 'q-1', prompt: 'Eski soru', options: ['Yanıt A', 'Yanıt B'], correctOption: 0 },
+    ],
+  };
+  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz/manage', async (route) => {
+    if (route.request().method() === 'PUT') definition = route.request().postDataJSON();
+    await route.fulfill({ json: envelope(definition) });
+  });
+  await page.goto('/instructor/course-1');
+  await page.getByRole('button', { name: 'Testi düzenle', exact: true }).click();
+  await page.getByLabel('Soru 1 metni').fill('Kaydedilmiş yeni soru');
+  await page.getByRole('button', { name: 'Testi kaydet', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Test kaydedildi.');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Testi düzenle', exact: true }).click();
+  await expect(page.getByLabel('Soru 1 metni')).toHaveValue('Kaydedilmiş yeni soru');
 });
 
 test.describe('decoded student video playback', () => {
@@ -570,6 +634,164 @@ test('email verification submits once even in strict mode', async ({ page }) => 
   await page.goto('/verify-email?token=local-code');
   await expect(page.getByRole('status')).toContainText('E-posta adresiniz doğrulandı.');
   expect(count).toBe(1);
+});
+
+test('administrator changes account role and status with a recorded reason', async ({ page }) => {
+  await session(page, 'ADMIN');
+  await mockApi(page, 'ADMIN');
+  const target = { ...user, id: 'target-1' };
+  await page.route('**/api/v1/users/search?**', (route) =>
+    route.fulfill({ json: envelope(pageData([target])) }),
+  );
+  await page.route('**/api/v1/users/target-1', (route) =>
+    route.fulfill({ json: envelope(target) }),
+  );
+  let saved: unknown;
+  await page.route('**/api/v1/users/admin/target-1', async (route) => {
+    saved = route.request().postDataJSON();
+    await route.fulfill({ json: envelope(target) });
+  });
+  await page.goto('/admin/users');
+  await page.getByRole('button', { name: 'İncele', exact: true }).click();
+  await page.getByLabel('Kullanıcı rolü').selectOption('INSTRUCTOR');
+  await page.getByLabel('Hesap durumu').selectOption('BANNED');
+  await page.getByLabel('Kullanıcı değişikliği gerekçesi').fill('İçerik politikası ihlali');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Kullanıcı yetkilerini kaydet' }).click();
+  await expect
+    .poll(() => saved)
+    .toEqual({ role: 'INSTRUCTOR', status: 'BANNED', reason: 'İçerik politikası ihlali' });
+});
+
+test('administrator reviews a course before it is published', async ({ page }) => {
+  await session(page, 'ADMIN');
+  await mockApi(page, 'ADMIN');
+  let approved = false;
+  let decision: unknown;
+  await page.route('**/api/v1/courses/admin?**', (route) =>
+    route.fulfill({
+      json: envelope(pageData(approved ? [] : [{ ...course, status: 'PENDING_REVIEW' }])),
+    }),
+  );
+  await page.route('**/api/v1/courses/admin/course-1/decision', async (route) => {
+    decision = route.request().postDataJSON();
+    approved = true;
+    await route.fulfill({ json: envelope({ ...course, status: 'PUBLISHED' }) });
+  });
+  await page.goto('/admin/courses');
+  await page.getByRole('button', { name: 'Onayla', exact: true }).click();
+  await page.getByLabel('Karar gerekçesi').fill('İçerik kontrol edildi');
+  await page.getByRole('button', { name: 'Kararı kaydet' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(decision).toEqual({ action: 'APPROVE', reason: 'İçerik kontrol edildi' });
+});
+
+test('free course enrollment opens learning without creating a payment', async ({ page }) => {
+  await session(page);
+  await mockApi(page);
+  await page.route('**/api/v1/courses/course-1', (route) =>
+    route.fulfill({ json: envelope({ ...course, price: 0 }) }),
+  );
+  await page.route('**/api/v1/enrollments/course/course-1/check', (route) =>
+    route.fulfill({ json: envelope(false) }),
+  );
+  let joined = false;
+  await page.route('**/api/v1/enrollments/free/course-1', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    joined = true;
+    await route.fulfill({ json: envelope(enrollment) });
+  });
+  await page.goto('/courses/course-1');
+  await page.getByRole('button', { name: 'Ücretsiz kursa katıl' }).click();
+  await expect(page).toHaveURL(/\/learn\/enrollment-1(?:\?lesson=lesson-1)?$/);
+  expect(joined).toBe(true);
+});
+
+test('student submits quiz answers and completion follows the server result', async ({ page }) => {
+  await session(page);
+  await mockApi(page);
+  const copy = structuredClone(course);
+  copy.sections[0].lessons[0].type = 'QUIZ';
+  await page.route('**/api/v1/courses/course-1', (route) =>
+    route.fulfill({ json: envelope(copy) }),
+  );
+  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz', (route) =>
+    route.fulfill({
+      json: envelope({
+        passingScore: 70,
+        questions: [{ id: 'question-1', prompt: '2 + 2?', options: ['4', '5'] }],
+      }),
+    }),
+  );
+  let payload: unknown;
+  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz/attempts', async (route) => {
+    if (route.request().method() === 'POST') {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        json: envelope({ id: 'attempt-1', score: 100, passed: true, correct: 1, total: 1 }),
+      });
+    } else await route.fulfill({ json: envelope([]) });
+  });
+  await page.goto('/learn/enrollment-1');
+  await page.getByLabel('4', { exact: true }).check();
+  await page.getByRole('button', { name: 'Testi gönder' }).click();
+  await expect(page.getByText('Testi geçtin; ders tamamlandı.', { exact: false })).toBeVisible();
+  expect(payload).toEqual({
+    enrollmentId: 'enrollment-1',
+    answers: [{ questionId: 'question-1', option: 0 }],
+  });
+});
+
+test('students can save personal notes and ask lesson questions', async ({ page }) => {
+  await session(page);
+  await mockApi(page);
+  let note: unknown;
+  let question: unknown;
+  await page.route('**/api/v1/progress/enrollment-1/notes', async (route) => {
+    note = route.request().postDataJSON();
+    await route.fulfill({
+      json: envelope({
+        id: 'note-1',
+        lessonId: 'lesson-1',
+        positionSeconds: 0,
+        content: 'Önemli bir nokta',
+      }),
+    });
+  });
+  await page.route('**/api/v1/courses/course-1/questions', async (route) => {
+    question = route.request().postDataJSON();
+    await route.fulfill({
+      json: envelope({
+        id: 'question-1',
+        authorId: 'student-1',
+        authorName: 'Ece',
+        title: 'Bir örnek daha?',
+        content: 'Açıklayabilir misiniz?',
+        replyCount: 0,
+      }),
+    });
+  });
+  await page.route('**/api/v1/courses/course-1/questions/question-1/replies', (route) =>
+    route.fulfill({ json: envelope([]) }),
+  );
+  await page.goto('/learn/enrollment-1');
+  await page.getByLabel('Ders notun').fill('Önemli bir nokta');
+  await page.getByRole('button', { name: 'Not ekle', exact: true }).click();
+  await expect
+    .poll(() => note)
+    .toEqual({
+      lessonId: 'lesson-1',
+      sectionId: 'section-1',
+      positionSeconds: 0,
+      content: 'Önemli bir nokta',
+    });
+  await page.getByText('Yeni soru sor', { exact: true }).click();
+  await page.getByLabel('Soru başlığı').fill('Bir örnek daha?');
+  await page.getByLabel('Sorunun ayrıntısı').fill('Açıklayabilir misiniz?');
+  await page.getByRole('button', { name: 'Soruyu gönder' }).click();
+  await expect
+    .poll(() => question)
+    .toEqual({ lessonId: 'lesson-1', title: 'Bir örnek daha?', content: 'Açıklayabilir misiniz?' });
 });
 
 test('failed enrollment requests render an error without waiting for a disabled course query', async ({

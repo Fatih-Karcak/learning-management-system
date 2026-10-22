@@ -41,4 +41,11 @@ public class LessonProgress {
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
     private LocalDateTime lastWatchedAt;
+    private int positionSeconds;
+    private long creditedMillis;
+    @Column(columnDefinition="TEXT")
+    private String watchedRanges;
+    private LocalDateTime lastPlaybackAt;
+    private Double lastPlaybackPosition;
+    private boolean playbackActive;
 }

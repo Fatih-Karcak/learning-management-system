@@ -1559,6 +1559,66 @@ progress::-moz-progress-bar {
 .video-player video[hidden] {
   display: none;
 }
+.feature-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 24px;
+}
+.feature-tabs .active {
+  background: var(--lime);
+  color: var(--green);
+}
+.feature-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e5da;
+}
+.quiz-question {
+  min-width: 0;
+  border: 1px solid #d8dfd1;
+  border-radius: 10px;
+  padding: 18px;
+  margin: 18px 0;
+}
+.quiz-question legend {
+  font-weight: 700;
+  padding: 0 8px;
+}
+.quiz-question .checkbox-field {
+  align-items: flex-start;
+  margin: 14px 0;
+}
+.note-item,
+.question-thread {
+  padding: 16px;
+  border: 1px solid #dce3d5;
+  border-radius: 10px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.note-item p,
+.question-thread p {
+  white-space: pre-wrap;
+}
+.discussion-question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #dce3d5;
+  border-radius: 8px;
+  margin: 10px 0;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+.discussion-question span {
+  font-size: 12px;
+  color: #64725d;
+}
 .video-player .notice {
   margin: 15px;
 }

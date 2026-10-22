@@ -16,6 +16,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InternalEnrollmentController {
 private final EnrollmentService enrollmentService;
+@GetMapping("/{enrollmentId}/verify")
+public ResponseEntity<ApiResponse<Boolean>> verify(@PathVariable UUID enrollmentId,@RequestParam UUID courseId,@RequestParam UUID studentId){
+    return ResponseEntity.ok(ApiResponse.success(enrollmentService.verifyEnrollment(enrollmentId,courseId,studentId),"Başarılı"));
+}
 @GetMapping("/course/{courseId}/check")
 public ResponseEntity<ApiResponse<Boolean>> checkEnrollment(@PathVariable UUID courseId,@RequestParam UUID studentId){
     return ResponseEntity.ok(ApiResponse.success(enrollmentService.isEnrolled(studentId,courseId),"başarılı"));

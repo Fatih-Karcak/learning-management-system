@@ -37,6 +37,7 @@ public class Course {
 
     private String thumbnailUrl;
     private String previewVideoUrl;
+    private String reviewFeedback;
 
     @Column(nullable = false)
     private UUID instructorId;
