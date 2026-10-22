@@ -4,7 +4,7 @@ Projeyi Java 25 ve modüllerdeki Maven 3.9.16 wrapper ile çalıştırın. Derle
 
 Tüm servislerde aynı `JWT_SECRET` ve en az 32 karakterlik aynı `INTERNAL_API_KEY` kullanılmalıdır. `INTERNAL_API_KEY`, gateway'in hesap durumu kontrolünde ve servisler arası çağrılarda kullanılır. Anahtarlar yalnızca güvenli ortam değişkenlerinde veya Git tarafından yok sayılan yerel yapılandırmada tutulmalıdır. `DB_PASSWORD`, `MINIO_ACCESS_KEY` ve `MINIO_SECRET_KEY`, kullanılan PostgreSQL/S3 hizmetinin ayarlarıyla eşleşmelidir. Örnek yerel altyapı ayarları `docker-compose.yml` içindedir. Java süreçleri Compose'un `.env` dosyasını kendiliğinden yüklemez; gerekli değişkenleri süreç ortamına aktarın.
 
-Depo kökünden tam doğrulama:
+`backend/` dizininden tam doğrulama:
 
 ```sh
 sh user-service/mvnw -B verify

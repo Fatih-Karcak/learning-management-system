@@ -1,3 +1,5 @@
+name: learning-management-system
+
 services:
   postgres:
     image: postgres:17

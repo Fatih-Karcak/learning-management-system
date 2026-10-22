@@ -2,6 +2,8 @@
 
 Mevcut yedi Spring Boot servisi için Türkçe, mobil uyumlu React 19 + TypeScript uygulaması. Vite, React Router, TanStack Query, Stripe Elements ve HLS.js kullanır. Ürün ekranları gerçek API verilerini kullanır; örnek veriler yalnızca tarayıcı testlerinde bulunur.
 
+Bu klasör bağımsız frontend projesidir. Spring servisleri, Maven projesi ve Docker Compose yapılandırması ayrı [backend/](../backend/) klasöründedir.
+
 ## Başlatma
 
 Node.js 20.19+ veya 22.12+ gerekir; bu ortamda Node 24 ile doğrulandı.
@@ -79,10 +81,11 @@ npm run format:check
 
 Playwright varsayılan olarak bu ortamda bulunan `/usr/bin/chromium` kullanır. Farklı bir kurulumda `PLAYWRIGHT_CHROMIUM_PATH` verin. Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve `frontend-e2e-…@example.test` adresli yerel bir eğitmen ile yayınlanmış test kursu oluşturur; üretim veritabanında çalıştırmayın. Diğer tarayıcı testleri backend'i taklit eder ve gerçek Stripe/S3 işlemi doğrulamaz.
 
-Backend regresyon testleri depo kökünden çalıştırılabilir:
+Backend regresyon testleri `backend/` klasöründen çalıştırılır:
 
 ```bash
-bash /workspace/.lms-setup/mvn.sh -B \
+cd ../backend
+sh user-service/mvnw -B \
   -Dtest=CourseRegressionTest,MediaDeletionTest,FrontendEmailLinkTest,AccessTokenValidationTest \
   -Dsurefire.failIfNoSpecifiedTests=false test
 ```
