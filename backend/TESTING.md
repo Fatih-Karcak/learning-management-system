@@ -14,9 +14,18 @@ Bu komut yedi modülü derler, mevcut uygulama bağlamı testlerini ve güvenlik
 
 ```sh
 sh user-service/mvnw -B \
-  -Dtest=AccessTokenValidationTest,GatewaySecurityTest,AccountRegressionTest,InternalServiceAuthFilterTest,PaymentRegressionTest,RefundRegressionTest,CourseClientContractTest,CourseRegressionTest,MediaDeletionTest \
+  -Dtest=AccessTokenValidationTest,GatewaySecurityTest,AccountRegressionTest,InternalServiceAuthFilterTest,PaymentRegressionTest,RefundRegressionTest,CourseClientContractTest,CourseRegressionTest,MediaDeletionTest,MediaPlaybackTest,InternalMediaAccessTest,LessonVideoTest,ContentClientContractTest \
   -Dsurefire.failIfNoSpecifiedTests=false -DargLine=--enable-preview test
 ```
+
+Gerçek FFmpeg ile uyumsuz MPEG-4/PCM kaynağının H.264/AAC HLS'e çevrildiğini, segmentin çözülebildiğini, sessiz/kısa videoyu ve bozuk dosya hatasını doğrulamak için:
+
+```sh
+sh user-service/mvnw -B -pl content-service \
+  -Dtest=VideoProcessingTest -Dlms.ffmpeg.tests=true test
+```
+
+Bu üç test `ffmpeg`/`ffprobe` gerektirir; özellik verilmediğinde atlanır. Nesne deposu taklit edilir; gerçek MinIO dağıtımını doğrulamaz. `MediaPlaybackTest` kayıtlı öğrencinin manifest/segment erişimini ve kayıtsız/iade edilmiş erişimin reddini sınar. `LessonVideoTest` metin derse video eklemeyi, sahiplik kontrolünü ve içerik servisi hatalarının başarılı işlem gibi dönmemesini doğrular.
 
 Ödeme istemcisi sözleşme testi yerel HTTP sunucusunu kullanır. Ödeme başlatma birim testi Stripe SDK çağrısını taklit eder; gerçek kart işlemi yapmaz. Gerçek ödeme/para iadesi doğrulaması için ayrıca Stripe test hesabı ve SDK ile uyumlu webhook API sürümü gerekir. İmzalı webhook'lar için kullanılan anahtar ödeme servisinin yapılandırmasıyla eşleşmelidir.
 

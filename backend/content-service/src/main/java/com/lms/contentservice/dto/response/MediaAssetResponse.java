@@ -10,6 +10,8 @@ import java.util.UUID;
 @Data
 public class MediaAssetResponse {
     private UUID id;
+    private UUID courseId;
+    private UUID lessonId;
     private AssetType type;
     private MediaStatus status;
     private String originalFileName;

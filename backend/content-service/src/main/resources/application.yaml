@@ -54,3 +54,7 @@ management:
 
 internal:
   api-key: ${INTERNAL_API_KEY:}
+
+video:
+  ffmpeg: ${VIDEO_FFMPEG:ffmpeg}
+  ffprobe: ${VIDEO_FFPROBE:ffprobe}

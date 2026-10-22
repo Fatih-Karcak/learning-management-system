@@ -206,6 +206,11 @@ export function Learning() {
                   }}
                 />
               )}
+              {lesson.type === 'VIDEO' && !lesson.videoUrl && (
+                <p role="status" className="notice">
+                  Bu derse henüz video bağlanmamış. Eğitmenin videoyu derse eklemesi gerekiyor.
+                </p>
+              )}
               <div className="prose">
                 <ReactMarkdown>
                   {lesson.content || (lesson.videoUrl ? '' : 'Bu derse henüz içerik eklenmemiş.')}

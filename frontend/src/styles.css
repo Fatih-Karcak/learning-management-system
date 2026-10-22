@@ -1556,6 +1556,9 @@ progress::-moz-progress-bar {
   max-height: 65vh;
   min-height: 180px;
 }
+.video-player video[hidden] {
+  display: none;
+}
 .video-player .notice {
   margin: 15px;
 }

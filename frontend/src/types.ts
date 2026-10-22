@@ -146,6 +146,8 @@ export interface Notification {
 }
 export interface Media {
   id: string;
+  courseId?: string;
+  lessonId?: string;
   type: 'IMAGE' | 'VIDEO';
   status: string;
   originalFileName: string;

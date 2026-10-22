@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "media_assets")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor

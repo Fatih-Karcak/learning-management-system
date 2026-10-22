@@ -7,6 +7,7 @@ Bu klasör yalnızca Java 25 / Spring Boot backend'ini içerir. React + TypeScri
 - Java 25; derleme ve çalışma sırasında preview özellikleri açık olmalıdır.
 - Modüllerde bulunan Maven 3.9.16 wrapper.
 - Docker Compose ile PostgreSQL, ZooKeeper/Kafka, MinIO ve MailHog.
+- İçerik servisinin çalıştığı makinede `ffmpeg` ve `ffprobe` (H.264/libx264 ve AAC desteğiyle).
 
 ```bash
 node scripts/setup-local-env.mjs
@@ -61,6 +62,23 @@ Alternatif olarak bir modülün içinden `sh mvnw spring-boot:run` çalıştır�
 | Bildirim | 8086 |
 
 Frontend yalnızca gateway'e bağlanır. İç servis portlarını dışarıya açmayın. PostgreSQL ve Kafka ortak altyapıdır; içerik/video/sertifika işlemleri ayrıca çalışan MinIO/S3 gerektirir. Bu bulut ortamındaki MinIO indirme engeli, klasör düzeninden bağımsız olarak devam eder.
+
+## Ders videosu ekleme ve oynatma
+
+Medya kitaplığına dosya yüklemek ile videoyu derse eklemek ayrı işlemlerdir. Kitaplıkta **Video** türünü, ilgili kursu ve dersi seçerek yüklediğinizde arayüz videoyu otomatik derse bağlar. Ders seçilmeden yüklenen dosya yalnızca kitaplıkta kalır. Mevcut metin derslerini düzeltmek için **Eğitmen stüdyosu → Kurs → Kurs müfredatı → Video ekle** yolundan hazır videoyu seçip **Videoyu derse bağla** düğmesine basın. Ders video türüne geçer; yazılı içerik korunur.
+
+Kurs servisi ders sahibini doğrular, içerik servisine ortak `INTERNAL_API_KEY` ile videoyu bağlar ve göreli gateway adresini kaydeder. İçerik servisi videonun aynı eğitmene ait olduğunu doğrular. Başka kursa bağlı video taşınamaz; ilgili kurs için tekrar yüklenmelidir. Daha önce kurs seçilmeden yüklenen video bağlanırken kurs bilgisi de tamamlanır; böylece kayıtlı öğrenciler manifest ve segmentlere erişebilir. Kurs ve içerik servislerinin aynı anahtarla çalışması gerekir. Bu değişiklikten sonra ikisini yeniden başlatın ve frontend'i yenileyin.
+
+FFmpeg kaynak codec'ini kopyalamak yerine H.264/AAC HLS çıktısı üretir. Sessiz ve bir saniyeden kısa videolar desteklenir. Dosyanın yüklenmiş olması, işlenmesinin tamamlandığı anlamına gelmez; öğrenci oynatıcısı **Video hazırlanıyor** durumunu gösterir ve hazır olduğunda akışı açar. **Başarısız** durumundaki dosyada kitaplık ayrıntısını kontrol edin; eski uyumsuz çıktılar için videoyu yeniden yükleyin.
+
+Windows'ta `ffmpeg -version` ve `ffprobe -version` komutlarının içerik servisini başlattığınız ortamda çalıştığını kontrol edin. PATH yerine `backend/.env` içinde tam yollar da belirtilebilir:
+
+```properties
+VIDEO_FFMPEG=C:/ffmpeg/bin/ffmpeg.exe
+VIDEO_FFPROBE=C:/ffmpeg/bin/ffprobe.exe
+```
+
+Farklı makine veya container kullanılıyorsa kurs servisinde `CONTENT_SERVICE_URL`, içerik servisinde `ENROLLMENT_SERVICE_URL` erişilebilir iç servis adreslerini göstermelidir.
 
 ## Testler
 

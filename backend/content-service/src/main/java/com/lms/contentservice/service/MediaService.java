@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -127,6 +129,24 @@ public class MediaService {
     public MediaAssetResponse getMedia(UUID mediaId, UUID requesterId, String requesterRole) {
         MediaAsset asset = findById(mediaId);
         checkAccess(asset, requesterId, requesterRole);
+        return toResponse(asset);
+    }
+
+    @Transactional
+    public MediaAssetResponse linkVideoToLesson(UUID mediaId, UUID courseId, UUID lessonId, UUID ownerId) {
+        MediaAsset asset = findById(mediaId);
+        if (!asset.getOwnerId().equals(ownerId)) {
+            throw new UnauthorizedMediaAccessException("Yalnızca kendi videonuzu derse ekleyebilirsiniz");
+        }
+        if (asset.getType() != AssetType.VIDEO || asset.getStatus() == MediaStatus.FAILED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "İşlenemeyen dosya derse eklenemez; videoyu yeniden yükleyin");
+        }
+        if (asset.getCourseId() != null && !asset.getCourseId().equals(courseId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Video başka bir kursa bağlı; bu kurs için yeniden yükleyin");
+        }
+        asset.setCourseId(courseId);
+        asset.setLessonId(lessonId);
+        mediaAssetRepository.save(asset);
         return toResponse(asset);
     }
 

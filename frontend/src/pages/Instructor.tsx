@@ -14,7 +14,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { api, body, lessonTypes, levels, money, safeUrl } from '../api';
-import type { Category, Course, Media, Page, Section } from '../types';
+import type { Category, Course, Lesson, Media, Page, Section } from '../types';
+import VideoPlayer from '../VideoPlayer';
 import {
   Badge,
   Cover,
@@ -248,6 +249,7 @@ export function Editor() {
   const [saved, setSaved] = useState(false);
   const [addSection, setAddSection] = useState(false);
   const [lessonSection, setLessonSection] = useState<Section>();
+  const [videoLesson, setVideoLesson] = useState<Lesson>();
   const course = useQuery({
     queryKey: ['course', courseId],
     queryFn: () => api<Course>(`/courses/${courseId}`),
@@ -351,6 +353,15 @@ export function Editor() {
                       {lessonTypes[l.type]}
                       {l.previewAllowed ? ' · Ön izleme' : ''}
                     </small>
+                    {['VIDEO', 'ARTICLE'].includes(l.type) && (
+                      <button
+                        className="text-button"
+                        aria-label={`${l.title}: video ekle veya değiştir`}
+                        onClick={() => setVideoLesson(l)}
+                      >
+                        <FileVideo size={16} /> {l.videoUrl ? 'Videoyu değiştir' : 'Video ekle'}
+                      </button>
+                    )}
                     <button
                       className="icon-button danger"
                       aria-label={`${l.title} dersini sil`}
@@ -376,6 +387,21 @@ export function Editor() {
             <Upload size={16} /> Kurs için medya yükle
           </Link>
         </section>
+      )}
+      {videoLesson && c && (
+        <Modal
+          title={`${videoLesson.title} — Ders videosu`}
+          onClose={() => setVideoLesson(undefined)}
+        >
+          <LessonVideoForm
+            courseId={c.id}
+            lesson={videoLesson}
+            onDone={() => {
+              setVideoLesson(undefined);
+              reload();
+            }}
+          />
+        </Modal>
       )}
       {addSection && (
         <Modal title="Yeni bölüm" onClose={() => setAddSection(false)}>
@@ -406,6 +432,123 @@ export function Editor() {
         </Modal>
       )}
     </>
+  );
+}
+function VideoFields({
+  courseId,
+  initialUrl = '',
+  initialDuration = 0,
+}: {
+  courseId: string;
+  initialUrl?: string;
+  initialDuration?: number;
+}) {
+  const [page, setPage] = useState(0);
+  const [url, setUrl] = useState(initialUrl);
+  const [duration, setDuration] = useState(initialDuration);
+  const media = useQuery({
+    queryKey: ['video-picker', page],
+    queryFn: () => api<Page<Media>>(`/media/my?size=12&page=${page}&sort=createdAt,desc`),
+  });
+  const videos =
+    media.data?.content.filter(
+      (m) => m.type === 'VIDEO' && m.status === 'READY' && (!m.courseId || m.courseId === courseId),
+    ) || [];
+  return (
+    <>
+      <Field
+        label="Medya kitaplığından video seç"
+        hint="Hazır videolar listelenir. Seçilen video bu kursun öğrencilerine açılır."
+      >
+        <select
+          value={videos.some((m) => m.streamUrl === url) ? url : ''}
+          onChange={(e) => {
+            const video = videos.find((m) => m.streamUrl === e.target.value);
+            if (video?.streamUrl) {
+              setUrl(video.streamUrl);
+              setDuration(video.durationSeconds || 0);
+            }
+          }}
+        >
+          <option value="">Video seçin</option>
+          {videos.map((m) => (
+            <option key={m.id} value={m.streamUrl}>
+              {m.originalFileName}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {media.isPending && <Loading />}
+      {media.error && <ErrorBox error={media.error} retry={() => void media.refetch()} />}
+      {media.data && <Pagination page={page} pages={media.data.totalPages} onChange={setPage} />}
+      <Field
+        label="Video adresi"
+        hint="Kitaplıktan seçebilir veya doğrudan bir video adresi girebilirsiniz."
+      >
+        <input
+          name="videoUrl"
+          required
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="/api/v1/media/…/manifest.m3u8"
+        />
+      </Field>
+      <Field label="Süre (saniye)">
+        <input
+          name="durationSeconds"
+          type="number"
+          min="0"
+          required
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+        />
+      </Field>
+    </>
+  );
+}
+function LessonVideoForm({
+  courseId,
+  lesson,
+  onDone,
+}: {
+  courseId: string;
+  lesson: Lesson;
+  onDone: () => void;
+}) {
+  const [error, setError] = useState<unknown>();
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        setBusy(true);
+        setError(null);
+        try {
+          await api(`/lessons/${lesson.id}/video`, {
+            method: 'PUT',
+            body: body({
+              videoUrl: data.get('videoUrl'),
+              durationSeconds: Number(data.get('durationSeconds') || 0),
+            }),
+          });
+          onDone();
+        } catch (err) {
+          setError(err);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <p className="muted">Video bağlandığında ders video türüne geçer. Yazılı içerik korunur.</p>
+      <VideoFields
+        courseId={courseId}
+        initialUrl={lesson.videoUrl}
+        initialDuration={lesson.durationSeconds}
+      />
+      {!!error && <ErrorBox error={error} />}
+      <Submit busy={busy}>Videoyu derse bağla</Submit>
+    </form>
   );
 }
 function CurriculumForm({
@@ -470,19 +613,7 @@ function CurriculumForm({
           <Field label="Ders içeriği" hint="Markdown desteklenir.">
             <textarea name="content" rows={5} />
           </Field>
-          {type === 'VIDEO' && (
-            <>
-              <Field
-                label="Video adresi"
-                hint="Medya kitaplığındaki hazır videonun bağlantısını kullanabilirsin."
-              >
-                <input name="videoUrl" required placeholder="/api/v1/media/…/manifest.m3u8" />
-              </Field>
-              <Field label="Süre (saniye)">
-                <input name="durationSeconds" type="number" min="0" required />
-              </Field>
-            </>
-          )}
+          {type === 'VIDEO' && <VideoFields courseId={courseId} />}
           <label className="checkbox-field">
             <input name="previewAllowed" type="checkbox" /> Bu ders herkese açık ön izlenebilir
           </label>
@@ -522,6 +653,7 @@ export function MediaLibrary() {
     queryKey: ['media-item', inspect],
     queryFn: () => api<Media>(`/media/${inspect}`),
     enabled: !!inspect,
+    refetchInterval: (q) => (q.state.data?.status === 'PROCESSING' ? 3000 : false),
   });
   const remove = useMutation({
     mutationFn: (id: string) => api(`/media/${id}`, { method: 'DELETE' }),
@@ -551,11 +683,30 @@ export function MediaLibrary() {
     setSuccess('');
     setBusy(true);
     try {
-      await api<Media>(`/media/${kind}`, { method: 'POST', body: f });
+      const uploaded = await api<Media>(`/media/${kind}`, { method: 'POST', body: f });
       void client.invalidateQueries({ queryKey: ['media'] });
+      void client.invalidateQueries({ queryKey: ['video-picker'] });
+      if (kind === 'video' && f.get('lessonId')) {
+        try {
+          await api(`/lessons/${f.get('lessonId')}/video`, {
+            method: 'PUT',
+            body: body({
+              videoUrl: uploaded.streamUrl,
+              durationSeconds: uploaded.durationSeconds || 0,
+            }),
+          });
+          void client.invalidateQueries({ queryKey: ['course', selectedCourse] });
+        } catch (err) {
+          throw new Error(
+            `Video yüklendi ancak derse bağlanamadı. Eğitmen stüdyosunda dersin Video ekle düğmesini kullanın. ${err instanceof Error ? err.message : ''}`,
+          );
+        }
+      }
       setSuccess(
         kind === 'video'
-          ? 'Video yüklendi. İşleme tamamlandığında bağlantısı hazır olacak.'
+          ? f.get('lessonId')
+            ? 'Video derse bağlandı. İşleme tamamlandığında öğrenciler izleyebilir.'
+            : 'Video yüklendi. Hazır olduğunda eğitmen stüdyosunda bir derse ekleyin.'
           : 'Görsel yüklendi.',
       );
       form.reset();
@@ -611,11 +762,19 @@ export function MediaLibrary() {
                 ))}
               </select>
             </Field>
-            <Field label="İlgili ders (isteğe bağlı)">
-              <select name="lessonId" key={selectedCourse}>
+            <Field
+              label="İlgili ders (isteğe bağlı)"
+              hint={
+                kind === 'video'
+                  ? 'Seçerseniz video bu derse otomatik bağlanır. Yazılı içerik korunur.'
+                  : undefined
+              }
+            >
+              <select name="lessonId" key={`${selectedCourse}-${kind}`}>
                 <option value="">Ders seçilmedi</option>
                 {course.data?.sections
                   ?.flatMap((s) => s.lessons || [])
+                  .filter((l) => kind !== 'video' || ['VIDEO', 'ARTICLE'].includes(l.type))
                   .map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.title}
@@ -722,6 +881,15 @@ export function MediaLibrary() {
               <>
                 <h3>{details.data.originalFileName}</h3>
                 <Badge value={details.data.status} />
+                {details.data.type === 'VIDEO' &&
+                  details.data.status === 'READY' &&
+                  details.data.streamUrl && <VideoPlayer src={details.data.streamUrl} />}
+                {details.data.status === 'PROCESSING' && (
+                  <p role="status">Video işleniyor. Hazır olduğunda oynatılabilir.</p>
+                )}
+                {details.data.failureReason && (
+                  <ErrorBox error={new Error(details.data.failureReason)} />
+                )}
                 <Field label="Medya bağlantısı">
                   <input
                     readOnly

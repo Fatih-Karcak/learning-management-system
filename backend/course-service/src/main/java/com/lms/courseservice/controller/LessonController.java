@@ -1,6 +1,7 @@
 package com.lms.courseservice.controller;
 
 import com.lms.courseservice.dto.request.CreateLessonRequest;
+import com.lms.courseservice.dto.request.UpdateLessonVideoRequest;
 import com.lms.courseservice.dto.response.ApiResponse;
 import com.lms.courseservice.dto.response.LessonResponse;
 import com.lms.courseservice.service.LessonService;
@@ -47,5 +48,15 @@ public class LessonController {
             @AuthenticationPrincipal AuthenticatedUser user) {
         lessonService.deleteLesson(id, user.id());
         return ResponseEntity.ok(ApiResponse.success(null, "Ders silindi"));
+    }
+
+    @PutMapping("/{id}/video")
+    @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<LessonResponse>> updateVideo(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateLessonVideoRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                lessonService.updateVideo(id, request, user.id()), "Ders videosu güncellendi"));
     }
 }

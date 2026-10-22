@@ -28,6 +28,8 @@ public class VideoProcessingService {
     @Value("${minio.bucket.raw}")    private String rawBucket;
     @Value("${minio.bucket.hls}")    private String hlsBucket;
     @Value("${minio.bucket.images}") private String imagesBucket;
+    @Value("${video.ffmpeg:ffmpeg}") private String ffmpeg = "ffmpeg";
+    @Value("${video.ffprobe:ffprobe}") private String ffprobe = "ffprobe";
 
     @Async("videoProcessingExecutor")
     public void processVideoAsync(UUID mediaId) {
@@ -48,10 +50,10 @@ public class VideoProcessingService {
             // 2) Süreyi öğren
             int duration = probeDurationSeconds(inputFile);
 
-            // 3) Thumbnail çıkar (1. saniyeden bir kare)
+            // The first frame also exists in videos shorter than one second.
             Path thumbFile = tempDir.resolve("thumbnail.jpg");
-            runProcess(List.of("ffmpeg", "-y", "-i", inputFile.toString(),
-                    "-ss", "00:00:01", "-vframes", "1", thumbFile.toString()));
+            runProcess(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", inputFile.toString(),
+                    "-map", "0:v:0", "-frames:v", "1", "-threads", "1", thumbFile.toString()));
 
             String thumbKey = "thumbnails/" + mediaId + ".jpg";
             storageService.uploadLocalFile(imagesBucket, thumbKey, thumbFile, "image/jpeg");
@@ -59,10 +61,15 @@ public class VideoProcessingService {
             // 4) HLS segmentlerine böl
             Path hlsDir = Files.createDirectory(tempDir.resolve("hls"));
             Path playlist = hlsDir.resolve("master.m3u8");
-            runProcess(List.of("ffmpeg", "-y", "-i", inputFile.toString(),
-                    "-codec:", "copy",
+            // Copying source codecs can mark MPEG-4/HEVC videos READY although browsers cannot decode them.
+            runProcess(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", inputFile.toString(),
+                    "-map", "0:v:0", "-map", "0:a:0?",
+                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-threads", "2",
+                    "-pix_fmt", "yuv420p", "-vf", "scale=ceil(iw/2)*2:ceil(ih/2)*2",
+                    "-force_key_frames", "expr:gte(t,n_forced*6)",
+                    "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000", "-sn", "-dn",
                     "-start_number", "0",
-                    "-hls_time", "10",
+                    "-hls_time", "6", "-hls_playlist_type", "vod", "-hls_flags", "independent_segments",
                     "-hls_list_size", "0",
                     "-f", "hls", playlist.toString()));
 
@@ -77,21 +84,17 @@ public class VideoProcessingService {
             }
 
             // 6) Durumu güncelle
-            asset.setStatus(MediaStatus.READY);
-            asset.setDurationSeconds(duration);
-            asset.setHlsMasterKey(hlsPrefix + "master.m3u8");
-            asset.setThumbnailKey(thumbKey);
-            mediaAssetRepository.save(asset);
+            mediaAssetRepository.completeProcessing(mediaId, MediaStatus.READY, duration,
+                    hlsPrefix + "master.m3u8", thumbKey);
 
             log.info("Video işleme tamamlandı: {}", mediaId);
 
         } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             log.error("Video işleme hatası - mediaId: {}, hata: {}", mediaId, e.getMessage(), e);
-            mediaAssetRepository.findById(mediaId).ifPresent(asset -> {
-                asset.setStatus(MediaStatus.FAILED);
-                asset.setFailureReason(e.getMessage());
-                mediaAssetRepository.save(asset);
-            });
+            String reason = e.getMessage() == null ? "Video işlenemedi" : e.getMessage();
+            mediaAssetRepository.failProcessing(mediaId, MediaStatus.FAILED,
+                    reason.substring(0, Math.min(reason.length(), 1000)));
         } finally {
             if (tempDir != null) {
                 deleteRecursively(tempDir);
@@ -101,7 +104,7 @@ public class VideoProcessingService {
 
     private int probeDurationSeconds(Path inputFile) throws IOException, InterruptedException {
         Process process = new ProcessBuilder(
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                ffprobe, "-v", "error", "-show_entries", "format=duration",
                 "-of", "csv=p=0", inputFile.toString())
                 .redirectErrorStream(true)
                 .start();
@@ -111,31 +114,44 @@ public class VideoProcessingService {
             output = reader.readLine();
             reader.lines().forEach(l -> { /* kalan çıktı tüketiliyor, process kilitlenmesin */ });
         }
-        process.waitFor();
+        if (process.waitFor() != 0) throw new StorageException("Video bilgileri okunamadı; dosyayı kontrol edin");
 
         try {
-            return (int) Double.parseDouble(output.trim());
+            double seconds = Double.parseDouble(output.trim());
+            if (!Double.isFinite(seconds) || seconds <= 0 || seconds > Integer.MAX_VALUE) {
+                throw new NumberFormatException();
+            }
+            return (int) Math.ceil(seconds);
         } catch (Exception e) {
-            return 0;
+            throw new StorageException("Video süresi okunamadı; dosyayı kontrol edin");
         }
     }
 
     private void runProcess(List<String> command) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
+        Process process;
+        try {
+            process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        } catch (IOException ex) {
+            throw new StorageException("FFmpeg başlatılamadı. FFmpeg kurulumunu ve VIDEO_FFMPEG yolunu kontrol edin");
+        }
 
+        StringBuilder diagnostics = new StringBuilder();
         try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            reader.lines().forEach(line -> log.debug("[ffmpeg] {}", line));
+            reader.lines().forEach(line -> {
+                log.debug("[ffmpeg] {}", line);
+                diagnostics.append(line).append('\n');
+                if (diagnostics.length() > 2000) diagnostics.delete(0, diagnostics.length() - 2000);
+            });
         }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new StorageException("İşlem başarısız (exit=" + exitCode + "): " + command);
+            throw new StorageException("Video dönüştürülemedi (exit=" + exitCode + "): " + diagnostics);
         }
     }
 
     private String extractExtension(String fileName) {
+        if (fileName == null) return ".mp4";
         int dot = fileName.lastIndexOf('.');
         return dot >= 0 ? fileName.substring(dot) : ".mp4";
     }

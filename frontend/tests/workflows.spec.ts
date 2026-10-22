@@ -1,4 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const course = {
   id: 'course-1',
@@ -115,6 +119,226 @@ async function mockApi(page: Page, role = 'STUDENT') {
     await route.fulfill({ json: envelope(data) });
   });
 }
+
+test('instructor attaches a library video to an existing text lesson', async ({ page }) => {
+  await session(page, 'INSTRUCTOR');
+  await mockApi(page, 'INSTRUCTOR');
+  const media = {
+    id: 'video-1',
+    type: 'VIDEO',
+    status: 'READY',
+    originalFileName: 'lesson.mp4',
+    streamUrl: '/api/v1/media/video-1/manifest.m3u8',
+    durationSeconds: 12,
+  };
+  await page.route('**/api/v1/media/my?**', (route) =>
+    route.fulfill({ json: envelope(pageData([media])) }),
+  );
+  let payload: unknown;
+  await page.route('**/api/v1/lessons/lesson-1/video', async (route) => {
+    expect(route.request().headers().authorization).toBe('Bearer test-token');
+    expect(route.request().method()).toBe('PUT');
+    payload = route.request().postDataJSON();
+    await route.fulfill({
+      json: envelope({
+        ...course.sections[0].lessons[0],
+        type: 'VIDEO',
+        videoUrl: media.streamUrl,
+      }),
+    });
+  });
+  await page.goto('/instructor/course-1');
+  await page.getByRole('button', { name: 'Tasarım nedir?: video ekle veya değiştir' }).click();
+  await page.getByLabel('Medya kitaplığından video seç').selectOption(media.streamUrl);
+  await expect(page.getByLabel('Video adresi', { exact: true })).toHaveValue(media.streamUrl);
+  await page.getByRole('button', { name: 'Videoyu derse bağla' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(payload).toEqual({ videoUrl: media.streamUrl, durationSeconds: 12 });
+});
+
+test('video lesson without a URL explains that an instructor must attach its video', async ({
+  page,
+}) => {
+  await session(page);
+  await mockApi(page);
+  await page.goto('/learn/enrollment-1?lesson=lesson-2');
+  await expect(page.getByText('Bu derse henüz video bağlanmamış.', { exact: false })).toBeVisible();
+});
+
+test.describe('decoded student video playback', () => {
+  test.skip(
+    process.env.E2E_VIDEO !== '1',
+    'Set E2E_VIDEO=1 with FFmpeg on PATH to test decoded video playback.',
+  );
+  let fixtureDir: string;
+  let manifest: Buffer;
+  let segment: Buffer;
+  const mediaId = '6df6a12f-fae2-483e-aef3-2850881bef22';
+  const streamUrl = `/api/v1/media/${mediaId}/manifest.m3u8`;
+  const media = {
+    id: mediaId,
+    type: 'VIDEO',
+    status: 'READY',
+    originalFileName: 'lesson.mp4',
+    durationSeconds: 3,
+    streamUrl,
+  };
+  test.beforeAll(() => {
+    fixtureDir = mkdtempSync(join(tmpdir(), 'lms-playback-'));
+    execFileSync('ffmpeg', [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc2=size=320x180:rate=24',
+      '-t',
+      '3',
+      '-an',
+      '-c:v',
+      'libx264',
+      '-threads',
+      '2',
+      '-pix_fmt',
+      'yuv420p',
+      '-f',
+      'hls',
+      '-hls_list_size',
+      '0',
+      '-hls_playlist_type',
+      'vod',
+      join(fixtureDir, 'master.m3u8'),
+    ]);
+    manifest = readFileSync(join(fixtureDir, 'master.m3u8'));
+    segment = readFileSync(join(fixtureDir, 'master0.ts'));
+  });
+  test.afterAll(() => {
+    if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
+  });
+
+  test('uploading against a text lesson attaches it and a student decodes its protected HLS video', async ({
+    page,
+    browser,
+  }) => {
+    const linkedCourse = structuredClone(course);
+    await session(page, 'INSTRUCTOR');
+    await mockApi(page, 'INSTRUCTOR');
+    await page.route('**/api/v1/media/my?**', (route) =>
+      route.fulfill({ json: envelope(pageData([])) }),
+    );
+    await page.route('**/api/v1/media/video', async (route) => {
+      const form = route.request().postDataBuffer()!.toString();
+      expect(form).toContain('name="courseId"\r\n\r\ncourse-1');
+      expect(form).toContain('name="lessonId"\r\n\r\nlesson-1');
+      expect(route.request().headers().authorization).toBe('Bearer test-token');
+      await route.fulfill({ status: 201, json: envelope({ ...media, status: 'PROCESSING' }) });
+    });
+    let attached = false;
+    await page.route('**/api/v1/lessons/lesson-1/video', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ videoUrl: streamUrl, durationSeconds: 3 });
+      Object.assign(linkedCourse.sections[0].lessons[0], {
+        type: 'VIDEO',
+        videoUrl: streamUrl,
+        durationSeconds: 3,
+      });
+      attached = true;
+      await route.fulfill({ json: envelope(linkedCourse.sections[0].lessons[0]) });
+    });
+    await page.goto('/media?course=course-1');
+    await page.getByLabel('Dosya türü').selectOption('video');
+    await page.getByLabel('İlgili ders (isteğe bağlı)').selectOption('lesson-1');
+    await page.getByLabel('Dosya seç').setInputFiles({
+      name: 'lesson.mp4',
+      mimeType: 'video/mp4',
+      buffer: Buffer.from('upload-fixture'),
+    });
+    await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
+    await expect(page.getByRole('status')).toContainText('Video derse bağlandı.');
+    expect(attached).toBe(true);
+
+    const context = await browser.newContext();
+    try {
+      const student = await context.newPage();
+      await session(student);
+      await mockApi(student);
+      await student.route('**/api/v1/courses/course-1', (route) =>
+        route.fulfill({ json: envelope(linkedCourse) }),
+      );
+      let manifests = 0;
+      let segments = 0;
+      await student.route(`**/api/v1/media/${mediaId}**`, async (route) => {
+        expect(route.request().headers().authorization).toBe('Bearer test-token');
+        const path = new URL(route.request().url()).pathname;
+        if (path.endsWith('.m3u8')) {
+          manifests++;
+          await route.fulfill({ contentType: 'application/vnd.apple.mpegurl', body: manifest });
+        } else if (path.endsWith('.ts')) {
+          segments++;
+          await route.fulfill({ contentType: 'video/mp2t', body: segment });
+        } else await route.fulfill({ json: envelope(media) });
+      });
+      await student.goto('/learn/enrollment-1');
+      const video = student.locator('video');
+      await expect(video).toBeVisible();
+      await video.evaluate(async (element) => {
+        const video = element as HTMLVideoElement;
+        video.muted = true;
+        await video.play();
+      });
+      await expect
+        .poll(() => video.evaluate((element) => (element as HTMLVideoElement).currentTime))
+        .toBeGreaterThan(0.5);
+      expect(await video.evaluate((element) => (element as HTMLVideoElement).videoWidth)).toBe(320);
+      expect(manifests).toBeGreaterThan(0);
+      expect(segments).toBeGreaterThan(0);
+      await expect(student.getByRole('alert')).toHaveCount(0);
+      await expect(student.getByText('İlk dersin içeriği.')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('processing video waits and starts after becoming ready', async ({ page }) => {
+    await session(page);
+    await mockApi(page);
+    const playableCourse = structuredClone(course);
+    Object.assign(playableCourse.sections[0].lessons[1], { videoUrl: streamUrl });
+    await page.route('**/api/v1/courses/course-1', (route) =>
+      route.fulfill({ json: envelope(playableCourse) }),
+    );
+    let ready = false;
+    let streamRequests = 0;
+    await page.route(`**/api/v1/media/${mediaId}**`, async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('.m3u8')) {
+        streamRequests++;
+        await route.fulfill({ contentType: 'application/vnd.apple.mpegurl', body: manifest });
+      } else if (path.endsWith('.ts')) {
+        streamRequests++;
+        await route.fulfill({ contentType: 'video/mp2t', body: segment });
+      } else
+        await route.fulfill({
+          json: envelope({ ...media, status: ready ? 'READY' : 'PROCESSING' }),
+        });
+    });
+    await page.goto('/learn/enrollment-1?lesson=lesson-2');
+    await expect(page.getByText('Video hazırlanıyor.', { exact: false })).toBeVisible();
+    expect(streamRequests).toBe(0);
+    ready = true;
+    const video = page.locator('video');
+    await expect(video).toBeVisible({ timeout: 10000 });
+    await video.evaluate(async (element) => {
+      const video = element as HTMLVideoElement;
+      video.muted = true;
+      await video.play();
+    });
+    await expect
+      .poll(() => video.evaluate((element) => (element as HTMLVideoElement).currentTime))
+      .toBeGreaterThan(0.3);
+  });
+});
 test('public catalog search, category selection, detail and preview work', async ({ page }) => {
   await mockApi(page);
   await page.goto('/catalog');

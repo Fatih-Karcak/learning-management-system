@@ -75,11 +75,16 @@ Backend entegrasyonunu tamamlamak için eklenen küçük API uzantıları:
 npm run build          # strict TypeScript + üretim derlemesi
 npm test               # API sınırı, auth, hata ve multipart testleri
 npm run test:e2e       # kontrollü API yanıtlarıyla Chromium iş akışları
+E2E_VIDEO=1 npm run test:e2e  # FFmpeg ile üretilen gerçek HLS'i Chromium'da oynatır
 E2E_REAL_BACKEND=1 npm run test:e2e -- tests/backend.spec.ts
 npm run format:check
 ```
 
 Playwright varsayılan olarak bu ortamda bulunan `/usr/bin/chromium` kullanır. Farklı bir kurulumda `PLAYWRIGHT_CHROMIUM_PATH` verin. Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve `frontend-e2e-…@example.test` adresli yerel bir eğitmen ile yayınlanmış test kursu oluşturur; üretim veritabanında çalıştırmayın. Diğer tarayıcı testleri backend'i taklit eder ve gerçek Stripe/S3 işlemi doğrulamaz.
+
+`E2E_VIDEO=1` için PATH'te FFmpeg gerekir. İki ek test, yüklenen videonun seçilen metin dersine bağlanmasını ve öğrenci hesabında HLS manifest/segment isteklerinin yetkili gönderilmesini sınar; görüntü genişliğini ve ilerleyen oynatma süresini ölçer. İşlenen videonun hazır olana kadar beklemesi de kontrol edilir. Bu testlerde API yanıtları taklit edilir, video verisi gerçekten çözülür.
+
+Öğrenci derste yalnızca başlık/metin görüyorsa eğitmen hesabında **Kurs müfredatı → Video ekle → Medya kitaplığından video seç → Videoyu derse bağla** yolunu kullanın. Yeni yüklemelerde **İlgili ders** seçimi bağlantıyı otomatik kurar. Metin içerik korunur; öğrenci sayfasında oynatıcı da görünür.
 
 Backend regresyon testleri `backend/` klasöründen çalıştırılır:
 
