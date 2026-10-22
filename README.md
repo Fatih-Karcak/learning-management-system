@@ -39,6 +39,7 @@ Arayüz 5173 portunda çalışır. `/api` istekleri varsayılan olarak 8080 port
 Java 25, Docker Compose ve servislerin ortak ortam değişkenleri gerekir:
 
 ```bash
+node backend/scripts/setup-local-env.mjs
 cd backend
 docker compose up -d
 sh user-service/mvnw -B -DskipTests package

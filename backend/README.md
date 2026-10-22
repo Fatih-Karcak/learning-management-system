@@ -9,6 +9,7 @@ Bu klasör yalnızca Java 25 / Spring Boot backend'ini içerir. React + TypeScri
 - Docker Compose ile PostgreSQL, ZooKeeper/Kafka, MinIO ve MailHog.
 
 ```bash
+node scripts/setup-local-env.mjs
 docker compose up -d
 sh user-service/mvnw -B -DskipTests package
 ```
@@ -17,7 +18,24 @@ Compose projesinin adı `learning-management-system` olarak sabittir. Böylece d
 
 ## Ortam değişkenleri
 
-Tüm servislerde aynı `JWT_SECRET` ve en az 32 karakterlik aynı `INTERNAL_API_KEY` kullanılmalıdır. `DB_PASSWORD`, `MINIO_ACCESS_KEY` ve `MINIO_SECRET_KEY` yerel altyapı ayarlarıyla eşleşmelidir. Değerleri güvenli ortam değişkenleri veya Git'in yok saydığı yerel yapılandırma ile sağlayın. Compose'un `.env` dosyası Java süreçlerine kendiliğinden aktarılmaz.
+Yerel geliştirme için Node.js ile, depo kökünden bir kez çalıştırın:
+
+```powershell
+node .\backend\scripts\setup-local-env.mjs
+```
+
+Bu komut `backend/.env` dosyasını örnek Compose ayarlarıyla oluşturur; `JWT_SECRET` ve `INTERNAL_API_KEY` için ayrı rastgele anahtarlar üretir. Terminalde mevcut anahtarlar varsa onları kullanır. Var olan `.env` dosyasına dokunmaz, hiçbir anahtarı ekrana yazmaz. Dosya Git tarafından yok sayılır. Bu işlemden sonra **tüm backend servislerini yeniden başlatın**; kullanıcı servisi, gateway ve enrollment aynı anahtarları kullanmalıdır.
+
+Spring servisleri ortak `.env` dosyasını depo kökü, `backend/` veya bir servis klasöründen başlatıldıklarında otomatik yükler. IntelliJ'de ana sınıfı yeniden çalıştırmanız yeterlidir. İşletim sistemi ortam değişkenleri ve JVM/komut satırı ayarları dosyadan daha yüksek önceliklidir; IDE'de eski/boş `INTERNAL_API_KEY` veya `JWT_SECRET` ayarları varsa kaldırın ya da ortak değerlerle eşleştirin.
+
+Yerel enrollment servisini Windows'ta Maven ile başlatmak için:
+
+```powershell
+cd .\backend\enrollment-service
+.\mvnw.cmd spring-boot:run
+```
+
+Üretimde yerel örnek parolaları kullanmayın; değerleri güvenli süreç ortamından sağlayın. Tüm servislerde aynı `JWT_SECRET` ve en az 32 karakterlik aynı `INTERNAL_API_KEY` kullanılmalıdır. `DB_PASSWORD`, `MINIO_ACCESS_KEY` ve `MINIO_SECRET_KEY` kullanılan PostgreSQL/S3 hizmetiyle eşleşmelidir. Ortak `.env` dosyasını elle hazırlayacaksanız `KEY=value` biçimini kullanın; `export` veya tırnak eklemeyin.
 
 Ödeme için `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` backend'e; yayınlanabilir Stripe anahtarı frontend'e aittir. E-posta doğrulama bağlantılarının arayüzde açılması için bildirim servisinde `APP_FRONTEND_BASE_URL` kullanın.
 
@@ -51,3 +69,5 @@ sh user-service/mvnw -B verify
 ```
 
 Tam test için altyapı servisleri ve ortam değişkenleri gereklidir. Altyapı gerektirmeyen regresyon komutu ve iş kuralları [TESTING.md](TESTING.md) dosyasındadır.
+
+Yerel ayar oluşturucusunun testleri depo kökünden `node --test backend/scripts/setup-local-env.test.mjs` ile çalışır.
