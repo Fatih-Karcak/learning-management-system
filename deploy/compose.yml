@@ -1,0 +1,242 @@
+name: lms-production
+
+x-app: &app
+  restart: unless-stopped
+  init: true
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  stop_grace_period: 45s
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+  environment: &app-env
+    SPRING_PROFILES_ACTIVE: production
+    SERVER_FORWARD_HEADERS_STRATEGY: native
+    DB_HOST: postgres
+    DB_USERNAME: lms_user
+    DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD gerekli}
+    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET gerekli}
+    JWT_ACCESS_TOKEN_EXPIRATION: 900000
+    JWT_REFRESH_TOKEN_EXPIRATION: 604800000
+    INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY gerekli}
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    MINIO_ENDPOINT: http://minio:9000
+    MINIO_PUBLIC_ENDPOINT: https://${S3_DOMAIN:?S3_DOMAIN gerekli}
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY gerekli}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY gerekli}
+    USER_SERVICE_URL: http://user-service:8081
+    COURSE_SERVICE_URL: http://course-service:8082
+    ENROLLMENT_SERVICE_URL: http://enrollment-service:8083
+    PAYMENT_SERVICE_URL: http://payment-service:8084
+    CONTENT_SERVICE_URL: http://content-service:8085
+    NOTIFICATION_SERVICE_URL: http://notification-service:8086
+    APP_PUBLIC_BASE_URL: https://${APP_DOMAIN:?APP_DOMAIN gerekli}
+    APP_FRONTEND_BASE_URL: https://${APP_DOMAIN}
+    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+    LOGGING_LEVEL_COM_LMS: INFO
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka: { condition: service_healthy }
+  networks: [app]
+
+services:
+  postgres:
+    image: postgres:17.7-alpine
+    restart: unless-stopped
+    environment:
+      {
+        POSTGRES_USER: lms_user,
+        POSTGRES_PASSWORD: "${DB_PASSWORD:?}",
+        POSTGRES_DB: lms_users,
+      }
+    volumes:
+      [
+        postgres:/var/lib/postgresql/data,
+        ../backend/init-db:/docker-entrypoint-initdb.d:ro,
+      ]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U lms_user -d lms_users"]
+      interval: 10s
+      retries: 10
+    networks: [app]
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    restart: unless-stopped
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes: [kafka:/var/lib/kafka/data]
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1",
+        ]
+      interval: 20s
+      start_period: 60s
+      retries: 10
+    networks: [app]
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    command: server /data --console-address ':9001'
+    restart: unless-stopped
+    environment:
+      {
+        MINIO_ROOT_USER: "${MINIO_ACCESS_KEY:?}",
+        MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY:?}",
+      }
+    volumes: [media:/data]
+    networks: [app]
+  clamav:
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    volumes: [clamav:/var/lib/clamav]
+    networks: [app]
+  user-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: user-service }
+    image: lms/user-service:${RELEASE_TAG:-local}
+    mem_limit: 768m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8081
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:-}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:-}
+      APP_MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY gerekli}
+  course-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: course-service }
+    image: lms/course-service:${RELEASE_TAG:-local}
+    mem_limit: 1024m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8082
+  enrollment-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: enrollment-service }
+    image: lms/enrollment-service:${RELEASE_TAG:-local}
+    mem_limit: 768m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8083
+  content-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: content-service }
+    image: lms/content-service:${RELEASE_TAG:-local}
+    mem_limit: 2048m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8085
+      CONTENT_SCAN_REQUIRED: "true"
+      CONTENT_SCAN_HOST: clamav
+  notification-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: notification-service }
+    image: lms/notification-service:${RELEASE_TAG:-local}
+    mem_limit: 768m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8086
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST gerekli}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM gerekli}
+  api-gateway:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: api-gateway }
+    image: lms/api-gateway:${RELEASE_TAG:-local}
+    depends_on:
+      user-service: { condition: service_healthy }
+      course-service: { condition: service_healthy }
+      enrollment-service: { condition: service_healthy }
+      content-service: { condition: service_healthy }
+      notification-service: { condition: service_healthy }
+    mem_limit: 768m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8080
+  payment-service:
+    <<: *app
+    build:
+      context: ../backend
+      args: { SERVICE: payment-service }
+    image: lms/payment-service:${RELEASE_TAG:-local}
+    mem_limit: 768m
+    environment:
+      <<: *app-env
+      SERVER_PORT: 8084
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    profiles: [payments]
+  web:
+    build:
+      context: ../frontend
+      args:
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+    image: lms/web:${RELEASE_TAG:-local}
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      NO_PROXY: "api-gateway,minio,localhost,127.0.0.1"
+      no_proxy: "api-gateway,minio,localhost,127.0.0.1"
+      APP_DOMAIN: "${APP_DOMAIN:?}"
+      S3_DOMAIN: "${S3_DOMAIN:?}"
+      TLS_EMAIL: "${TLS_EMAIL:?}"
+    volumes: [caddy-data:/data, caddy-config:/config]
+    depends_on:
+      api-gateway: { condition: service_healthy }
+      minio: { condition: service_started }
+    networks: [app]
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    restart: unless-stopped
+    command:
+      [
+        --config.file=/etc/prometheus/prometheus.yml,
+        --storage.tsdb.retention.time=15d,
+      ]
+    volumes:
+      [
+        ./prometheus.yml:/etc/prometheus/prometheus.yml:ro,
+        ./alerts.yml:/etc/prometheus/alerts.yml:ro,
+        prometheus:/prometheus,
+      ]
+    ports: ["127.0.0.1:9090:9090"]
+    networks: [app]
+volumes:
+  postgres: {}
+  kafka: {}
+  media: {}
+  clamav: {}
+  caddy-data: {}
+  caddy-config: {}
+  prometheus: {}
+networks:
+  app: {}

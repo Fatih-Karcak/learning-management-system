@@ -1,0 +1,13 @@
+groups:
+  - name: lms
+    rules:
+      - alert: LmsServiceUnavailable
+        expr: up{job="lms"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "LMS service is unreachable" }
+      - alert: LmsHttpServerErrors
+        expr: sum(rate(http_server_requests_seconds_count{job="lms",status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job="lms"}[5m])), 0.001) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "More than 5% of requests fail" }

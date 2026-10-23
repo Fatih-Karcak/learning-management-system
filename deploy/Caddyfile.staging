@@ -1,0 +1,41 @@
+{
+	admin off
+	auto_https off
+}
+:8088 {
+	encode gzip
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:19000 https:; font-src 'self'; connect-src 'self' http://127.0.0.1:19000 https:; media-src 'self' blob: http://127.0.0.1:19000 https:; frame-src https://js.stripe.com https://hooks.stripe.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	}
+	respond /healthz "ok" 200
+	@private path /actuator /actuator/* /api/v1/internal /api/v1/internal/*
+	handle @private {
+		respond 404
+	}
+	@uploads path /api/v1/media/video /api/v1/media/image /api/v1/media/resources
+	handle @uploads {
+		request_body {
+			max_size 2GB
+		}
+		reverse_proxy api-gateway:8080
+	}
+	handle /api/* {
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy api-gateway:8080
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
+:9000 {
+	@console path /minio/*
+	respond @console 404
+	reverse_proxy minio:9000
+}

@@ -1,0 +1,1 @@
+CREATE TABLE learning_resources(id UUID PRIMARY KEY,owner_id UUID NOT NULL,course_id UUID NOT NULL,purpose VARCHAR(20) NOT NULL,name VARCHAR(200) NOT NULL,content_type VARCHAR(100) NOT NULL,size_bytes BIGINT NOT NULL,storage_key VARCHAR(500) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT NOW());
