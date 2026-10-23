@@ -3,21 +3,22 @@ package com.lms.courseservice.domain.entity;
 import com.lms.courseservice.domain.enums.CourseLevel;
 import com.lms.courseservice.domain.enums.CourseStatus;
 import jakarta.persistence.*;
-import lombok.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "courses")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
 public class Course {
@@ -28,6 +29,9 @@ public class Course {
 
     @Column(nullable = false)
     private String title;
+
+    @jakarta.validation.constraints.Size(max = 2000)
+    private String targetAudience;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -64,15 +68,13 @@ public class Course {
     private Integer durationMinutes;
 
     @ElementCollection
-    @CollectionTable(name = "course_requirements",
-            joinColumns = @JoinColumn(name = "course_id"))
+    @CollectionTable(name = "course_requirements", joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "requirement")
     @Builder.Default
     private List<String> requirements = new ArrayList<>();
 
     @ElementCollection
-    @CollectionTable(name = "course_outcomes",
-            joinColumns = @JoinColumn(name = "course_id"))
+    @CollectionTable(name = "course_outcomes", joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "outcome")
     @Builder.Default
     private List<String> outcomes = new ArrayList<>();
@@ -89,8 +91,10 @@ public class Course {
     // Denormalize — Enrollment Service'ten güncellenir
     @Builder.Default
     private Integer totalEnrollments = 0;
+
     @Builder.Default
     private Double averageRating = 0.0;
+
     @Builder.Default
     private Integer totalReviews = 0;
 

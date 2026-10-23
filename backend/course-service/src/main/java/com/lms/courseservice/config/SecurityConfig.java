@@ -22,28 +22,36 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/v1/courses/**",
-                                "/api/v1/sections/**",
-                                "/api/v1/lessons/section/**",
-                                "/api/v1/reviews/**"
-                        ).permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/api/v1/internal/courses/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+        http.csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth ->
+                auth
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/courses/**",
+                        "/api/v1/sections/**",
+                        "/api/v1/lessons/section/**",
+                        "/api/v1/reviews/**"
+                    )
+                    .permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+                    .permitAll()
+                    .requestMatchers("/api/v1/internal/courses/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
+
     @Bean
     public org.springframework.security.core.userdetails.UserDetailsService disabledPasswordLogin() {
-        return username -> { throw new org.springframework.security.core.userdetails.UsernameNotFoundException("Password authentication disabled"); };
+        return username -> {
+            throw new org.springframework.security.core.userdetails.UsernameNotFoundException(
+                "Password authentication disabled"
+            );
+        };
     }
 }

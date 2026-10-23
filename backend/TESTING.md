@@ -43,3 +43,33 @@ Güvenlik ve iş kuralları:
 - Kurs sayacı enrollment kimliğiyle tekrar işlemeyi engeller. Mesajlaşma en az bir kez teslim esasına dayanır; üretim gözlemlemesinde outbox kuyruğu ve Kafka hata konuları izlenmelidir.
 
 Çalışan sistemin işlevsel kontrolü yalnızca sağlık uç noktalarına dayanmamalıdır: farklı hesaplarla ödeme/kayıt sahipliğini, ücretli içerik erişimini, iade sonrası erişimi, görsel yükleyip silmeyi, video/HLS akışını ve sertifika PDF'i üretip indirmeyi de sınayın. S3 test sunucusuyla başarılı deneme, gerçek MinIO dağıtımını veya gerçek Stripe işlemlerini doğrulamaz.
+
+## Platform iş akışları
+
+Java 25 ve FFmpeg bulunan ortamda, altyapı gerektirmeyen testler:
+
+```bash
+cd backend
+bash user-service/mvnw -B '-Dtest=*Test' -Dsurefire.failIfNoSpecifiedTests=false -Dlms.ffmpeg.tests=true test
+```
+
+`*ApplicationTests` Spring bağlamı testleridir; bu komut onları seçmez. PostgreSQL/Kafka/S3/SMTP ortamı olmadan tüm testlerin çalıştığını iddia etmeyin.
+
+Gerçek API kontrolleri için gateway ve ilgili servisleri, PostgreSQL/Kafka/MinIO ve Mailhog'u başlatın. Yalnızca geliştirme veritabanında çalıştırın; benzersiz test kullanıcıları, kurslar, dosyalar ve mesajlar oluşturur. Geliştirme yönetici bilgilerini güvenli ortam değişkenleriyle sağlayın; parolayı terminal geçmişine veya kaynak dosyaya yazmayın.
+
+```bash
+RUN_LMS_E2E=1 node --test backend/scripts/platform-workflows.test.mjs
+```
+
+Bu komut depo kökünden çalışır. Gerekli değişkenler `LMS_E2E_ADMIN_EMAIL`, `LMS_E2E_ADMIN_PASSWORD`; isteğe bağlı `LMS_E2E_API_URL`, `LMS_E2E_MAILHOG_URL`. `LMS_E2E_FIXTURE_PATH` verilirse tarayıcı testleri için token içeren özel izinli dosya oluşturur; iş bitince silin. Testler tam yönetici, eğitmen, öğrenci ve destek kapsamıyla gerçek yetki kontrollerini yapar. Varsayılan posta testi Mailhog `127.0.0.1:8025` adresini kullanır.
+
+```bash
+cd frontend
+npm test
+npm run build
+E2E_VIDEO=1 E2E_REAL_BACKEND=1 npm run test:e2e
+```
+
+Gerçek yeni platform tarayıcı senaryoları için aynı `LMS_E2E_FIXTURE_PATH` dosyasını verin. Bu değişken yoksa `platform.spec.ts` senaryoları açıkça atlanır. Dosya gerçek oturum içerir; Git'e eklemeyin. Başarısız gerçek oturum testlerinin trace dosyalarını da gizli veri olarak değerlendirin.
+
+Üretim Compose biçim kontrolü `docker compose --env-file deploy/.env -f deploy/compose.yml config --quiet` ile yapılır. Bu işlem imaj derlemez veya sunucuya dağıtım yapmaz. Gerçek üretim doğrulaması [dağıtım yönergesindedir](../deploy/README.md).

@@ -1,3 +1,4 @@
+import { WishButton, RecommendedCourses } from './Platform';
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -69,6 +70,14 @@ export default function CourseDetail() {
       void client.invalidateQueries({ queryKey: ['course', courseId] });
     },
   });
+  const moderate = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api(`/courses/admin/reviews/${id}/remove`, { method: 'POST', body: body({ reason }) }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['reviews', courseId] });
+      void client.invalidateQueries({ queryKey: ['course', courseId] });
+    },
+  });
   const remove = useMutation({
     mutationFn: (id: string) => api(`/reviews/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -97,7 +106,14 @@ export default function CourseDetail() {
             {c.categoryName} <span>•</span> {levels[c.level]}
           </div>
           <h1 className="detail-title">{c.title}</h1>
+          <WishButton courseId={c.id} />
           <p className="detail-description">{c.shortDescription}</p>
+          {c.targetAudience && (
+            <section className="panel">
+              <h2>Bu kurs kimler için?</h2>
+              <p className="pre-wrap">{c.targetAudience}</p>
+            </section>
+          )}
           <div className="detail-meta">
             <span className="rating">
               <Star size={16} fill="currentColor" /> {(c.averageRating || 0).toFixed(1)}{' '}
@@ -211,6 +227,18 @@ export default function CourseDetail() {
                         <small>{date(r.createdAt)}</small>
                       </div>
                       <span className="rating">{'★'.repeat(r.rating)}</span>
+                      {session?.user.role === 'ADMIN' && session.user.adminScope !== 'SUPPORT' && (
+                        <button
+                          className="text-button danger"
+                          disabled={moderate.isPending}
+                          onClick={() => {
+                            const reason = window.prompt('Değerlendirmeyi kaldırma gerekçesi');
+                            if (reason) moderate.mutate({ id: r.id, reason });
+                          }}
+                        >
+                          Moderasyonla kaldır
+                        </button>
+                      )}
                       {session?.user.id === r.studentId && (
                         <button
                           className="icon-button danger"
@@ -237,6 +265,7 @@ export default function CourseDetail() {
                 />
               </>
             )}
+            {moderate.error && <ErrorBox error={moderate.error} />}
             {remove.error && <ErrorBox error={remove.error} />}{' '}
             {session?.user.role === 'STUDENT' && enrollment.data && (
               <form className="panel review-form" onSubmit={addReview}>
@@ -323,6 +352,7 @@ export default function CourseDetail() {
           </div>
         </aside>
       </div>
+      <RecommendedCourses courseId={c.id} />
       {showTrailer && c.previewVideoUrl && (
         <Modal title="Kurs tanıtımı" onClose={() => setShowTrailer(false)}>
           <VideoPlayer src={c.previewVideoUrl} />

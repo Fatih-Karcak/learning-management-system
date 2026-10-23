@@ -43,7 +43,11 @@ public class AdminUserService {
         var acting = users
             .findById(actor)
             .orElseThrow(() -> new UserNotFoundException("Yönetici bulunamadı"));
-        if (acting.getRole() != UserRole.ADMIN || acting.getStatus() != UserStatus.ACTIVE) {
+        if (
+            acting.getRole() != UserRole.ADMIN ||
+            acting.getStatus() != UserStatus.ACTIVE ||
+            !"FULL".equals(acting.getAdminScope())
+        ) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Yönetici hesabı aktif değil");
         }
         if (id.equals(actor)) throw new ResponseStatusException(
@@ -51,9 +55,21 @@ public class AdminUserService {
             "Kendi yönetici yetkinizi veya durumunuzu değiştiremezsiniz"
         );
         var user = users.findById(id).orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı"));
+        Long full = jdbc.queryForObject(
+            "select count(*) from users where role='ADMIN' and status='ACTIVE' and admin_scope='FULL'",
+            Long.class
+        );
+        if (
+            "FULL".equals(user.getAdminScope()) &&
+            user.getRole() == UserRole.ADMIN &&
+            full != null &&
+            full <= 1 &&
+            (request.role() != UserRole.ADMIN || request.status() != UserStatus.ACTIVE)
+        ) throw new IllegalStateException("Son tam yetkili yönetici kaldırılamaz");
         user.setRole(request.role());
         user.setStatus(request.status());
         users.save(user);
+        jdbc.update("update user_sessions set revoked=true where user_id=?", id);
         jdbc.update(
             "insert into admin_audit(id,actor_id,target_id,action,reason) values (?,?,?,?,?)",
             UUID.randomUUID(),

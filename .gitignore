@@ -14,3 +14,7 @@
 # Gizli anahtar ve sertifika dosyaları
 *.key
 *.pem
+# Üretim yedekleri ve yerel test verileri
+*.dump
+*.dump.part
+*.backup

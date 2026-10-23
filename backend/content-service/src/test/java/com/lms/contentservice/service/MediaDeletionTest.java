@@ -1,41 +1,71 @@
 package com.lms.contentservice.service;
 
+import static org.mockito.Mockito.*;
+
 import com.lms.contentservice.client.EnrollmentClient;
 import com.lms.contentservice.domain.entity.MediaAsset;
 import com.lms.contentservice.domain.enums.AssetType;
 import com.lms.contentservice.mapper.MediaAssetMapper;
 import com.lms.contentservice.repository.MediaAssetRepository;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
-import java.util.Optional;
-import java.util.UUID;
-import static org.mockito.Mockito.*;
 
 class MediaDeletionTest {
-    @Test void mediaListingUsesAuthenticatedOwnerScope() {
+
+    @Test
+    void mediaListingUsesAuthenticatedOwnerScope() {
         var repository = mock(MediaAssetRepository.class);
-        var service = new MediaService(mock(ApplicationEventPublisher.class), repository, mock(StorageService.class),
-                mock(VideoProcessingService.class), mock(EnrollmentClient.class), mock(MediaAssetMapper.class));
+        var service = new MediaService(
+            mock(ApplicationEventPublisher.class),
+            repository,
+            mock(StorageService.class),
+            mock(VideoProcessingService.class),
+            mock(EnrollmentClient.class),
+            mock(MediaAssetMapper.class),
+            mock(CourseIdentityClient.class)
+        );
         UUID owner = UUID.randomUUID();
         var pageable = org.springframework.data.domain.PageRequest.of(0, 12);
-        when(repository.findByOwnerId(owner, pageable)).thenReturn(org.springframework.data.domain.Page.empty(pageable));
+        when(repository.findByOwnerId(owner, pageable)).thenReturn(
+            org.springframework.data.domain.Page.empty(pageable)
+        );
 
-        org.junit.jupiter.api.Assertions.assertEquals(0, service.getOwnMedia(owner, pageable).getTotalElements());
+        org.junit.jupiter.api.Assertions.assertEquals(
+            0,
+            service.getOwnMedia(owner, pageable).getTotalElements()
+        );
         verify(repository).findByOwnerId(owner, pageable);
         verify(repository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
     }
 
-    @Test void imageDeletesFromImagesBucketAndVideoAlsoDeletesHlsPrefix() {
-        for (AssetType type : new AssetType[]{AssetType.IMAGE, AssetType.VIDEO}) {
-            var repository = mock(MediaAssetRepository.class); var storage = mock(StorageService.class);
-            var service = new MediaService(mock(ApplicationEventPublisher.class), repository, storage,
-                    mock(VideoProcessingService.class), mock(EnrollmentClient.class), mock(MediaAssetMapper.class));
+    @Test
+    void imageDeletesFromImagesBucketAndVideoAlsoDeletesHlsPrefix() {
+        for (AssetType type : new AssetType[] { AssetType.IMAGE, AssetType.VIDEO }) {
+            var repository = mock(MediaAssetRepository.class);
+            var storage = mock(StorageService.class);
+            var service = new MediaService(
+                mock(ApplicationEventPublisher.class),
+                repository,
+                storage,
+                mock(VideoProcessingService.class),
+                mock(EnrollmentClient.class),
+                mock(MediaAssetMapper.class),
+                mock(CourseIdentityClient.class)
+            );
             ReflectionTestUtils.setField(service, "rawBucket", "raw");
             ReflectionTestUtils.setField(service, "hlsBucket", "hls");
             ReflectionTestUtils.setField(service, "imagesBucket", "images");
-            var id = UUID.randomUUID(); var owner = UUID.randomUUID();
-            var asset = MediaAsset.builder().id(id).ownerId(owner).type(type).rawStorageKey("original").build();
+            var id = UUID.randomUUID();
+            var owner = UUID.randomUUID();
+            var asset = MediaAsset.builder()
+                .id(id)
+                .ownerId(owner)
+                .type(type)
+                .rawStorageKey("original")
+                .build();
             if (type == AssetType.VIDEO) asset.setHlsMasterKey("hls/test/master.m3u8");
             when(repository.findById(id)).thenReturn(Optional.of(asset));
             service.deleteMedia(id, owner, "INSTRUCTOR");

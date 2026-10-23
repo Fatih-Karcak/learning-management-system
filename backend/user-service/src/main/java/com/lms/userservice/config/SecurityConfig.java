@@ -1,9 +1,9 @@
 package com.lms.userservice.config;
 
-import com.lms.userservice.security.JwtAuthenticationFilter;
 import com.lms.userservice.security.InternalServiceAuthFilter;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import com.lms.userservice.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,26 +28,31 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/**",
-                                "/actuator/health",
-                                "/actuator/info"
-                        ).permitAll()
-                        .requestMatchers("/api/v1/internal/**").hasRole("SERVICE")
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
-                )
-                .exceptionHandling(errors -> errors
-                        .authenticationEntryPoint((request, response, ex) -> response.setStatus(401))
-                        .accessDeniedHandler((request, response, ex) -> response.setStatus(403)))
-                .addFilterBefore(internalServiceAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+        http.csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth ->
+                auth
+                    .requestMatchers(
+                        "/api/v1/auth/**",
+                        "/actuator/health",
+                        "/actuator/info",
+                        "/actuator/prometheus"
+                    )
+                    .permitAll()
+                    .requestMatchers("/api/v1/internal/**")
+                    .hasRole("SERVICE")
+                    .requestMatchers("/api/v1/admin/**")
+                    .hasRole("ADMIN")
+                    .anyRequest()
+                    .authenticated()
+            )
+            .exceptionHandling(errors ->
+                errors
+                    .authenticationEntryPoint((request, response, ex) -> response.setStatus(401))
+                    .accessDeniedHandler((request, response, ex) -> response.setStatus(403))
+            )
+            .addFilterBefore(internalServiceAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -65,8 +70,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration config) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 }

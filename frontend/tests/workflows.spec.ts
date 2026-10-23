@@ -100,6 +100,25 @@ async function mockApi(page: Page, role = 'STUDENT') {
     if (path === '/api/v1/users/me')
       data = { ...user, id: role === 'INSTRUCTOR' ? 'instructor-1' : user.id, role };
     else if (path === '/api/v1/courses/categories') data = [{ id: 3, name: 'Tasarım' }];
+    else if (path.endsWith('/workspace'))
+      data = {
+        revision: 0,
+        status: 'DRAFT',
+        feedback: null,
+        document: { course: structuredClone(course), categoryId: 3, quizzes: {}, materials: {} },
+        checklist: [],
+      };
+    else if (
+      path.endsWith('/materials') ||
+      path.endsWith('/announcements') ||
+      path.endsWith('/bookmarks') ||
+      path.endsWith('/wishlist') ||
+      path.endsWith('/inbox') ||
+      path.endsWith('/workspaces') ||
+      path.endsWith('/versions') ||
+      path.endsWith('/recommendations')
+    )
+      data = [];
     else if (path === '/api/v1/courses/course-1') data = course;
     else if (
       [
@@ -131,7 +150,7 @@ async function mockApi(page: Page, role = 'STUDENT') {
   });
 }
 
-test('instructor attaches a library video to an existing text lesson', async ({ page }) => {
+test('instructor stages a library video in the workspace before publication', async ({ page }) => {
   await session(page, 'INSTRUCTOR');
   await mockApi(page, 'INSTRUCTOR');
   const media = {
@@ -145,26 +164,32 @@ test('instructor attaches a library video to an existing text lesson', async ({ 
   await page.route('**/api/v1/media/my?**', (route) =>
     route.fulfill({ json: envelope(pageData([media])) }),
   );
-  let payload: unknown;
-  await page.route('**/api/v1/lessons/lesson-1/video', async (route) => {
-    expect(route.request().headers().authorization).toBe('Bearer test-token');
-    expect(route.request().method()).toBe('PUT');
-    payload = route.request().postDataJSON();
-    await route.fulfill({
-      json: envelope({
-        ...course.sections[0].lessons[0],
-        type: 'VIDEO',
-        videoUrl: media.streamUrl,
-      }),
-    });
+  let saved: any;
+  let workspace: any = {
+    revision: 0,
+    status: 'DRAFT',
+    document: { course: structuredClone(course), categoryId: 3, quizzes: {}, materials: {} },
+    checklist: [],
+  };
+  await page.route('**/api/v1/courses/course-1/workspace', async (route) => {
+    if (route.request().method() === 'PUT') {
+      expect(route.request().headers().authorization).toBe('Bearer test-token');
+      saved = route.request().postDataJSON();
+      workspace = { ...workspace, document: saved.document, revision: 1 };
+    }
+    await route.fulfill({ json: envelope(workspace) });
   });
   await page.goto('/instructor/course-1');
-  await page.getByRole('button', { name: 'Tasarım nedir?: video ekle veya değiştir' }).click();
-  await page.getByLabel('Medya kitaplığından video seç').selectOption(media.streamUrl);
-  await expect(page.getByLabel('Video adresi', { exact: true })).toHaveValue(media.streamUrl);
-  await page.getByRole('button', { name: 'Videoyu derse bağla' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(payload).toEqual({ videoUrl: media.streamUrl, durationSeconds: 12 });
+  await page.getByRole('button', { name: 'Tasarım nedir? · Okuma', exact: true }).click();
+  await page.getByLabel('Ders türü', { exact: true }).selectOption('VIDEO');
+  await page.getByLabel('Ders videosu', { exact: true }).selectOption(media.streamUrl);
+  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
+  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
+  await expect
+    .poll(() => saved?.document.course.sections[0].lessons[0].videoUrl)
+    .toBe(media.streamUrl);
+  expect(saved.document.course.sections[0].lessons[0].content).toBe('İlk dersin içeriği.');
+  await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toBeEnabled();
 });
 
 test('video lesson without a URL explains that an instructor must attach its video', async ({
@@ -201,32 +226,44 @@ test('continue learning opens the most recently watched unfinished lesson', asyn
   await expect(page).toHaveURL('/learn/enrollment-1?lesson=lesson-2');
 });
 
-test('quiz editor retains the saved questions when reopened', async ({ page }) => {
+test('quiz questions remain in the saved workspace when reopened', async ({ page }) => {
   await session(page, 'INSTRUCTOR');
   await mockApi(page, 'INSTRUCTOR');
   const copy = structuredClone(course);
   copy.sections[0].lessons[0].type = 'QUIZ';
-  await page.route('**/api/v1/courses/course-1', (route) =>
-    route.fulfill({ json: envelope(copy) }),
-  );
-  let definition = {
-    passingScore: 70,
-    questions: [
-      { id: 'q-1', prompt: 'Eski soru', options: ['Yanıt A', 'Yanıt B'], correctOption: 0 },
-    ],
+  let workspace: any = {
+    revision: 1,
+    status: 'DRAFT',
+    document: {
+      course: copy,
+      categoryId: 3,
+      quizzes: {
+        'lesson-1': {
+          passingScore: 70,
+          questions: [
+            { id: 'q-1', prompt: 'Eski soru', options: ['Yanıt A', 'Yanıt B'], correctOption: 0 },
+          ],
+        },
+      },
+      materials: {},
+    },
+    checklist: [],
   };
-  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz/manage', async (route) => {
-    if (route.request().method() === 'PUT') definition = route.request().postDataJSON();
-    await route.fulfill({ json: envelope(definition) });
+  await page.route('**/api/v1/courses/course-1/workspace', async (route) => {
+    if (route.request().method() === 'PUT') {
+      workspace = { ...workspace, document: route.request().postDataJSON().document, revision: 2 };
+    }
+    await route.fulfill({ json: envelope(workspace) });
   });
   await page.goto('/instructor/course-1');
-  await page.getByRole('button', { name: 'Testi düzenle', exact: true }).click();
-  await page.getByLabel('Soru 1 metni').fill('Kaydedilmiş yeni soru');
-  await page.getByRole('button', { name: 'Testi kaydet', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Test kaydedildi.');
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Testi düzenle', exact: true }).click();
-  await expect(page.getByLabel('Soru 1 metni')).toHaveValue('Kaydedilmiş yeni soru');
+  await page.getByRole('button', { name: 'Tasarım nedir? · Test', exact: true }).click();
+  await page.getByLabel('Soru 1', { exact: true }).fill('Kaydedilmiş yeni soru');
+  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
+  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
+  await expect.poll(() => workspace.revision).toBe(2);
+  await page.reload();
+  await page.getByRole('button', { name: 'Tasarım nedir? · Test', exact: true }).click();
+  await expect(page.getByLabel('Soru 1', { exact: true })).toHaveValue('Kaydedilmiş yeni soru');
 });
 
 test.describe('decoded student video playback', () => {
@@ -295,20 +332,28 @@ test.describe('decoded student video playback', () => {
     await page.route('**/api/v1/media/video', async (route) => {
       const form = route.request().postDataBuffer()!.toString();
       expect(form).toContain('name="courseId"\r\n\r\ncourse-1');
-      expect(form).toContain('name="lessonId"\r\n\r\nlesson-1');
+
       expect(route.request().headers().authorization).toBe('Bearer test-token');
       await route.fulfill({ status: 201, json: envelope({ ...media, status: 'PROCESSING' }) });
     });
     let attached = false;
-    await page.route('**/api/v1/lessons/lesson-1/video', async (route) => {
-      expect(route.request().postDataJSON()).toEqual({ videoUrl: streamUrl, durationSeconds: 3 });
-      Object.assign(linkedCourse.sections[0].lessons[0], {
-        type: 'VIDEO',
-        videoUrl: streamUrl,
-        durationSeconds: 3,
-      });
-      attached = true;
-      await route.fulfill({ json: envelope(linkedCourse.sections[0].lessons[0]) });
+    let workspace: any = {
+      revision: 0,
+      status: 'DRAFT',
+      document: { course: structuredClone(course), categoryId: 3, quizzes: {}, materials: {} },
+      checklist: [],
+    };
+    await page.route('**/api/v1/courses/course-1/workspace', async (route) => {
+      if (route.request().method() === 'PUT') {
+        const input = route.request().postDataJSON();
+        Object.assign(
+          linkedCourse.sections[0].lessons[0],
+          input.document.course.sections[0].lessons[0],
+        );
+        attached = true;
+        workspace = { ...workspace, document: input.document, revision: 1 };
+      }
+      await route.fulfill({ json: envelope(workspace) });
     });
     await page.goto('/media?course=course-1');
     await page.getByLabel('Dosya türü').selectOption('video');
@@ -319,7 +364,7 @@ test.describe('decoded student video playback', () => {
       buffer: Buffer.from('upload-fixture'),
     });
     await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
-    await expect(page.getByRole('status')).toContainText('Video derse bağlandı.');
+    await expect(page.getByRole('status')).toContainText('1 dosya yüklendi.');
     expect(attached).toBe(true);
 
     const context = await browser.newContext();
@@ -577,7 +622,7 @@ test('media upload preserves file and owner authentication, then lists the new f
   });
   await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
   await expect(page.getByRole('heading', { name: 'lesson.png' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Görsel yüklendi.');
+  await expect(page.getByRole('status')).toContainText('1 dosya yüklendi.');
 });
 
 test('certificate download and public verification use their separate endpoints', async ({

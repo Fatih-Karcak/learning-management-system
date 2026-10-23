@@ -1,5 +1,48 @@
 const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 let token: string | null = null;
+let refresher: (() => Promise<boolean>) | null = null;
+let refreshFlight: Promise<boolean> | null = null;
+export function setTokenRefresher(handler: (() => Promise<boolean>) | null) {
+  refresher = handler;
+}
+export async function refreshAuthentication() {
+  if (!refresher) return false;
+  if (!refreshFlight)
+    refreshFlight = refresher().finally(() => {
+      refreshFlight = null;
+    });
+  return refreshFlight;
+}
+export async function authenticatedFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  let sentToken = token;
+  const send = async () => {
+    sentToken = token;
+    const headers = new Headers(options.headers);
+    if (sentToken) headers.set('Authorization', `Bearer ${sentToken}`);
+    else headers.delete('Authorization');
+    return fetch(apiUrl(path), { ...options, headers });
+  };
+  let response = await send();
+  if (response.status === 401 && !/^(?:\/api\/v1)?\/auth\//.test(path)) {
+    if (token && sentToken !== token) response = await send();
+    else if (await refreshAuthentication()) response = await send();
+  }
+  if (response.status === 401 && sentToken === token)
+    window.dispatchEvent(new Event('lms:unauthorized'));
+  return response;
+}
+
+export async function fetchResource(path: string): Promise<Blob> {
+  if (!/^\/api\/v1\/media\/resources\/[0-9a-f-]{36}$/i.test(path))
+    throw new ApiError('Dosya adresi geçersiz.', 400);
+  const response = await authenticatedFetch(path);
+  if (!response.ok)
+    throw new ApiError('Dosya indirilemedi. Erişim iznini kontrol edin.', response.status);
+  return response.blob();
+}
 export function setAccessToken(value: string | null) {
   token = value;
 }
@@ -34,7 +77,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
-    response = await fetch(apiUrl(path), { ...options, headers });
+    response = await authenticatedFetch(path, { ...options, headers });
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new ApiError('Sunucuya ulaşılamıyor. Bağlantınızı kontrol edip tekrar deneyin.', 0);
@@ -55,7 +98,6 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
         } as Record<number, string>
       )[response.status] ||
       'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
-    if (response.status === 401) window.dispatchEvent(new Event('lms:unauthorized'));
     throw new ApiError(message, response.status);
   }
   return payload?.data as T;

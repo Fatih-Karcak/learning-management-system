@@ -41,6 +41,15 @@ class AdminUserTest {
                 actor
             )
         );
+        admin.setStatus(UserStatus.ACTIVE);
+        admin.setAdminScope("SUPPORT");
+        assertThrows(ResponseStatusException.class, () ->
+            service.update(
+                target,
+                new AdminUserService.Update(UserRole.ADMIN, UserStatus.ACTIVE, "No escalation"),
+                actor
+            )
+        );
         verify(users, never()).save(any());
         verifyNoInteractions(jdbc);
     }

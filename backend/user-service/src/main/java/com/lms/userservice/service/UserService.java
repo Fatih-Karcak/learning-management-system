@@ -7,6 +7,7 @@ import com.lms.userservice.dto.response.UserResponse;
 import com.lms.userservice.exception.UserNotFoundException;
 import com.lms.userservice.mapper.UserMapper;
 import com.lms.userservice.repository.UserRepository;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,8 +16,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -27,13 +26,20 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     public UserResponse getUserById(UUID id) {
         return userMapper.toResponse(findUserById(id));
     }
 
     @Transactional
     public UserResponse updateProfile(UUID id, UpdateProfileRequest request) {
-        User user = findUserById(id);
+        User user = StringUtils.hasText(request.getNewPassword())
+            ? userRepository
+                  .findByIdForUpdate(id)
+                  .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı"))
+            : findUserById(id);
 
         if (StringUtils.hasText(request.getFirstName())) {
             user.setFirstName(request.getFirstName());
@@ -58,6 +64,7 @@ public class UserService {
                 throw new IllegalArgumentException("Mevcut şifre yanlış");
             }
             user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            jdbc.update("update user_sessions set revoked=true where user_id=?", id);
         }
 
         user = userRepository.save(user);
@@ -67,9 +74,14 @@ public class UserService {
 
     @Transactional
     public void verifyEmail(String token) {
-        User user = userRepository.findByEmailVerificationToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Geçersiz doğrulama token'ı"));
+        User user = userRepository
+            .findByEmailVerificationToken(token)
+            .orElseThrow(() -> new IllegalArgumentException("Geçersiz doğrulama token'ı"));
 
+        if (
+            user.getVerificationExpiresAt() != null &&
+            user.getVerificationExpiresAt().isBefore(java.time.LocalDateTime.now(java.time.Clock.systemUTC()))
+        ) throw new IllegalArgumentException("Doğrulama bağlantısının süresi doldu");
         user.setEmailVerified(true);
         if (user.getStatus() == UserStatus.PENDING_VERIFICATION) user.setStatus(UserStatus.ACTIVE);
         user.setEmailVerificationToken(null);
@@ -78,22 +90,24 @@ public class UserService {
     }
 
     public Page<UserResponse> searchUsers(String query, Pageable pageable) {
-        return userRepository.searchUsers(query, pageable)
-                .map(userMapper::toResponse);
+        return userRepository.searchUsers(query, pageable).map(userMapper::toResponse);
     }
 
     @Transactional
     public void deactivateUser(UUID id) {
         User user = findUserById(id);
         if (user.getRole() == com.lms.userservice.domain.enums.UserRole.ADMIN) {
-            throw new IllegalArgumentException("Yönetici hesabını başka bir yönetici devre dışı bırakmalıdır");
+            throw new IllegalArgumentException(
+                "Yönetici hesabını başka bir yönetici devre dışı bırakmalıdır"
+            );
         }
         user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
     }
 
     private User findUserById(UUID id) {
-        return userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + id));
+        return userRepository
+            .findById(id)
+            .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + id));
     }
 }

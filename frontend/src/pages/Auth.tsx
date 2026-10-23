@@ -23,6 +23,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     setBusy(true);
     setError(null);
     const form = Object.fromEntries(new FormData(e.currentTarget));
+    if (form.otp === '') delete form.otp;
     try {
       const auth = await api<Auth>(`/auth/${register ? 'register' : 'login'}`, {
         method: 'POST',
@@ -87,15 +88,29 @@ export function AuthPage({ register = false }: { register?: boolean }) {
               placeholder="sen@ornek.com"
             />
           </Field>
-          <Field label="Şifre" hint={register ? 'En az 8 karakter kullanın.' : undefined}>
+          <Field label="Şifre" hint={register ? 'En az 12 karakter kullanın.' : undefined}>
             <input
               name="password"
               type="password"
-              minLength={register ? 8 : undefined}
+              minLength={register ? 12 : undefined}
               required
               autoComplete={register ? 'new-password' : 'current-password'}
             />
           </Field>
+          {!register && (
+            <>
+              <Field label="Doğrulama kodu (etkinleştirdiysen)">
+                <input
+                  name="otp"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                />
+              </Field>
+              <Link to="/forgot-password">Parolamı unuttum</Link>
+            </>
+          )}
           {register && (
             <Field label="Nasıl katılmak istersin?">
               <select name="role">
@@ -157,6 +172,68 @@ export function VerifyEmail() {
       <Link className="button primary" to="/login">
         Giriş yap
       </Link>
+    </section>
+  );
+}
+
+export function RecoverPassword({ reset = false }: { reset?: boolean }) {
+  const [params] = useSearchParams();
+  const [busy, setBusy] = useState(false),
+    [done, setDone] = useState(false),
+    [error, setError] = useState<unknown>();
+  return (
+    <section className="panel narrow">
+      <h1>{reset ? 'Yeni parola belirle' : 'Parolamı unuttum'}</h1>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          const data = new FormData(e.currentTarget);
+          try {
+            await api(reset ? '/auth/reset-password' : '/auth/forgot-password', {
+              method: 'POST',
+              body: body(
+                reset
+                  ? { token: params.get('token'), password: data.get('password') }
+                  : { email: data.get('email') },
+              ),
+            });
+            setDone(true);
+          } catch (e) {
+            setError(e);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {reset ? (
+          <Field label="Yeni parola — en az 12 karakter">
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={12}
+              maxLength={72}
+              autoComplete="new-password"
+            />
+          </Field>
+        ) : (
+          <Field label="E-posta adresi">
+            <input name="email" type="email" required autoComplete="email" />
+          </Field>
+        )}
+        <Submit busy={busy}>{reset ? 'Parolayı yenile' : 'Sıfırlama bağlantısı gönder'}</Submit>
+      </form>
+      {done && (
+        <Success>
+          {reset
+            ? 'Parolan yenilendi. Tekrar giriş yapabilirsin.'
+            : 'Adres uygunsa sıfırlama bağlantısı e-posta ile gönderilecek.'}
+        </Success>
+      )}
+      {!!error && <ErrorBox error={error} />}
+      <Link to="/login">Giriş yap</Link>
     </section>
   );
 }

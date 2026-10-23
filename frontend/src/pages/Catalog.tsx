@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -14,7 +14,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../auth';
-import { api } from '../api';
+import { api, levels } from '../api';
 import type { Category, Course, Enrollment, Page } from '../types';
 import { CourseCard, Empty, ErrorBox, Loading, PageTitle, Pagination } from '../ui';
 
@@ -55,6 +55,10 @@ export function InstructorCourses() {
   );
 }
 export function Dashboard() {
+  const { session } = useAuth();
+  return session?.user.role === 'ADMIN' ? <Navigate to="/admin" replace /> : <LearningDashboard />;
+}
+function LearningDashboard() {
   const { session } = useAuth();
   const courses = useQuery({
     queryKey: ['popular'],
@@ -242,15 +246,22 @@ export function Catalog() {
   const category = params.get('category') || '';
   const sort = params.get('sort') || 'new';
   const page = Math.max(0, Number(params.get('page')) || 0);
-  const endpoint = q
-    ? `/courses/search?query=${encodeURIComponent(q)}`
-    : category
-      ? `/courses/category/${encodeURIComponent(category)}?`
-      : sort === 'popular'
-        ? '/courses/popular?'
-        : '/courses?';
+  const level = params.get('level') || '',
+    language = params.get('language') || '',
+    free = params.get('free') === 'true',
+    rating = params.get('rating') || '';
+  const advanced = !!(level || language || free || rating || sort === 'rating');
+  const endpoint = advanced
+    ? `/courses/discover?query=${encodeURIComponent(q)}${category ? `&category=${category}` : ''}${level ? `&level=${level}` : ''}${language ? `&language=${encodeURIComponent(language)}` : ''}${free ? '&free=true' : ''}${rating ? `&rating=${rating}` : ''}&order=${sort}`
+    : q
+      ? `/courses/search?query=${encodeURIComponent(q)}`
+      : category
+        ? `/courses/category/${encodeURIComponent(category)}?`
+        : sort === 'popular'
+          ? '/courses/popular?'
+          : '/courses?';
   const courses = useQuery({
-    queryKey: ['catalog', q, category, sort, page],
+    queryKey: ['catalog', q, category, sort, page, level, language, free, rating],
     queryFn: () =>
       api<Page<Course>>(
         `${endpoint}${endpoint.endsWith('?') ? '' : '&'}page=${page}&size=9${sort === 'new' ? '&sort=createdAt,desc' : ''}`,
@@ -260,8 +271,7 @@ export function Catalog() {
     const next = new URLSearchParams(params);
     next.set(key, value);
     if (key !== 'page') next.delete('page');
-    if (key === 'q') next.delete('category');
-    if (key === 'category') next.delete('q');
+
     setParams(next);
   }
   function search(e: FormEvent) {
@@ -293,6 +303,7 @@ export function Catalog() {
         >
           <option value="new">En yeni kurslar</option>
           <option value="popular">En popüler kurslar</option>
+          <option value="rating">En yüksek puan</option>
         </select>
         <select
           aria-label="Kategori"
@@ -306,6 +317,43 @@ export function Catalog() {
             </option>
           ))}
         </select>
+      </div>
+      <div className="form-grid">
+        <label>
+          Seviye
+          <select value={level} onChange={(e) => update('level', e.target.value)}>
+            <option value="">Tüm seviyeler</option>
+            {Object.entries(levels).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Dil
+          <select value={language} onChange={(e) => update('language', e.target.value)}>
+            <option value="">Tüm diller</option>
+            <option value="Türkçe">Türkçe</option>
+            <option value="English">English</option>
+          </select>
+        </label>
+        <label>
+          En az puan
+          <select value={rating} onChange={(e) => update('rating', e.target.value)}>
+            <option value="">Tüm puanlar</option>
+            <option value="4">4 ve üzeri</option>
+            <option value="4.5">4,5 ve üzeri</option>
+          </select>
+        </label>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={free}
+            onChange={(e) => update('free', String(e.target.checked))}
+          />{' '}
+          Ücretsiz kurslar
+        </label>
       </div>
       {categories.error && (
         <ErrorBox error={categories.error} retry={() => void categories.refetch()} />

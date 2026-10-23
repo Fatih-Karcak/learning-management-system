@@ -21,23 +21,36 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // This controller requires the shared internal service key; gateway blocks this path.
-                        .requestMatchers("/api/v1/internal/media/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+        http.csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth ->
+                auth
+                    .requestMatchers(
+                        org.springframework.http.HttpMethod.GET,
+                        "/api/v1/media/*",
+                        "/api/v1/media/*/manifest.m3u8",
+                        "/api/v1/media/*/*.ts"
+                    )
+                    .permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus")
+                    .permitAll()
+                    // This controller requires the shared internal service key; gateway blocks this path.
+                    .requestMatchers("/api/v1/internal/media/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
+
     @Bean
     public org.springframework.security.core.userdetails.UserDetailsService disabledPasswordLogin() {
-        return username -> { throw new org.springframework.security.core.userdetails.UsernameNotFoundException("Password authentication disabled"); };
+        return username -> {
+            throw new org.springframework.security.core.userdetails.UsernameNotFoundException(
+                "Password authentication disabled"
+            );
+        };
     }
 }

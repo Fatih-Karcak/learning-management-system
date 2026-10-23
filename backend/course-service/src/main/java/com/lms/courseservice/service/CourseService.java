@@ -50,6 +50,7 @@ public class CourseService {
 
         Course course = Course.builder()
             .title(request.getTitle())
+            .targetAudience(request.getTargetAudience())
             .description(request.getDescription())
             .shortDescription(request.getShortDescription())
             .price(request.getPrice())
@@ -132,8 +133,10 @@ public class CourseService {
     public CourseResponse updateCourse(UUID courseId, UpdateCourseRequest request, UUID instructorId) {
         Course course = findCourseById(courseId);
         validateInstructor(course, instructorId);
+        CourseWorkspaceService.requireDirectEditable(course);
 
         if (request.getTitle() != null) course.setTitle(request.getTitle());
+        if (request.getTargetAudience() != null) course.setTargetAudience(request.getTargetAudience());
         if (request.getDescription() != null) course.setDescription(request.getDescription());
         if (request.getShortDescription() != null) course.setShortDescription(request.getShortDescription());
         if (request.getPrice() != null) course.setPrice(request.getPrice());
@@ -258,7 +261,71 @@ public class CourseService {
         Course course = findCourseById(courseId);
         validateInstructor(course, owner);
         course.setStatus(CourseStatus.ARCHIVED);
+        jdbc.update(
+            "update course_workspaces set status='DRAFT',revision=revision+1 where course_id=? and status='PENDING_REVIEW'",
+            courseId
+        );
         return courseMapper.toResponse(courseRepository.save(course));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CourseSummaryResponse> discover(
+        String query,
+        Long category,
+        com.lms.courseservice.domain.enums.CourseLevel level,
+        String language,
+        boolean free,
+        Double rating,
+        String order,
+        Pageable pageable
+    ) {
+        if (
+            query.length() > 200 ||
+            (language != null && language.length() > 50) ||
+            (rating != null && (rating < 0 || rating > 5))
+        ) throw new IllegalArgumentException("Filtre geçersiz");
+        var sort = org.springframework.data.domain.Sort.by(
+            org.springframework.data.domain.Sort.Direction.DESC,
+            switch (order) {
+                case "popular" -> "totalEnrollments";
+                case "rating" -> "averageRating";
+                default -> "createdAt";
+            }
+        ).and(org.springframework.data.domain.Sort.by("id"));
+        var page = org.springframework.data.domain.PageRequest.of(
+            pageable.getPageNumber(),
+            Math.min(100, pageable.getPageSize()),
+            sort
+        );
+        return courseRepository
+            .findAll((root, q, cb) -> {
+                var p = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+                p.add(cb.equal(root.get("status"), CourseStatus.PUBLISHED));
+                if (!query.isBlank()) {
+                    String term = "%" + query.toLowerCase(java.util.Locale.ROOT) + "%";
+                    p.add(
+                        cb.or(
+                            cb.like(cb.lower(root.get("title")), term),
+                            cb.like(cb.lower(root.get("description")), term),
+                            cb.like(cb.lower(root.get("instructorName")), term)
+                        )
+                    );
+                }
+                if (category != null) p.add(cb.equal(root.get("category").get("id"), category));
+                if (level != null) p.add(cb.equal(root.get("level"), level));
+                if (language != null && !language.isBlank()) p.add(
+                    cb.equal(cb.lower(root.get("language")), language.toLowerCase(java.util.Locale.ROOT))
+                );
+                if (free) p.add(
+                    cb.equal(
+                        cb.coalesce(root.get("discountPrice"), root.get("price")),
+                        java.math.BigDecimal.ZERO
+                    )
+                );
+                if (rating != null) p.add(cb.ge(root.get("averageRating"), rating));
+                return cb.and(p.toArray(jakarta.persistence.criteria.Predicate[]::new));
+            }, page)
+            .map(courseMapper::toSummaryResponse);
     }
 
     public Page<CourseSummaryResponse> getPublishedCourses(Pageable pageable) {

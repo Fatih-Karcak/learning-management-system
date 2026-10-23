@@ -36,24 +36,24 @@ test('real backend: register instructor, add lesson and submit for administrator
   await page.getByLabel('Fiyat (₺)', { exact: true }).fill('250');
   await page.getByRole('button', { name: 'Taslağı oluştur' }).click();
   await expect(page).toHaveURL(/\/instructor\/[a-f0-9-]+$/);
-  await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Bölüm ekle' }).click();
-  await page.getByRole('dialog').getByLabel('Başlık', { exact: true }).fill('Başlangıç');
-  await page.getByRole('dialog').getByRole('button', { name: 'Ekle', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Ders ekle' }).click();
-  await page.getByRole('dialog').getByLabel('Başlık', { exact: true }).fill('İlk yazılı ders');
+  await page.getByLabel('Ön koşullar — her satıra bir madde').fill('Ön koşul yok');
+  await page.getByLabel('Kazanımlar — her satıra bir madde').fill('İlk yazılı dersi tamamla');
+  await page.getByRole('button', { name: 'Bölüm ekle', exact: true }).click();
+  await page.getByLabel('Bölüm 1 başlığı').fill('Başlangıç');
+  await page.getByRole('button', { name: 'Ders ekle', exact: true }).click();
   await page
     .getByRole('dialog')
-    .getByLabel('Ders içeriği', { exact: true })
+    .getByLabel('Ders başlığı', { exact: true })
+    .fill('İlk yazılı ders');
+  await page
+    .getByRole('dialog')
+    .getByLabel('Ders metni', { exact: true })
     .fill('Gerçek backend üzerinden kaydedilen ders içeriği.');
-  await page.getByRole('dialog').getByLabel('Bu ders herkese açık ön izlenebilir').check();
-  await page.getByRole('dialog').getByRole('button', { name: 'Ekle', exact: true }).click();
+  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
+  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
   await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toBeEnabled();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'İncelemeye gönder', exact: true }).click();
-  await expect(page.getByText('Kurs yönetici onayı bekliyor.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Başvuruyu geri çek', exact: true })).toBeVisible();
   await page
     .getByRole('navigation', { name: 'Eğitmen menüsü' })
     .getByRole('link', { name: 'Kurslarım', exact: true })

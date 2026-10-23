@@ -1,5 +1,6 @@
+import { useAuth } from '../auth';
 import { useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, Navigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, body, date } from '../api';
 import type { Category, Course, Page, User } from '../types';
@@ -16,8 +17,10 @@ import {
   Success,
 } from '../ui';
 import { CourseStudents } from './LearningFeatures';
+import CourseWorkspace from './Workspace';
 
 export function AdminNavigation() {
+  const scope = useAuth().session?.user.adminScope || 'FULL';
   return (
     <nav className="feature-tabs" aria-label="Yönetim menüsü">
       {[
@@ -27,15 +30,35 @@ export function AdminNavigation() {
         ['/admin/categories', 'Kategoriler'],
         ['/admin/enrollments', 'Kayıtlar'],
         ['/admin/audit', 'İşlem kayıtları'],
-      ].map(([to, label]) => (
-        <NavLink end={to === '/admin'} key={to} to={to} className="button secondary small">
-          {label}
-        </NavLink>
-      ))}
+        ['/admin/support', 'Destek ve şikâyetler'],
+        ['/admin/operations', 'İşletim ve veri talepleri'],
+      ]
+        .filter(
+          ([to]) =>
+            scope === 'FULL' ||
+            (scope === 'MODERATION'
+              ? to === '/admin/courses' || to === '/admin/categories'
+              : to === '/admin/support' ||
+                to === '/admin/operations' ||
+                to === '/admin/enrollments'),
+        )
+        .map(([to, label]) => (
+          <NavLink end={to === '/admin'} key={to} to={to} className="button secondary small">
+            {label}
+          </NavLink>
+        ))}
     </nav>
   );
 }
 export function AdminDashboard() {
+  const scope = useAuth().session?.user.adminScope || 'FULL';
+  return scope === 'FULL' ? (
+    <FullAdminDashboard />
+  ) : (
+    <Navigate to={scope === 'MODERATION' ? '/admin/courses' : '/admin/support'} replace />
+  );
+}
+function FullAdminDashboard() {
   const data = useQuery({
     queryKey: ['admin-summary'],
     queryFn: async () => {
@@ -121,6 +144,7 @@ export function AdminCourses() {
     <>
       <PageTitle eyebrow="YÖNETİCİ ALANI" title="Kurs incelemeleri" />
       <AdminNavigation />
+      <WorkspaceQueue />
       <div className="form-grid">
         <Field label="Kurs durumuna göre filtrele">
           <select
@@ -485,5 +509,44 @@ export function AdminAudit() {
         </>
       )}
     </>
+  );
+}
+
+function WorkspaceQueue() {
+  const [selected, setSelected] = useState<string>();
+  const q = useQuery({
+    queryKey: ['workspace-queue'],
+    queryFn: () =>
+      api<{ course_id: string; title: string; instructor_name: string; revision: number }[]>(
+        '/courses/admin/workspaces',
+      ),
+  });
+  return (
+    <section className="panel">
+      <h2>Yayın taslakları</h2>
+      {q.isPending ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} />
+      ) : q.data?.length ? (
+        q.data.map((w) => (
+          <article className="lesson-row" key={w.course_id}>
+            <span>
+              {w.title} · {w.instructor_name} · Taslak {w.revision}
+            </span>
+            <button className="button secondary" onClick={() => setSelected(w.course_id)}>
+              Taslağı incele
+            </button>
+          </article>
+        ))
+      ) : (
+        <p>İnceleme bekleyen yayın taslağı yok.</p>
+      )}
+      {selected && (
+        <Modal title="Yayın taslağı incelemesi" onClose={() => setSelected(undefined)}>
+          <CourseWorkspace courseId={selected} review />
+        </Modal>
+      )}
+    </section>
   );
 }

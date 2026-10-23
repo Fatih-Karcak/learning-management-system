@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { api, ApiError, body, date, safeUrl } from '../api';
+import { api, body, date, safeUrl, fetchResource } from '../api';
 import { useAuth } from '../auth';
 import type {
   AssignmentSubmission,
@@ -29,18 +29,50 @@ export function QuizLesson({
   const path = `/courses/${courseId}/lessons/${lessonId}/quiz`;
   const client = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [active, setActive] = useState<{ id: string; expiresAt: string; quiz: Quiz }>();
+  const [now, setNow] = useState(Date.now());
   const quiz = useQuery({ queryKey: ['quiz', lessonId], queryFn: () => api<Quiz>(path) });
   const attempts = useQuery({
     queryKey: ['quiz-attempts', lessonId],
     queryFn: () => api<QuizAttempt[]>(`${path}/attempts`),
   });
+  const start = useMutation({
+    mutationFn: () =>
+      api<{ id: string; expiresAt: string; quiz: Quiz }>(`${path}/start`, {
+        method: 'POST',
+        body: body({ enrollmentId }),
+      }),
+    onSuccess: (value) => {
+      setActive(value);
+      setAnswers({});
+      setNow(Date.now());
+      submit.reset();
+    },
+  });
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  const actual = active?.quiz || quiz.data;
+  const managed = !!(
+    quiz.data?.maxAttempts ||
+    quiz.data?.timeLimitSeconds ||
+    quiz.data?.questionCount ||
+    quiz.data?.randomize
+  );
+  const remaining = active
+    ? Math.max(0, Math.floor((new Date(active.expiresAt).getTime() - now) / 1000))
+    : undefined;
+  const expired = remaining === 0;
   const submit = useMutation({
     mutationFn: () =>
       api<QuizAttempt>(`${path}/attempts`, {
         method: 'POST',
         body: body({
           enrollmentId,
-          answers: quiz.data!.questions.map((q) => ({ questionId: q.id, option: answers[q.id] })),
+          sessionId: active?.id,
+          answers: actual!.questions.map((q) => ({ questionId: q.id, option: answers[q.id] })),
         }),
       }),
     onSuccess: (result) => {
@@ -53,44 +85,87 @@ export function QuizLesson({
   return (
     <section className="feature-section">
       <h3>Ders testi</h3>
-      <p>Geçme puanı: %{quiz.data!.passingScore}.</p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit.mutate();
-        }}
-      >
-        {quiz.data!.questions.map((q, i) => (
-          <fieldset className="quiz-question" key={q.id}>
-            <legend>
-              {i + 1}. {q.prompt}
-            </legend>
-            {q.options.map((option, index) => (
-              <label className="checkbox-field" key={index}>
-                <input
-                  type="radio"
-                  name={q.id}
-                  required
-                  checked={answers[q.id] === index}
-                  onChange={() => setAnswers({ ...answers, [q.id]: index })}
-                />
-                {option}
-              </label>
+      <p>
+        Geçme puanı: %{actual!.passingScore}.
+        {quiz.data?.maxAttempts ? ` Deneme sınırı: ${quiz.data.maxAttempts}.` : ''}
+        {quiz.data?.timeLimitSeconds ? ` Süre: ${quiz.data.timeLimitSeconds} saniye.` : ''}
+      </p>
+      {managed && !active ? (
+        <button
+          className="button primary"
+          disabled={start.isPending}
+          onClick={() => start.mutate()}
+        >
+          Testi başlat / devam et
+        </button>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit.mutate();
+          }}
+        >
+          {active && quiz.data?.timeLimitSeconds && (
+            <p role="timer">Kalan süre: {remaining} saniye</p>
+          )}
+          <fieldset
+            disabled={expired || submit.isSuccess || submit.isPending}
+            className="workspace-fields"
+          >
+            {actual!.questions.map((q, i) => (
+              <fieldset className="quiz-question" key={q.id}>
+                <legend>
+                  {i + 1}. {q.prompt}
+                </legend>
+                {q.options.map((option, index) => (
+                  <label className="checkbox-field" key={index}>
+                    <input
+                      type="radio"
+                      name={q.id}
+                      required
+                      checked={answers[q.id] === index}
+                      onChange={() => setAnswers({ ...answers, [q.id]: index })}
+                    />
+                    {option}
+                  </label>
+                ))}
+              </fieldset>
             ))}
+            <Submit busy={submit.isPending}>Testi gönder</Submit>
           </fieldset>
-        ))}
-        {submit.error && <ErrorBox error={submit.error} />}
-        {submit.data && (
-          <div className={`notice ${submit.data.passed ? 'success' : 'warning'}`} role="status">
-            Puanın: %{submit.data.score}.{' '}
-            {submit.data.passed
-              ? 'Testi geçtin; ders tamamlandı.'
-              : 'Geçme puanına ulaşamadın. Yeniden deneyebilirsin.'}
-          </div>
-        )}
-        <Submit busy={submit.isPending}>Testi gönder</Submit>
-      </form>
-      {attempts.error && <ErrorBox error={attempts.error} />}
+          {submit.error && <ErrorBox error={submit.error} />}{' '}
+          {submit.data && (
+            <div className={`notice ${submit.data.passed ? 'success' : 'warning'}`} role="status">
+              Puanın: %{submit.data.score}.{' '}
+              {submit.data.passed ? 'Testi geçtin; ders tamamlandı.' : 'Geçme puanına ulaşamadın.'}
+              <ul>
+                {submit.data.feedback?.map((f) => (
+                  <li key={f.questionId}>
+                    {actual!.questions.find((q) => q.id === f.questionId)?.prompt}:{' '}
+                    {f.correct ? 'Doğru' : 'Tekrar çalış'}
+                    {f.explanation ? ` — ${f.explanation}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(submit.isSuccess || expired) && (
+            <>
+              <p>{expired ? 'Test süresi doldu. Yeni deneme kalan haklarından düşer.' : ''}</p>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={start.isPending}
+                onClick={() => (managed ? start.mutate() : (submit.reset(), setAnswers({})))}
+              >
+                Yeniden dene
+              </button>
+            </>
+          )}
+        </form>
+      )}
+      {start.error && <ErrorBox error={start.error} />}{' '}
+      {attempts.error && <ErrorBox error={attempts.error} />}{' '}
       {!!attempts.data?.length && (
         <details>
           <summary>Önceki denemeler ({attempts.data.length})</summary>
@@ -119,7 +194,17 @@ export function AssignmentLesson({
   onCompleted: () => void;
 }) {
   const path = `/courses/${courseId}/lessons/${lessonId}/assignment`;
+  const [attachment, setAttachment] = useState<string>();
+  const [uploadError, setUploadError] = useState<unknown>();
+  const [uploading, setUploading] = useState(false);
   const client = useQueryClient();
+  const history = useQuery({
+    queryKey: ['assignment-history', lessonId],
+    queryFn: () =>
+      api<{ id: string; content: string; status: string; feedback?: string; created_at: string }[]>(
+        `${path}/history`,
+      ),
+  });
   const submission = useQuery({
     queryKey: ['assignment', lessonId],
     queryFn: () => api<AssignmentSubmission | null>(`${path}/my`),
@@ -130,6 +215,7 @@ export function AssignmentLesson({
       api<AssignmentSubmission>(path, { method: 'POST', body: body(data) }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['assignment', lessonId] });
+      void client.invalidateQueries({ queryKey: ['assignment-history', lessonId] });
       onCompleted();
     },
   });
@@ -140,6 +226,18 @@ export function AssignmentLesson({
   return (
     <section className="feature-section">
       <h3>Ödev teslimi</h3>
+      {!!history.data?.length && (
+        <details>
+          <summary>Teslim geçmişi ({history.data.length})</summary>
+          {history.data.map((h) => (
+            <article className="notice" key={h.id}>
+              <small>{date(h.created_at)}</small>
+              <p className="pre-wrap">{h.content}</p>
+              {h.feedback && <p>Eğitmen: {h.feedback}</p>}
+            </article>
+          ))}
+        </details>
+      )}
       {s && (
         <>
           <Badge value={s.status} />
@@ -163,7 +261,8 @@ export function AssignmentLesson({
             send.mutate({
               enrollmentId,
               content: f.get('content'),
-              attachmentUrl: String(f.get('attachmentUrl') || '') || null,
+              attachmentUrl:
+                attachment ?? (String(f.get('attachmentUrl') || '') || s?.attachmentUrl || null),
             });
           }}
         >
@@ -176,178 +275,60 @@ export function AssignmentLesson({
               defaultValue={s?.content}
             />
           </Field>
+          {s?.attachmentUrl?.startsWith('/api/v1/media/resources/') && (
+            <ProtectedDownload url={s.attachmentUrl} />
+          )}
+          <Field label="Ödev dosyası (PDF veya TXT, en fazla 25 MB)">
+            <input
+              type="file"
+              accept=".pdf,.txt"
+              disabled={uploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                setUploadError(null);
+                try {
+                  const form = new FormData();
+                  form.set('file', file);
+                  form.set('purpose', 'ASSIGNMENT');
+                  form.set('courseId', courseId);
+                  const resource = await api<{ url: string }>('/media/resources', {
+                    method: 'POST',
+                    body: form,
+                  });
+                  setAttachment(resource.url);
+                } catch (e) {
+                  setUploadError(e);
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+          </Field>
+          {attachment && (
+            <p className="notice success">
+              Dosya yüklendi. Ödevi gönderdiğinde teslimine eklenecek.
+            </p>
+          )}
+          {!!uploadError && <ErrorBox error={uploadError} />}{' '}
+          {uploading && <p role="status">Dosya yükleniyor…</p>}
           <Field label="Çalışma bağlantısı (isteğe bağlı)">
             <input
               name="attachmentUrl"
               type="url"
               maxLength={2000}
               placeholder="https://…"
-              defaultValue={s?.attachmentUrl}
+              defaultValue={s?.attachmentUrl?.startsWith('/api/') ? '' : s?.attachmentUrl}
             />
           </Field>
           {send.error && <ErrorBox error={send.error} />}
-          <Submit busy={send.isPending}>{s ? 'Ödevi güncelle' : 'Ödevi gönder'}</Submit>
+          <Submit busy={send.isPending || uploading}>
+            {s ? 'Ödevi güncelle' : 'Ödevi gönder'}
+          </Submit>
         </form>
       )}
     </section>
-  );
-}
-
-const newQuestion = () => ({
-  id: crypto.randomUUID(),
-  prompt: '',
-  options: ['', ''],
-  correctOption: 0,
-  explanation: '',
-});
-export function QuizEditor({ courseId, lessonId }: { courseId: string; lessonId: string }) {
-  const client = useQueryClient();
-  const path = `/courses/${courseId}/lessons/${lessonId}/quiz/manage`;
-  const quiz = useQuery({
-    queryKey: ['quiz-editor', lessonId],
-    queryFn: () => api<Quiz>(path),
-    retry: false,
-  });
-  if (quiz.isPending) return <Loading />;
-  if (quiz.error && !(quiz.error instanceof ApiError && quiz.error.status === 404))
-    return <ErrorBox error={quiz.error} />;
-  return (
-    <QuizEditorForm
-      key={lessonId}
-      path={path}
-      initial={quiz.data}
-      onSaved={(value) => client.setQueryData(['quiz-editor', lessonId], value)}
-    />
-  );
-}
-function QuizEditorForm({
-  path,
-  initial,
-  onSaved,
-}: {
-  path: string;
-  initial?: Quiz;
-  onSaved: (value: Quiz) => void;
-}) {
-  const [quiz, setQuiz] = useState<Quiz>(
-    initial || { passingScore: 70, questions: [newQuestion()] },
-  );
-  const save = useMutation({
-    mutationFn: () => api<Quiz>(path, { method: 'PUT', body: body(quiz) }),
-    onSuccess: (value) => {
-      setQuiz(value);
-      onSaved(value);
-    },
-  });
-  function change(index: number, patch: Partial<Quiz['questions'][number]>) {
-    setQuiz({
-      ...quiz,
-      questions: quiz.questions.map((q, i) => (i === index ? { ...q, ...patch } : q)),
-    });
-  }
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <Field label="Geçme puanı (%)">
-        <input
-          type="number"
-          min={1}
-          max={100}
-          required
-          value={quiz.passingScore}
-          onChange={(e) => setQuiz({ ...quiz, passingScore: Number(e.target.value) })}
-        />
-      </Field>
-      {quiz.questions.map((q, index) => (
-        <fieldset className="quiz-question" key={q.id}>
-          <legend>Soru {index + 1}</legend>
-          <Field label={`Soru ${index + 1} metni`}>
-            <textarea
-              required
-              maxLength={2000}
-              value={q.prompt}
-              onChange={(e) => change(index, { prompt: e.target.value })}
-            />
-          </Field>
-          {q.options.map((option, i) => (
-            <Field key={i} label={`Soru ${index + 1}, seçenek ${i + 1}`}>
-              <input
-                required
-                maxLength={1000}
-                value={option}
-                onChange={(e) =>
-                  change(index, {
-                    options: q.options.map((value, j) => (j === i ? e.target.value : value)),
-                  })
-                }
-              />
-            </Field>
-          ))}
-          <div className="form-actions">
-            <button
-              type="button"
-              className="text-button"
-              disabled={q.options.length >= 8}
-              onClick={() => change(index, { options: [...q.options, ''] })}
-            >
-              Seçenek ekle
-            </button>
-            <button
-              type="button"
-              className="text-button"
-              disabled={q.options.length <= 2}
-              onClick={() =>
-                change(index, {
-                  options: q.options.slice(0, -1),
-                  correctOption: Math.min(q.correctOption || 0, q.options.length - 2),
-                })
-              }
-            >
-              Son seçeneği kaldır
-            </button>
-          </div>
-          <Field label={`Soru ${index + 1}, doğru seçenek`}>
-            <select
-              value={q.correctOption || 0}
-              onChange={(e) => change(index, { correctOption: Number(e.target.value) })}
-            >
-              {q.options.map((_, i) => (
-                <option value={i} key={i}>
-                  {i + 1}. seçenek
-                </option>
-              ))}
-            </select>
-          </Field>
-          <button
-            type="button"
-            className="text-button danger"
-            disabled={quiz.questions.length === 1}
-            onClick={() =>
-              setQuiz({ ...quiz, questions: quiz.questions.filter((_, i) => i !== index) })
-            }
-          >
-            Soruyu kaldır
-          </button>
-        </fieldset>
-      ))}
-      <button
-        type="button"
-        className="button secondary"
-        disabled={quiz.questions.length >= 100}
-        onClick={() => setQuiz({ ...quiz, questions: [...quiz.questions, newQuestion()] })}
-      >
-        Soru ekle
-      </button>
-      {save.error && <ErrorBox error={save.error} />}{' '}
-      {save.isSuccess && (
-        <Success>Test kaydedildi. Yanıt anahtarı öğrencilere gönderilmez.</Success>
-      )}
-      <Submit busy={save.isPending}>Testi kaydet</Submit>
-    </form>
   );
 }
 
@@ -384,10 +365,14 @@ export function AssignmentGrading({ courseId, lessonId }: { courseId: string; le
             <div className="prose">
               <ReactMarkdown>{s.content}</ReactMarkdown>
             </div>
-            {safeUrl(s.attachmentUrl) && (
-              <a href={safeUrl(s.attachmentUrl)} target="_blank" rel="noreferrer">
-                Çalışmayı aç
-              </a>
+            {s.attachmentUrl?.startsWith('/api/v1/media/resources/') ? (
+              <ProtectedDownload url={s.attachmentUrl} />
+            ) : (
+              safeUrl(s.attachmentUrl) && (
+                <a href={safeUrl(s.attachmentUrl)} target="_blank" rel="noreferrer">
+                  Çalışmayı aç
+                </a>
+              )
             )}
             <form
               onSubmit={(e) => {
@@ -800,5 +785,31 @@ export function CourseStudents({ courseId }: { courseId: string }) {
         </>
       )}
     </section>
+  );
+}
+
+function ProtectedDownload({ url }: { url: string }) {
+  const [error, setError] = useState<unknown>();
+  return (
+    <>
+      <button
+        className="text-button"
+        onClick={async () => {
+          try {
+            const blob = await fetchResource(url);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'odev-dosyasi';
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+          } catch (e) {
+            setError(e);
+          }
+        }}
+      >
+        Ödev dosyasını indir
+      </button>
+      {!!error && <ErrorBox error={error} />}
+    </>
   );
 }

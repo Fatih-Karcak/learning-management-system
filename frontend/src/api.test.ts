@@ -1,10 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, body, safeUrl, setAccessToken } from './api';
+import {
+  api,
+  ApiError,
+  body,
+  safeUrl,
+  setAccessToken,
+  setTokenRefresher,
+  fetchResource,
+} from './api';
 
 const dispatchEvent = vi.fn();
 beforeEach(() => {
   vi.stubGlobal('window', { location: { origin: 'https://learn.example' }, dispatchEvent });
   setAccessToken(null);
+  setTokenRefresher(null);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -78,4 +87,64 @@ describe('API boundary', () => {
     expect(safeUrl('/course')).toBe('https://learn.example/course');
     expect(safeUrl('https://storage.example/file')).toBe('https://storage.example/file');
   });
+});
+
+describe('Session renewal and protected resources', () => {
+  it('shares one refresh across concurrent failures and retries with the new header', async () => {
+    setAccessToken('expired');
+    let refreshed = 0;
+    setTokenRefresher(async () => {
+      refreshed++;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      setAccessToken('fresh');
+      return true;
+    });
+    const fetch = vi.fn(async (_url: string, options: RequestInit) =>
+      new Headers(options.headers).get('Authorization') === 'Bearer fresh'
+        ? new Response(body({ success: true, data: 'ok' }))
+        : new Response(null, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    expect(await Promise.all([api('/users/me'), api('/enrollments/my')])).toEqual(['ok', 'ok']);
+    expect(refreshed).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(dispatchEvent).not.toHaveBeenCalled();
+  });
+  it('never retries a login endpoint with another session refresh', async () => {
+    const refresh = vi.fn();
+    setTokenRefresher(refresh);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
+    await expect(api('/auth/login', { method: 'POST', body: body({}) })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('rejects external resource addresses before attaching credentials', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    setAccessToken('private');
+    await expect(fetchResource('https://outside.example/file')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+it('does not clear a newer session after an older in-flight request returns 401', async () => {
+  let release: (value: Response) => void = () => {};
+  const oldResponse = new Promise<Response>((resolve) => {
+    release = resolve;
+  });
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(() => oldResponse)
+    .mockResolvedValueOnce(new Response(body({ success: true, data: 'new-session' })));
+  vi.stubGlobal('fetch', fetch);
+  setAccessToken('old');
+  const pending = api('/users/me');
+  setAccessToken('new');
+  release(new Response(null, { status: 401 }));
+  expect(await pending).toBe('new-session');
+  expect(dispatchEvent).not.toHaveBeenCalled();
+  expect(fetch.mock.calls[1][1].headers.get('Authorization')).toBe('Bearer new');
 });

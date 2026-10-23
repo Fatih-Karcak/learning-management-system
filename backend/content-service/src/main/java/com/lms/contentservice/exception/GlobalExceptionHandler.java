@@ -15,19 +15,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LmsException.class)
     public ResponseEntity<ApiResponse<Void>> handleLmsException(LmsException ex) {
         HttpStatus status = switch (ex) {
-            case MediaNotFoundException e            -> HttpStatus.NOT_FOUND;
-            case UnsupportedMediaException e          -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
-            case StorageException e                   -> HttpStatus.BAD_GATEWAY;
-            case UnauthorizedMediaAccessException e   -> HttpStatus.FORBIDDEN;
+            case MediaNotFoundException e -> HttpStatus.NOT_FOUND;
+            case UnsupportedMediaException e -> HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+            case StorageException e -> HttpStatus.BAD_GATEWAY;
+            case UnauthorizedMediaAccessException e -> HttpStatus.FORBIDDEN;
             default -> throw new IllegalStateException("Unexpected value: " + ex);
         };
         return ResponseEntity.status(status).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> invalid(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleTooLarge(MaxUploadSizeExceededException ex) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(ApiResponse.error("Dosya boyutu izin verilen sınırı aşıyor"));
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(
+            ApiResponse.error("Dosya boyutu izin verilen sınırı aşıyor")
+        );
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
@@ -37,19 +43,25 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(Exception ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Kimlik doğrulama gerekli"));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+            ApiResponse.error("Kimlik doğrulama gerekli")
+        );
     }
 
-    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
-            org.springframework.http.converter.HttpMessageNotReadableException.class,
-            org.springframework.web.bind.MissingServletRequestParameterException.class,
-            org.springframework.web.bind.MissingRequestHeaderException.class})
+    @ExceptionHandler({
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.http.converter.HttpMessageNotReadableException.class,
+        org.springframework.web.bind.MissingServletRequestParameterException.class,
+        org.springframework.web.bind.MissingRequestHeaderException.class,
+    })
     public ResponseEntity<ApiResponse<Void>> handleInvalidRequest(Exception ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error("İstek alanları geçersiz veya eksik"));
     }
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
-    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(org.springframework.web.server.ResponseStatusException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatus(
+        org.springframework.web.server.ResponseStatusException ex
+    ) {
         return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(ex.getReason()));
     }
 
@@ -61,7 +73,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
         log.error("Beklenmeyen hata: ", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Sunucu hatası oluştu"));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+            ApiResponse.error("Sunucu hatası oluştu")
+        );
     }
 }

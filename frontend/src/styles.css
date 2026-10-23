@@ -2722,3 +2722,80 @@ td strong {
     scroll-behavior: auto !important;
   }
 }
+
+.workspace-fields {
+  border: 0;
+  min-width: 0;
+}
+.workspace-fields:disabled {
+  opacity: 0.8;
+}
+.workspace-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.workspace-toolbar .form-actions {
+  margin: 0;
+}
+.workspace-fields legend {
+  font-size: 1.25rem;
+  font-weight: 700;
+  padding-top: 1rem;
+}
+.table-scroll {
+  overflow: auto;
+}
+.table-scroll table {
+  min-width: 650px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-scroll th,
+.table-scroll td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e7e7e7);
+}
+.table-scroll caption {
+  text-align: left;
+  margin-bottom: 1rem;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mfa-secret {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  background: #f3f3f3;
+  user-select: all;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+@media (max-width: 700px) {
+  .workspace-toolbar {
+    position: static;
+  }
+  .lesson-row {
+    flex-wrap: wrap;
+  }
+  .workspace-toolbar .button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

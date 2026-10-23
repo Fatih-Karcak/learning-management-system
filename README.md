@@ -48,3 +48,12 @@ sh user-service/mvnw -B -DskipTests package
 ```
 
 Servisleri ilgili modülün klasöründen Maven wrapper ile veya üretilen JAR dosyasını `java --enable-preview` ile başlatın. Ortam değişkenleri ve başlangıç adımları: [Backend README](backend/README.md). Test akışı: [Backend testleri](backend/TESTING.md).
+
+## Gerçek kullanım ve bulut
+
+- [Platform iş akışları ve kurallar](docs/PLATFORM.md)
+- [VPS / Docker / HTTPS dağıtımı](deploy/README.md)
+- [Pilot kullanıcı planı](docs/PILOT.md)
+- [Veri saklama ve silme işletimi](docs/PRIVACY_OPERATIONS.md)
+
+- [Kontrol sonuçları ve doğrulanmamış ortam adımları](docs/VALIDATION.md)

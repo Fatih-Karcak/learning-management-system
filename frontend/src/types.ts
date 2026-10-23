@@ -13,6 +13,7 @@ export interface User {
   phoneNumber?: string;
   avatarUrl?: string;
   role: Role;
+  adminScope?: 'FULL' | 'MODERATION' | 'SUPPORT';
   status: string;
   emailVerified: boolean;
   createdAt: string;
@@ -51,6 +52,7 @@ export interface Section {
   lessons: Lesson[];
 }
 export interface Course {
+  targetAudience?: string;
   id: string;
   title: string;
   shortDescription: string;
@@ -74,6 +76,7 @@ export interface Course {
   averageRating?: number;
   totalReviews: number;
   createdAt?: string;
+  publishedAt?: string;
 }
 export interface Review {
   id: string;
@@ -172,6 +175,10 @@ export interface QuizQuestion {
   explanation?: string;
 }
 export interface Quiz {
+  maxAttempts?: number;
+  timeLimitSeconds?: number;
+  questionCount?: number;
+  randomize?: boolean;
   passingScore: number;
   questions: QuizQuestion[];
 }
@@ -182,6 +189,7 @@ export interface QuizAttempt {
   correct?: number;
   total?: number;
   createdAt?: string;
+  feedback?: { questionId: string; correct: boolean; explanation?: string }[];
 }
 export interface AssignmentSubmission {
   id: string;
@@ -226,4 +234,23 @@ export interface RosterRow {
   enrollment: Enrollment;
   studentName: string;
   email: string;
+}
+
+export interface Material {
+  title: string;
+  url: string;
+  type: 'RESOURCE' | 'SUBTITLE';
+  language?: string;
+}
+export interface Workspace {
+  revision: number;
+  status: string;
+  feedback?: string;
+  document: {
+    course: Course;
+    categoryId: number;
+    quizzes: Record<string, Quiz>;
+    materials: Record<string, Material[]>;
+  };
+  checklist: string[];
 }

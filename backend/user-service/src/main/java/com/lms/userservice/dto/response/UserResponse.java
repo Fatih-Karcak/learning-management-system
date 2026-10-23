@@ -2,14 +2,15 @@ package com.lms.userservice.dto.response;
 
 import com.lms.userservice.domain.enums.UserRole;
 import com.lms.userservice.domain.enums.UserStatus;
-import lombok.Data;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.Data;
 
 @Data
 public class UserResponse {
+
     private UUID id;
+    private String adminScope;
     private String email;
     private String firstName;
     private String lastName;

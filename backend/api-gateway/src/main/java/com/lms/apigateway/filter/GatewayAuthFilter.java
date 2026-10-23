@@ -2,21 +2,20 @@ package com.lms.apigateway.filter;
 
 import com.lms.apigateway.security.JwtTokenProvider;
 import com.lms.apigateway.security.UserAccountClient;
-import org.springframework.web.client.RestClientException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.filter.OncePerRequestFilter;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
 
 /*
  * Gateway'in kalbi:
@@ -36,20 +35,23 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
     private final UserAccountClient userAccountClient;
 
     private static final List<String> PUBLIC_PREFIXES = List.of(
-            "/api/v1/auth/",
-            "/api/v1/courses",
-            "/api/v1/sections",
-            "/api/v1/lessons",
-            "/api/v1/reviews",
-            "/api/v1/enrollments/certificates/verify/",
-            "/api/v1/webhooks/stripe",
-            "/actuator/"
+        "/api/v1/auth/",
+        "/api/v1/courses",
+        "/api/v1/sections",
+        "/api/v1/lessons",
+        "/api/v1/reviews",
+        "/api/v1/media",
+        "/api/v1/enrollments/certificates/verify/",
+        "/api/v1/webhooks/stripe",
+        "/actuator/"
     );
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-
+    protected void doFilterInternal(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        FilterChain filterChain
+    ) throws ServletException, IOException {
         String path = request.getRequestURI();
 
         // 1) internal path'ler dışarıdan asla erişilemez
@@ -58,10 +60,14 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean isPublic = PUBLIC_PREFIXES.stream().anyMatch(prefix ->
-                path.equals(prefix) || path.startsWith(prefix.endsWith("/") ? prefix : prefix + "/"));
-        if (!"GET".equals(request.getMethod()) && !path.startsWith("/api/v1/auth/")
-                && !path.equals("/api/v1/webhooks/stripe")) {
+        boolean isPublic = PUBLIC_PREFIXES.stream().anyMatch(
+            prefix -> path.equals(prefix) || path.startsWith(prefix.endsWith("/") ? prefix : prefix + "/")
+        );
+        if (
+            !"GET".equals(request.getMethod()) &&
+            !path.startsWith("/api/v1/auth/") &&
+            !path.equals("/api/v1/webhooks/stripe")
+        ) {
             isPublic = false;
         }
 
@@ -73,8 +79,21 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
             userId = jwtTokenProvider.getUserIdFromToken(token);
             role = jwtTokenProvider.getRoleFromToken(token);
             try {
-                if (!userAccountClient.isActive(userId, role)) {
+                if (
+                    !userAccountClient.isActive(userId, role) ||
+                    !userAccountClient.isSessionActive(
+                        userId,
+                        jwtTokenProvider.parseToken(token).get("sid", String.class)
+                    )
+                ) {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
+                if (
+                    "ADMIN".equals(role) &&
+                    !userAccountClient.isAdminActionAllowed(userId, path, request.getMethod())
+                ) {
+                    response.setStatus(403);
                     return;
                 }
             } catch (RestClientException ex) {
@@ -92,7 +111,7 @@ public class GatewayAuthFilter extends OncePerRequestFilter {
         HeaderOverrideRequestWrapper wrapped = new HeaderOverrideRequestWrapper(request);
         wrapped.removeHeader("X-User-Id");
         wrapped.removeHeader("X-User-Role");
-        wrapped.removeHeader("X-User-Name");   // ← eklendi
+        wrapped.removeHeader("X-User-Name"); // ← eklendi
 
         if (userId != null) {
             wrapped.setHeader("X-User-Id", userId.toString());

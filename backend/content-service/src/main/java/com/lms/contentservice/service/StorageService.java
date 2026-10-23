@@ -4,13 +4,12 @@ import com.lms.contentservice.exception.StorageException;
 import io.minio.*;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
+import java.io.InputStream;
+import java.nio.file.Path;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import java.io.InputStream;
-import java.nio.file.Path;
 
 @Slf4j
 @Service
@@ -19,9 +18,23 @@ public class StorageService {
 
     private final MinioClient minioClient;
 
-    @Value("${minio.bucket.raw}")    private String rawBucket;
-    @Value("${minio.bucket.hls}")    private String hlsBucket;
-    @Value("${minio.bucket.images}") private String imagesBucket;
+    @Value("${minio.public-endpoint:}")
+    private String publicEndpoint;
+
+    @Value("${minio.access-key}")
+    private String accessKey;
+
+    @Value("${minio.secret-key}")
+    private String secretKey;
+
+    @Value("${minio.bucket.raw}")
+    private String rawBucket;
+
+    @Value("${minio.bucket.hls}")
+    private String hlsBucket;
+
+    @Value("${minio.bucket.images}")
+    private String imagesBucket;
 
     @PostConstruct
     public void initBuckets() {
@@ -32,8 +45,7 @@ public class StorageService {
 
     public void ensureBucket(String bucket) {
         try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder().bucket(bucket).build());
+            boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
                 log.info("Bucket oluşturuldu: {}", bucket);
@@ -45,11 +57,14 @@ public class StorageService {
 
     public void upload(String bucket, String key, InputStream stream, long size, String contentType) {
         try {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(bucket).object(key)
+            minioClient.putObject(
+                PutObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(key)
                     .stream(stream, size, -1)
                     .contentType(contentType)
-                    .build());
+                    .build()
+            );
         } catch (Exception e) {
             throw new StorageException("Dosya yüklenemedi: " + e.getMessage());
         }
@@ -57,11 +72,14 @@ public class StorageService {
 
     public void uploadLocalFile(String bucket, String key, Path localPath, String contentType) {
         try {
-            minioClient.uploadObject(UploadObjectArgs.builder()
-                    .bucket(bucket).object(key)
+            minioClient.uploadObject(
+                UploadObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(key)
                     .filename(localPath.toString())
                     .contentType(contentType)
-                    .build());
+                    .build()
+            );
         } catch (Exception e) {
             throw new StorageException("Dosya yüklenemedi: " + e.getMessage());
         }
@@ -69,8 +87,7 @@ public class StorageService {
 
     public InputStream download(String bucket, String key) {
         try {
-            return minioClient.getObject(GetObjectArgs.builder()
-                    .bucket(bucket).object(key).build());
+            return minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
         } catch (Exception e) {
             throw new StorageException("Dosya indirilemedi: " + e.getMessage());
         }
@@ -78,12 +95,22 @@ public class StorageService {
 
     public String presignedGetUrl(String bucket, String key, int expirySeconds) {
         try {
-            return minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
-                            .bucket(bucket).object(key)
-                            .expiry(expirySeconds)
-                            .build());
+            var signingClient =
+                publicEndpoint == null || publicEndpoint.isBlank()
+                    ? minioClient
+                    : MinioClient.builder()
+                          .endpoint(publicEndpoint)
+                          .credentials(accessKey, secretKey)
+                          .region("us-east-1")
+                          .build();
+            return signingClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(bucket)
+                    .object(key)
+                    .expiry(expirySeconds)
+                    .build()
+            );
         } catch (Exception e) {
             throw new StorageException("URL üretilemedi: " + e.getMessage());
         }
@@ -91,8 +118,7 @@ public class StorageService {
 
     public void delete(String bucket, String key) {
         try {
-            minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(bucket).object(key).build());
+            minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(key).build());
         } catch (Exception e) {
             throw new StorageException("Dosya silinemedi: " + e.getMessage());
         }
@@ -101,13 +127,15 @@ public class StorageService {
     public void deletePrefix(String bucket, String prefix) {
         try {
             var objects = new java.util.ArrayList<io.minio.messages.DeleteObject>();
-            for (var result : minioClient.listObjects(ListObjectsArgs.builder()
-                    .bucket(bucket).prefix(prefix).recursive(true).build())) {
+            for (var result : minioClient.listObjects(
+                ListObjectsArgs.builder().bucket(bucket).prefix(prefix).recursive(true).build()
+            )) {
                 objects.add(new io.minio.messages.DeleteObject(result.get().objectName()));
             }
             if (objects.isEmpty()) return;
-            for (var result : minioClient.removeObjects(RemoveObjectsArgs.builder()
-                    .bucket(bucket).objects(objects).build())) {
+            for (var result : minioClient.removeObjects(
+                RemoveObjectsArgs.builder().bucket(bucket).objects(objects).build()
+            )) {
                 throw new StorageException("HLS dosyası silinemedi: " + result.get().message());
             }
         } catch (StorageException ex) {

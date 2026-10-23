@@ -13,7 +13,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { api, body, date, lessonTypes, safeUrl } from '../api';
 import { useAuth } from '../auth';
-import type { Certificate, Course, Enrollment, Page, Progress } from '../types';
+import type { Certificate, Course, Enrollment, Page, Progress, Material } from '../types';
 import {
   Badge,
   Cover,
@@ -26,6 +26,7 @@ import {
   Submit,
 } from '../ui';
 import VideoPlayer from '../VideoPlayer';
+import { LessonBookmarks, LessonMaterials, Announcements } from './Platform';
 import { QuizLesson, AssignmentLesson, LessonNotes, CourseDiscussion } from './LearningFeatures';
 
 export function MyLearning() {
@@ -138,6 +139,13 @@ export function Learning() {
       setParams({ lesson: lesson.id }, { replace: true });
   }, [params, lesson, course.data, progress.data, setParams]);
   const current = progress.data?.find((p) => p.lessonId === lesson?.id);
+  const materials = useQuery({
+    queryKey: ['materials', enrollment.data?.courseId, lesson?.id],
+    queryFn: () =>
+      api<Material[]>(`/courses/${enrollment.data!.courseId}/lessons/${lesson!.id}/materials`),
+    enabled: !!lesson && !!enrollment.data,
+  });
+
   useEffect(() => {
     setPosition(0);
     setSeekTo(undefined);
@@ -222,7 +230,13 @@ export function Learning() {
                 <VideoPlayer
                   key={lesson.id}
                   src={lesson.videoUrl}
-                  initialTime={current?.positionSeconds ?? current?.watchedSeconds ?? 0}
+                  initialTime={
+                    Number(params.get('time')) ||
+                    current?.positionSeconds ||
+                    current?.watchedSeconds ||
+                    0
+                  }
+                  captions={materials.data?.filter((m) => m.type === 'SUBTITLE')}
                   seekTo={seekTo}
                   onPosition={setPosition}
                   onPlayback={(seconds, playing) => {
@@ -314,6 +328,14 @@ export function Learning() {
                   </button>
                 )}
               </div>
+              <LessonMaterials courseId={e.courseId} lessonId={lesson.id} />
+              <LessonBookmarks
+                enrollmentId={e.id}
+                lessonId={lesson.id}
+                sectionId={lesson.sectionId}
+                position={lesson.type === 'VIDEO' ? position : 0}
+                onSeek={(seconds) => setSeekTo({ seconds, nonce: Date.now() })}
+              />
               <LessonNotes
                 key={`notes-${lesson.id}`}
                 enrollmentId={e.id}
@@ -322,6 +344,7 @@ export function Learning() {
                 position={lesson.videoUrl ? position : 0}
                 onSeek={(seconds) => setSeekTo({ seconds, nonce: Date.now() })}
               />
+              <Announcements courseId={e.courseId} />
               <CourseDiscussion
                 key={`discussion-${lesson.id}`}
                 courseId={e.courseId}

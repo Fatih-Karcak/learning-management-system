@@ -21,7 +21,15 @@ class AssessmentTest {
     final EnrollmentClient enrollments = mock(EnrollmentClient.class);
     final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     final ObjectMapper json = new ObjectMapper();
-    final AssessmentService service = new AssessmentService(lessons, access, enrollments, jdbc, json);
+    final AssessmentService service = new AssessmentService(
+        lessons,
+        access,
+        enrollments,
+        jdbc,
+        json,
+        mock(PlatformEvents.class),
+        mock(com.lms.courseservice.client.ContentClient.class)
+    );
     final UUID courseId = UUID.randomUUID(),
         lessonId = UUID.randomUUID(),
         questionId = UUID.randomUUID(),
@@ -136,5 +144,56 @@ class AssessmentTest {
         assertThrows(UnauthorizedException.class, () ->
             service.save(courseId, lessonId, new AssessmentService.Quiz(70, List.of()), stranger)
         );
+    }
+
+    @Test
+    void olderQuizRequestsDefaultToNonRandomizedUnlimitedAttempts() {
+        var quiz = json.readValue("{\"passingScore\":70,\"questions\":[]}", AssessmentService.Quiz.class);
+        assertFalse(quiz.randomize());
+        assertNull(quiz.maxAttempts());
+        assertNull(quiz.timeLimitSeconds());
+    }
+
+    @Test
+    void quizDeadlineUsesUtcEvenWhenServerRunsInIstanbul() {
+        var old = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("Europe/Istanbul"));
+            var quiz = new AssessmentService.Quiz(
+                70,
+                List.of(
+                    new AssessmentService.Question(
+                        questionId,
+                        "Question",
+                        List.of("Right", "Wrong"),
+                        0,
+                        "Explanation"
+                    )
+                ),
+                null,
+                30,
+                null,
+                false
+            );
+            when(jdbc.queryForList(anyString(), eq(String.class), eq(lessonId))).thenReturn(
+                List.of(json.writeValueAsString(quiz))
+            );
+            var started = service.start(
+                courseId,
+                lessonId,
+                new AssessmentService.StartInput(enrollmentId),
+                student
+            );
+            long seconds = java.time.Duration.between(
+                java.time.Instant.now(),
+                started.expiresAt()
+            ).getSeconds();
+            assertTrue(
+                seconds >= 28 && seconds <= 30,
+                "Deadline must be about 30 seconds away rather than three hours"
+            );
+        } finally {
+            TimeZone.setDefault(old);
+        }
     }
 }

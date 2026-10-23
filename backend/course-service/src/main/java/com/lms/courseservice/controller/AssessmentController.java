@@ -47,6 +47,25 @@ public class AssessmentController {
         return ApiResponse.success(service.save(courseId, lessonId, request, user), "Test kaydedildi");
     }
 
+    @PostMapping("/quiz/start")
+    public ApiResponse<?> start(
+        @PathVariable UUID courseId,
+        @PathVariable UUID lessonId,
+        @Valid @RequestBody AssessmentService.StartInput request,
+        @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return ApiResponse.success(service.start(courseId, lessonId, request, user), "Test başladı");
+    }
+
+    @GetMapping("/assignment/history")
+    public ApiResponse<?> history(
+        @PathVariable UUID courseId,
+        @PathVariable UUID lessonId,
+        @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return ApiResponse.success(service.assignmentHistory(courseId, lessonId, user), "Teslim geçmişi");
+    }
+
     @PostMapping("/quiz/attempts")
     public ApiResponse<AssessmentService.Attempt> attempt(
         @PathVariable UUID courseId,

@@ -257,7 +257,7 @@ public class ProgressService {
             LessonProgress progress = existing.get();
 
             if (!progress.getSectionId().equals(sectionId)) {
-                throw new IllegalArgumentException("Ders bölüm kimliği uyuşmuyor");
+                progress.setSectionId(sectionId);
             }
 
             return progress;
@@ -299,6 +299,11 @@ public class ProgressService {
 
         int total = lessonIds.size();
 
+        if (enrollment.getStatus() == EnrollmentStatus.COMPLETED && completed < total) {
+            enrollment.setLastAccessedAt(LocalDateTime.now());
+            enrollmentRepository.save(enrollment);
+            return;
+        }
         enrollment.setTotalLessons(total);
         enrollment.setLastAccessedAt(LocalDateTime.now());
         enrollment.setCompletedLessons(Math.toIntExact(completed));
@@ -310,7 +315,7 @@ public class ProgressService {
         if (completed >= total) {
             enrollment.setStatus(EnrollmentStatus.COMPLETED);
 
-            enrollment.setCompletedAt(LocalDateTime.now());
+            if (enrollment.getCompletedAt() == null) enrollment.setCompletedAt(LocalDateTime.now());
 
             // Sertifika farklı işlemde üretilecek.
         }

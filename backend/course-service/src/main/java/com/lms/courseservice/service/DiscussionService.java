@@ -21,6 +21,7 @@ public class DiscussionService {
     private final LessonRepository lessons;
     private final CourseAccessPolicy access;
     private final JdbcTemplate jdbc;
+    private final PlatformEvents events;
 
     public record QuestionInput(
         UUID lessonId,
@@ -166,7 +167,7 @@ public class DiscussionService {
     @Transactional
     public Reply reply(UUID courseId, UUID questionId, ReplyInput input, AuthenticatedUser user) {
         var course = require(courseId, user);
-        get(courseId, questionId);
+        var question = get(courseId, questionId);
         UUID id = UUID.randomUUID();
         jdbc.update(
             "insert into question_replies(id,question_id,author_id,author_name,instructor,content) values(?,?,?,?,?,?)",
@@ -176,6 +177,18 @@ public class DiscussionService {
             user.displayName(),
             course.getInstructorId().equals(user.id()),
             input.content().trim()
+        );
+        if (!question.authorId().equals(user.id())) events.enqueue(
+            new com.lms.courseservice.event.PlatformNotice(
+                UUID.randomUUID(),
+                question.authorId(),
+                courseId,
+                "Sorunuza yeni yanıt",
+                input.content(),
+                "/courses/" + courseId,
+                "QUESTION_REPLY",
+                null
+            )
         );
         return new Reply(
             id,

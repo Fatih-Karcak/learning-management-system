@@ -19,7 +19,7 @@ public class RegisterRequest {
     @NotBlank(message = "E-posta boş olamaz")
     private String email;
 
-    @Size(min = 8, message = "Şifre en az 8 karakter olmalı")
+    @Size(min = 12, max = 72, message = "Şifre 12–72 karakter olmalı")
     @NotBlank(message = "Şifre boş olamaz")
     private String password;
 

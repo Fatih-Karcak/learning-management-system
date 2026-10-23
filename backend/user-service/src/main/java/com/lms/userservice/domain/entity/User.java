@@ -3,13 +3,12 @@ package com.lms.userservice.domain.entity;
 import com.lms.userservice.domain.enums.UserRole;
 import com.lms.userservice.domain.enums.UserStatus;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -49,8 +48,12 @@ public class User {
     @Column(nullable = false)
     private UserStatus status;
 
+    @Builder.Default
+    private String adminScope = "FULL";
+
     private boolean emailVerified = false;
     private String emailVerificationToken;
+    private LocalDateTime verificationExpiresAt;
     private String passwordResetToken;
     private LocalDateTime passwordResetTokenExpiry;
 

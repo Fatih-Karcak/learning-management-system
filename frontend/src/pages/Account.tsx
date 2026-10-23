@@ -1,3 +1,4 @@
+import { Inbox } from './Platform';
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -347,6 +348,7 @@ export function Notifications() {
         title="Bildirimler"
         description="Eğitimlerin, ödemelerin ve hesabınla ilgili e-posta bildirimleri."
       />
+      <Inbox />
       {items.isPending ? (
         <Loading />
       ) : items.error ? (
@@ -396,8 +398,16 @@ export function AdminUsers() {
     enabled: !!selected,
   });
   const update = useMutation({
-    mutationFn: (data: unknown) =>
-      api(`/users/admin/${selected}`, { method: 'PUT', body: body(data) }),
+    mutationFn: async (data: unknown) => {
+      const input = data as { role: string; scope?: string; reason: string };
+      const { scope, ...account } = input;
+      await api(`/users/admin/${selected}`, { method: 'PUT', body: body(account) });
+      if (input.role === 'ADMIN' && input.scope)
+        await api(`/users/admin/${selected}/scope`, {
+          method: 'PUT',
+          body: body({ scope: input.scope, reason: input.reason }),
+        });
+    },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['users'] });
       void client.invalidateQueries({ queryKey: ['user', selected] });
@@ -521,6 +531,13 @@ export function AdminUsers() {
                         <option value="STUDENT">Öğrenci</option>
                         <option value="INSTRUCTOR">Eğitmen</option>
                         <option value="ADMIN">Yönetici</option>
+                      </select>
+                    </Field>
+                    <Field label="Yönetici kapsamı (yalnızca yönetici rolünde uygulanır)">
+                      <select name="scope" defaultValue={details.data.adminScope || 'FULL'}>
+                        <option value="FULL">Tam yönetim</option>
+                        <option value="MODERATION">Kurs ve içerik moderasyonu</option>
+                        <option value="SUPPORT">Destek ve kayıt işlemleri</option>
                       </select>
                     </Field>
                     <Field label="Hesap durumu">

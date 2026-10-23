@@ -23,7 +23,7 @@ import {
 import { useAuth } from './auth';
 import { Avatar, Empty, ErrorBox, Loading } from './ui';
 import type { Role } from './types';
-import { AuthPage, VerifyEmail } from './pages/Auth';
+import { AuthPage, VerifyEmail, RecoverPassword } from './pages/Auth';
 import { Catalog, Dashboard, InstructorCourses } from './pages/Catalog';
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
 const MyLearning = lazy(() => import('./pages/Learning').then((m) => ({ default: m.MyLearning })));
@@ -57,6 +57,11 @@ const Payments = lazy(() => import('./pages/Account').then((m) => ({ default: m.
 const Profile = lazy(() => import('./pages/Account').then((m) => ({ default: m.Profile })));
 const Checkout = lazy(() => import('./pages/Checkout'));
 
+const Security = lazy(() => import('./pages/Security'));
+const Support = lazy(() => import('./pages/Support'));
+const Operations = lazy(() => import('./pages/Support').then((m) => ({ default: m.Operations })));
+const StudyPlan = lazy(() => import('./pages/Platform').then((m) => ({ default: m.StudyPlan })));
+const Wishlist = lazy(() => import('./pages/Platform').then((m) => ({ default: m.Wishlist })));
 class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
@@ -102,12 +107,15 @@ function Layout() {
     window.scrollTo(0, 0);
   }, [location.pathname]);
   const user = session?.user;
-  const teacher = user?.role === 'INSTRUCTOR' || user?.role === 'ADMIN';
+  const teacher =
+    user?.role === 'INSTRUCTOR' || (user?.role === 'ADMIN' && user.adminScope !== 'SUPPORT');
   const links = [
     ...(user
       ? [
           { to: '/', label: 'Genel bakış', icon: LayoutDashboard },
           { to: '/my-learning', label: 'Öğrenim alanım', icon: BookOpen },
+          { to: '/study-plan', label: 'Çalışma planım', icon: LayoutDashboard },
+          { to: '/wishlist', label: 'İstek listem', icon: Compass },
         ]
       : []),
     { to: '/catalog', label: 'Kursları keşfet', icon: Compass },
@@ -174,6 +182,14 @@ function Layout() {
               <NavLink className="nav-link" to="/profile">
                 <Settings size={20} />
                 Hesap ayarları
+              </NavLink>
+              <NavLink className="nav-link" to="/security">
+                <Shield size={20} />
+                Güvenlik ve tercihler
+              </NavLink>
+              <NavLink className="nav-link" to="/support">
+                <Bell size={20} />
+                Destek
               </NavLink>
               {user.role === 'ADMIN' && (
                 <NavLink className="nav-link" to="/admin">
@@ -296,6 +312,8 @@ export default function App() {
           <Route path="instructors/:instructorId" element={<InstructorCourses />} />
           <Route path="login" element={<AuthPage />} />
           <Route path="register" element={<AuthPage register />} />
+          <Route path="forgot-password" element={<RecoverPassword />} />
+          <Route path="reset-password" element={<RecoverPassword reset />} />
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="certificates" element={<Certificates />} />
           <Route path="certificates/verify/:code" element={<Certificates />} />
@@ -306,6 +324,10 @@ export default function App() {
             <Route path="payments" element={<Payments />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="security" element={<Security />} />
+            <Route path="support" element={<Support />} />
+            <Route path="study-plan" element={<StudyPlan />} />
+            <Route path="wishlist" element={<Wishlist />} />
           </Route>
           <Route element={<Guard roles={['INSTRUCTOR', 'ADMIN']} />}>
             <Route path="instructor" element={<Instructor />} />
@@ -319,6 +341,8 @@ export default function App() {
             <Route path="admin/courses" element={<AdminCourses />} />
             <Route path="admin/categories" element={<AdminCategories />} />
             <Route path="admin/enrollments" element={<AdminEnrollments />} />
+            <Route path="admin/support" element={<Support admin />} />
+            <Route path="admin/operations" element={<Operations />} />
             <Route path="admin/audit" element={<AdminAudit />} />
           </Route>
           <Route

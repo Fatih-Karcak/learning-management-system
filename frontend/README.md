@@ -99,3 +99,7 @@ sh user-service/mvnw -B \
 ## Yayınlama
 
 `npm run build` çıktısı `dist/` dizinidir. `npm run preview` 4173 portunda yerel derleme kontrolü içindir. Üretimde dosyaları statik bir sunucuda yayınlayın; `/api/` gateway'e proxy edilmeli, diğer uygulama yolları `index.html` dosyasına dönmelidir. Örnek Nginx yapılandırması [nginx.conf](nginx.conf) dosyasındadır. `APP_FRONTEND_BASE_URL` ve Stripe dönüş adresleri yayınlanan HTTPS köküyle eşleşmelidir.
+
+## Platform ekranları
+
+Eğitmen stüdyosu mevcut kurslarda sürümlü çalışma taslağını açar; ders/bölüm düzenleme, taşıma, test bankası, kaynak/altyazı, öğrenci ön izlemesi ve inceleme başvurusu buradadır. Öğrencide çalışma planı, yer imleri, istek listesi, gelen kutusu ve korumalı ödev dosyaları; hesapta oturum/MFA/veri tercihleri; yönetimde inceleme, destek ve işletim ekranları bulunur. [Davranış kuralları](../docs/PLATFORM.md).

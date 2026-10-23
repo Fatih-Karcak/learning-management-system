@@ -14,5 +14,6 @@ public class LoginRequest {
     @NotBlank
     private String password;
 
-
+    @jakarta.validation.constraints.Pattern(regexp = "[0-9]{6}")
+    private String otp;
 }

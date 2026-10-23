@@ -2,10 +2,9 @@ package com.lms.courseservice.dto.request;
 
 import com.lms.courseservice.domain.enums.CourseLevel;
 import jakarta.validation.constraints.*;
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.util.List;
+import lombok.Data;
 
 @Data
 public class CreateCourseRequest {
@@ -13,6 +12,9 @@ public class CreateCourseRequest {
     @NotBlank(message = "Kurs başlığı boş olamaz")
     @Size(min = 10, max = 200)
     private String title;
+
+    @jakarta.validation.constraints.Size(max = 2000)
+    private String targetAudience;
 
     @NotBlank(message = "Açıklama boş olamaz")
     private String description;

@@ -1,27 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  Copy,
-  FileVideo,
-  Image,
-  Plus,
-  Send,
-  Trash2,
-  Upload,
-} from 'lucide-react';
-import { api, body, lessonTypes, levels, money, safeUrl } from '../api';
-import type { Category, Course, Lesson, Media, Page, Section } from '../types';
+import { ArrowLeft, ArrowRight, Copy, FileVideo, Image, Plus, Trash2, Upload } from 'lucide-react';
+import { api, body, levels, money, safeUrl } from '../api';
+import type { Category, Course, Media, Page } from '../types';
 import VideoPlayer from '../VideoPlayer';
-import {
-  QuizEditor,
-  AssignmentGrading,
-  CourseStudents,
-  CourseDiscussion,
-} from './LearningFeatures';
+import CourseWorkspace from './Workspace';
+import { VideoOperations } from './Platform';
 import {
   Badge,
   Cover,
@@ -160,6 +145,14 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           defaultValue={course?.shortDescription}
         />
       </Field>
+      <Field label="Bu kurs kimler için?">
+        <textarea
+          name="targetAudience"
+          rows={3}
+          maxLength={2000}
+          defaultValue={course?.targetAudience}
+        />
+      </Field>
       <Field label="Kurs açıklaması" hint="Başlıklar ve listeler için Markdown kullanabilirsin.">
         <textarea name="description" rows={6} required defaultValue={course?.description} />
       </Field>
@@ -250,45 +243,11 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
 }
 export function Editor() {
   const { courseId } = useParams();
+  return courseId ? <CourseWorkspace courseId={courseId} /> : <CreateCourseView />;
+}
+function CreateCourseView() {
   const navigate = useNavigate();
   const client = useQueryClient();
-  const [saved, setSaved] = useState(false);
-  const [addSection, setAddSection] = useState(false);
-  const [lessonSection, setLessonSection] = useState<Section>();
-  const [videoLesson, setVideoLesson] = useState<Lesson>();
-  const [assessment, setAssessment] = useState<Lesson>();
-  const [tool, setTool] = useState<'students' | 'discussion'>();
-  const course = useQuery({
-    queryKey: ['course', courseId],
-    queryFn: () => api<Course>(`/courses/${courseId}`),
-    enabled: !!courseId,
-  });
-  const reload = () => {
-    void client.invalidateQueries({ queryKey: ['course', courseId] });
-    void client.invalidateQueries({ queryKey: ['own-courses'] });
-  };
-  const publish = useMutation({
-    mutationFn: () => api(`/courses/${courseId}/publish`, { method: 'POST' }),
-    onSuccess: reload,
-  });
-  const archive = useMutation({
-    mutationFn: () => api(`/courses/${courseId}/archive`, { method: 'POST' }),
-    onSuccess: reload,
-  });
-  const remove = useMutation({
-    mutationFn: ({ kind, id }: { kind: string; id: string }) =>
-      api(`/${kind}/${id}`, { method: 'DELETE' }),
-    onSuccess: reload,
-  });
-  if (courseId && course.isPending) return <Loading />;
-  if (course.error) return <ErrorBox error={course.error} retry={() => void course.refetch()} />;
-  const c = course.data;
-  function onSaved(result: Course) {
-    setSaved(true);
-    client.setQueryData(['course', result.id], result);
-    void client.invalidateQueries({ queryKey: ['own-courses'] });
-    if (!courseId) navigate(`/instructor/${result.id}`, { replace: true });
-  }
   return (
     <>
       <Link className="back-link" to="/instructor">
@@ -296,410 +255,17 @@ export function Editor() {
       </Link>
       <PageTitle
         eyebrow="EĞİTMEN STÜDYOSU"
-        title={c ? 'Birlikte öğrenmeye değer.' : 'Bilgini bir kursa dönüştür.'}
-        description={c?.title || 'Önce kurs bilgilerini ekle, ardından derslerini hazırla.'}
-      >
-        {c && (
-          <div className="form-actions">
-            <Link className="button secondary" to={`/courses/${c.id}`}>
-              Ön izle
-            </Link>
-            {!['PUBLISHED', 'PENDING_REVIEW'].includes(c.status) && (
-              <button
-                className="button primary"
-                disabled={publish.isPending || !c.sections?.some((s) => s.lessons?.length)}
-                onClick={() => {
-                  if (window.confirm('Kursunuz yönetici incelemesine gönderilsin mi?'))
-                    publish.mutate();
-                }}
-              >
-                <Send size={16} /> İncelemeye gönder
-              </button>
-            )}
-            {c.status !== 'ARCHIVED' && (
-              <button
-                className="text-button danger"
-                disabled={archive.isPending}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Kurs yeni kayıtlara kapatılsın mı? Mevcut öğrenciler erişmeye devam eder.',
-                    )
-                  )
-                    archive.mutate();
-                }}
-              >
-                Kursu arşivle
-              </button>
-            )}
-          </div>
-        )}
-      </PageTitle>
-      {saved && <Success>Kurs bilgileri kaydedildi.</Success>}
-      {publish.error && <ErrorBox error={publish.error} />}
-      {archive.error && <ErrorBox error={archive.error} />}
-      {c && (
-        <div className="notice">
-          <Badge value={c.status} />
-          {c.status === 'PENDING_REVIEW' && <p>Kurs yönetici onayı bekliyor.</p>}
-          {c.reviewFeedback && <p>Yönetici geri bildirimi: {c.reviewFeedback}</p>}
-        </div>
-      )}
-      <CourseForm key={c?.id || 'new'} course={c} onSaved={onSaved} />
-      {c && (
-        <section className="panel curriculum-editor">
-          <div className="section-heading">
-            <div>
-              <h2>Kurs müfredatı</h2>
-              <p>Bölümlerini ve derslerini adım adım oluştur.</p>
-            </div>
-            <button className="button secondary" onClick={() => setAddSection(true)}>
-              <Plus size={17} /> Bölüm ekle
-            </button>
-          </div>
-          {remove.error && <ErrorBox error={remove.error} />}{' '}
-          {c.sections?.length ? (
-            c.sections.map((s, i) => (
-              <div className="editor-section" key={s.id}>
-                <div className="editor-section-title">
-                  <h3>
-                    {i + 1}. {s.title}
-                  </h3>
-                  <div>
-                    <button className="text-button" onClick={() => setLessonSection(s)}>
-                      <Plus size={15} /> Ders ekle
-                    </button>
-                    <button
-                      className="icon-button danger"
-                      aria-label={`${s.title} bölümünü sil`}
-                      disabled={remove.isPending}
-                      onClick={() => {
-                        if (window.confirm('Bölüm ve dersleri silinsin mi?'))
-                          remove.mutate({ kind: 'sections', id: s.id });
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                {s.lessons?.map((l) => (
-                  <div className="lesson-row" key={l.id}>
-                    <BookOpen size={16} />
-                    <span>{l.title}</span>
-                    <small>
-                      {lessonTypes[l.type]}
-                      {l.previewAllowed ? ' · Ön izleme' : ''}
-                    </small>
-                    {['QUIZ', 'ASSIGNMENT'].includes(l.type) && (
-                      <button className="text-button" onClick={() => setAssessment(l)}>
-                        {l.type === 'QUIZ' ? 'Testi düzenle' : 'Ödevleri değerlendir'}
-                      </button>
-                    )}
-                    {['VIDEO', 'ARTICLE'].includes(l.type) && (
-                      <button
-                        className="text-button"
-                        aria-label={`${l.title}: video ekle veya değiştir`}
-                        onClick={() => setVideoLesson(l)}
-                      >
-                        <FileVideo size={16} /> {l.videoUrl ? 'Videoyu değiştir' : 'Video ekle'}
-                      </button>
-                    )}
-                    <button
-                      className="icon-button danger"
-                      aria-label={`${l.title} dersini sil`}
-                      disabled={remove.isPending}
-                      onClick={() => {
-                        if (window.confirm('Ders silinsin mi?'))
-                          remove.mutate({ kind: 'lessons', id: l.id });
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            <Empty
-              title="İlk bölümünü ekle"
-              text="Kursu yayınlayabilmek için en az bir ders eklemelisin."
-            />
-          )}
-          <Link className="inline-link" to={`/media?course=${c.id}`}>
-            <Upload size={16} /> Kurs için medya yükle
-          </Link>
-        </section>
-      )}
-      {c && (
-        <>
-          <div className="form-actions">
-            <button
-              className="button secondary"
-              onClick={() => setTool(tool === 'students' ? undefined : 'students')}
-            >
-              Öğrenciler ve ilerleme
-            </button>
-            <button
-              className="button secondary"
-              onClick={() => setTool(tool === 'discussion' ? undefined : 'discussion')}
-            >
-              Kurs soru-cevap
-            </button>
-          </div>
-          {tool === 'students' && <CourseStudents courseId={c.id} />}{' '}
-          {tool === 'discussion' && (
-            <CourseDiscussion courseId={c.id} instructorId={c.instructorId} />
-          )}
-        </>
-      )}
-      {assessment && c && (
-        <Modal
-          title={`${assessment.title} — ${assessment.type === 'QUIZ' ? 'Test hazırlama' : 'Ödev değerlendirme'}`}
-          onClose={() => setAssessment(undefined)}
-        >
-          {assessment.type === 'QUIZ' ? (
-            <QuizEditor courseId={c.id} lessonId={assessment.id} />
-          ) : (
-            <AssignmentGrading courseId={c.id} lessonId={assessment.id} />
-          )}
-        </Modal>
-      )}
-      {videoLesson && c && (
-        <Modal
-          title={`${videoLesson.title} — Ders videosu`}
-          onClose={() => setVideoLesson(undefined)}
-        >
-          <LessonVideoForm
-            courseId={c.id}
-            lesson={videoLesson}
-            onDone={() => {
-              setVideoLesson(undefined);
-              reload();
-            }}
-          />
-        </Modal>
-      )}
-      {addSection && (
-        <Modal title="Yeni bölüm" onClose={() => setAddSection(false)}>
-          <CurriculumForm
-            path="sections"
-            courseId={courseId!}
-            onDone={() => {
-              setAddSection(false);
-              reload();
-            }}
-          />
-        </Modal>
-      )}
-      {lessonSection && (
-        <Modal
-          title={`${lessonSection.title} — Yeni ders`}
-          onClose={() => setLessonSection(undefined)}
-        >
-          <CurriculumForm
-            path="lessons"
-            courseId={courseId!}
-            sectionId={lessonSection.id}
-            onDone={() => {
-              setLessonSection(undefined);
-              reload();
-            }}
-          />
-        </Modal>
-      )}
-    </>
-  );
-}
-function VideoFields({
-  courseId,
-  initialUrl = '',
-  initialDuration = 0,
-}: {
-  courseId: string;
-  initialUrl?: string;
-  initialDuration?: number;
-}) {
-  const [page, setPage] = useState(0);
-  const [url, setUrl] = useState(initialUrl);
-  const [duration, setDuration] = useState(initialDuration);
-  const media = useQuery({
-    queryKey: ['video-picker', page],
-    queryFn: () => api<Page<Media>>(`/media/my?size=12&page=${page}&sort=createdAt,desc`),
-    refetchInterval: (q) =>
-      q.state.data?.content.some((m) => m.status === 'PROCESSING') ? 3000 : false,
-  });
-  const videos =
-    media.data?.content.filter(
-      (m) => m.type === 'VIDEO' && m.status === 'READY' && (!m.courseId || m.courseId === courseId),
-    ) || [];
-  return (
-    <>
-      <Field
-        label="Medya kitaplığından video seç"
-        hint="Hazır videolar listelenir. Seçilen video bu kursun öğrencilerine açılır."
-      >
-        <select
-          value={videos.some((m) => m.streamUrl === url) ? url : ''}
-          onChange={(e) => {
-            const video = videos.find((m) => m.streamUrl === e.target.value);
-            if (video?.streamUrl) {
-              setUrl(video.streamUrl);
-              setDuration(video.durationSeconds || 0);
-            }
-          }}
-        >
-          <option value="">Video seçin</option>
-          {videos.map((m) => (
-            <option key={m.id} value={m.streamUrl}>
-              {m.originalFileName}
-            </option>
-          ))}
-        </select>
-      </Field>
-      {media.isPending && <Loading />}
-      {media.error && <ErrorBox error={media.error} retry={() => void media.refetch()} />}
-      {media.data && <Pagination page={page} pages={media.data.totalPages} onChange={setPage} />}
-      <Field
-        label="Video adresi"
-        hint="Kitaplıktan seçebilir veya doğrudan bir video adresi girebilirsiniz."
-      >
-        <input
-          name="videoUrl"
-          required
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="/api/v1/media/…/manifest.m3u8"
-        />
-      </Field>
-      <Field label="Süre (saniye)">
-        <input
-          name="durationSeconds"
-          type="number"
-          min="0"
-          required
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
-        />
-      </Field>
-    </>
-  );
-}
-function LessonVideoForm({
-  courseId,
-  lesson,
-  onDone,
-}: {
-  courseId: string;
-  lesson: Lesson;
-  onDone: () => void;
-}) {
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const data = new FormData(e.currentTarget);
-        setBusy(true);
-        setError(null);
-        try {
-          await api(`/lessons/${lesson.id}/video`, {
-            method: 'PUT',
-            body: body({
-              videoUrl: data.get('videoUrl'),
-              durationSeconds: Number(data.get('durationSeconds') || 0),
-            }),
-          });
-          onDone();
-        } catch (err) {
-          setError(err);
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <p className="muted">Video bağlandığında ders video türüne geçer. Yazılı içerik korunur.</p>
-      <VideoFields
-        courseId={courseId}
-        initialUrl={lesson.videoUrl}
-        initialDuration={lesson.durationSeconds}
+        title="Bilgini bir kursa dönüştür."
+        description="Önce kurs bilgilerini ekle, ardından derslerini taslakta hazırla."
       />
-      {!!error && <ErrorBox error={error} />}
-      <Submit busy={busy}>Videoyu derse bağla</Submit>
-    </form>
-  );
-}
-function CurriculumForm({
-  path,
-  courseId,
-  sectionId,
-  onDone,
-}: {
-  path: 'sections' | 'lessons';
-  courseId: string;
-  sectionId?: string;
-  onDone: () => void;
-}) {
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
-  const [type, setType] = useState('ARTICLE');
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const f = new FormData(e.currentTarget);
-    const data = {
-      ...Object.fromEntries(f),
-      courseId,
-      sectionId,
-      orderIndex: Number(f.get('orderIndex') || 0),
-      durationSeconds: Number(f.get('durationSeconds') || 0),
-      previewAllowed: f.get('previewAllowed') === 'on',
-    };
-    try {
-      await api(`/${path}`, { method: 'POST', body: body(data) });
-      onDone();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form onSubmit={submit}>
-      <Field label="Başlık">
-        <input name="title" required />
-      </Field>
-      <Field label="Sıra">
-        <input name="orderIndex" type="number" min="0" defaultValue={0} />
-      </Field>
-      {path === 'sections' ? (
-        <Field label="Açıklama">
-          <textarea name="description" rows={3} />
-        </Field>
-      ) : (
-        <>
-          <Field label="Ders türü">
-            <select name="type" value={type} onChange={(e) => setType(e.target.value)}>
-              {Object.entries(lessonTypes).map(([k, v]) => (
-                <option value={k} key={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Ders içeriği" hint="Markdown desteklenir.">
-            <textarea name="content" rows={5} />
-          </Field>
-          {type === 'VIDEO' && <VideoFields courseId={courseId} />}
-          <label className="checkbox-field">
-            <input name="previewAllowed" type="checkbox" /> Bu ders herkese açık ön izlenebilir
-          </label>
-        </>
-      )}
-      {!!error && <ErrorBox error={error} />}
-      <Submit busy={busy}>Ekle</Submit>
-    </form>
+      <CourseForm
+        onSaved={(course) => {
+          client.setQueryData(['course', course.id], course);
+          void client.invalidateQueries({ queryKey: ['own-courses'] });
+          navigate(`/instructor/${course.id}`, { replace: true });
+        }}
+      />
+    </>
   );
 }
 export function MediaLibrary() {
@@ -743,53 +309,71 @@ export function MediaLibrary() {
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
-    const f = new FormData(form);
-    const file = f.get('file');
-    if (!(file instanceof File) || !file.size) return;
-    const max = kind === 'image' ? 10 * 1024 * 1024 : 2 * 1024 * 1024 * 1024;
-    if (file.size > max) {
+    const values = new FormData(form);
+    const files = values.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
+    if (!files.length) return;
+    if (files.length > 20) {
+      setError(new Error('Tek seferde en fazla 20 dosya yükleyin.'));
+      return;
+    }
+    if (files.length > 1 && values.get('lessonId')) {
       setError(
         new Error(
-          kind === 'image' ? 'Görsel en fazla 10 MB olabilir.' : 'Video en fazla 2 GB olabilir.',
+          'Birden çok dosya için ders seçimini kaldırın. Videoları daha sonra taslaktaki derslere ekleyin.',
         ),
       );
       return;
     }
-    if (!String(f.get('courseId'))) f.delete('courseId');
-    if (!String(f.get('lessonId'))) f.delete('lessonId');
+    const max = kind === 'image' ? 10 * 1024 * 1024 : 2 * 1024 * 1024 * 1024;
+    if (files.some((f) => f.size > max)) {
+      setError(new Error('Dosyalardan biri boyut sınırını aşıyor.'));
+      return;
+    }
+    setBusy(true);
     setError(null);
     setSuccess('');
-    setBusy(true);
+    let uploadedCount = 0;
     try {
-      const uploaded = await api<Media>(`/media/${kind}`, { method: 'POST', body: f });
-      void client.invalidateQueries({ queryKey: ['media'] });
-      void client.invalidateQueries({ queryKey: ['video-picker'] });
-      if (kind === 'video' && f.get('lessonId')) {
-        try {
-          await api(`/lessons/${f.get('lessonId')}/video`, {
-            method: 'PUT',
-            body: body({
-              videoUrl: uploaded.streamUrl,
-              durationSeconds: uploaded.durationSeconds || 0,
-            }),
-          });
-          void client.invalidateQueries({ queryKey: ['course', selectedCourse] });
-        } catch (err) {
-          throw new Error(
-            `Video yüklendi ancak derse bağlanamadı. Eğitmen stüdyosunda dersin Video ekle düğmesini kullanın. ${err instanceof Error ? err.message : ''}`,
+      for (const file of files) {
+        setSuccess(`${uploadedCount + 1}/${files.length}: ${file.name} yükleniyor…`);
+        const data = new FormData();
+        data.set('file', file);
+        if (values.get('courseId')) data.set('courseId', String(values.get('courseId')));
+        const uploaded = await api<Media>(`/media/${kind}`, { method: 'POST', body: data });
+        uploadedCount++;
+        if (kind === 'video' && values.get('lessonId')) {
+          const id = String(values.get('lessonId'));
+          const workspace = await api<import('../types').Workspace>(
+            `/courses/${selectedCourse}/workspace`,
           );
+          const lesson = workspace.document.course.sections
+            ?.flatMap((s) => s.lessons)
+            .find((l) => l.id === id);
+          if (!lesson)
+            throw new Error('Ders taslakta bulunamadı. Videoyu kurs düzenleyicisinden seçin.');
+          lesson.videoUrl = uploaded.streamUrl;
+          lesson.durationSeconds = uploaded.durationSeconds || 0;
+          lesson.type = 'VIDEO';
+          await api(`/courses/${selectedCourse}/workspace`, {
+            method: 'PUT',
+            body: body({ revision: workspace.revision, document: workspace.document }),
+          });
+          void client.invalidateQueries({ queryKey: ['workspace', selectedCourse] });
         }
+        void client.invalidateQueries({ queryKey: ['media'] });
+        void client.invalidateQueries({ queryKey: ['workspace-media'] });
+        void client.invalidateQueries({ queryKey: ['video-picker'] });
       }
       setSuccess(
-        kind === 'video'
-          ? f.get('lessonId')
-            ? 'Video derse bağlandı. İşleme tamamlandığında öğrenciler izleyebilir.'
-            : 'Video yüklendi. Hazır olduğunda eğitmen stüdyosunda bir derse ekleyin.'
-          : 'Görsel yüklendi.',
+        `${uploadedCount} dosya yüklendi. Videolar hazır olduğunda kurs taslağında seçip incelemeye gönderin.`,
       );
       form.reset();
     } catch (e) {
-      setError(e);
+      setError(
+        new Error(
+          `${uploadedCount}/${files.length} dosya yüklendi. ${e instanceof Error ? e.message : 'Yükleme tamamlanamadı.'}`,
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -844,7 +428,7 @@ export function MediaLibrary() {
               label="İlgili ders (isteğe bağlı)"
               hint={
                 kind === 'video'
-                  ? 'Seçerseniz video bu derse otomatik bağlanır. Yazılı içerik korunur.'
+                  ? 'Tek video seçerseniz ders taslağı güncellenir. Yayın için taslağı incelemeye gönderin.'
                   : undefined
               }
             >
@@ -865,6 +449,7 @@ export function MediaLibrary() {
                 key={kind}
                 name="file"
                 type="file"
+                multiple
                 accept={kind === 'image' ? 'image/*' : 'video/*'}
                 required
               />
@@ -876,6 +461,7 @@ export function MediaLibrary() {
         {courses.error && <ErrorBox error={courses.error} />}{' '}
         {course.error && <ErrorBox error={course.error} />}
       </section>
+      <VideoOperations />
       {success && <Success>{success}</Success>}
       {remove.error && <ErrorBox error={remove.error} />}
       <div className="section-heading">

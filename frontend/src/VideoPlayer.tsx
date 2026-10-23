@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js/light';
 import { useQuery } from '@tanstack/react-query';
-import { api, apiUrl, getAccessToken, safeUrl } from './api';
-import type { Media } from './types';
+import { api, apiUrl, getAccessToken, safeUrl, fetchResource, refreshAuthentication } from './api';
+import type { Media, Material } from './types';
 import { ErrorBox, Loading } from './ui';
 
 export default function VideoPlayer({
@@ -12,7 +12,9 @@ export default function VideoPlayer({
   onPlayback,
   onPosition,
   seekTo,
+  captions = [],
 }: {
+  captions?: Material[];
   src: string;
   initialTime?: number;
   onSave?: (seconds: number) => void;
@@ -21,6 +23,46 @@ export default function VideoPlayer({
   seekTo?: { seconds: number; nonce: number };
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [tracks, setTracks] = useState<{ src: string; label: string; language: string }[]>([]);
+  const [captionError, setCaptionError] = useState(false);
+  const captionKey = JSON.stringify(captions);
+  useEffect(() => {
+    let live = true;
+    const urls: string[] = [];
+    setCaptionError(false);
+    setTracks([]);
+    void Promise.all(
+      captions.map(async (m) => {
+        let blob: Blob;
+        if (m.url.startsWith('/api/v1/media/resources/')) blob = await fetchResource(m.url);
+        else {
+          const response = await fetch(safeUrl(m.url) || '', { credentials: 'omit' });
+          if (!response.ok) throw new Error('Altyazı yüklenemedi');
+          blob = await response.blob();
+        }
+        if (blob.size > 1024 * 1024) throw new Error('Altyazı çok büyük');
+        const url = URL.createObjectURL(new Blob([blob], { type: 'text/vtt' }));
+        urls.push(url);
+        if (!live) {
+          URL.revokeObjectURL(url);
+          return null;
+        }
+        return { src: url, label: m.title, language: m.language || 'tr' };
+      }),
+    )
+      .then((items) => {
+        if (live) setTracks(items.filter((x): x is NonNullable<typeof x> => x !== null));
+      })
+      .catch(() => {
+        if (live) setCaptionError(true);
+      });
+    return () => {
+      live = false;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+    // Each caption change reloads tracks, independently of progress polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captionKey]);
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
   const url = src.startsWith('/api/') ? apiUrl(src) : safeUrl(src);
@@ -77,6 +119,7 @@ export default function VideoPlayer({
     };
     video.addEventListener('loadedmetadata', restore, { once: true });
     let hls: Hls | undefined;
+    let refreshing = false;
     if (/\.m3u8(?:\?|$)/i.test(url)) {
       if (Hls.isSupported()) {
         hls = new Hls({
@@ -94,6 +137,23 @@ export default function VideoPlayer({
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal && data.response?.code === 401 && !refreshing) {
+            refreshing = true;
+            void refreshAuthentication()
+              .then((ok) => {
+                if (ok) {
+                  hls?.startLoad();
+                } else {
+                  window.dispatchEvent(new Event('lms:unauthorized'));
+                  setError(new Error('Video oturumunuz sona erdi.'));
+                }
+              })
+              .catch(() => setError(new Error('Oturum yenilenemedi. Bağlantınızı kontrol edin.')))
+              .finally(() => {
+                refreshing = false;
+              });
+            return;
+          }
           if (data.fatal)
             setError(
               new Error(
@@ -149,6 +209,11 @@ export default function VideoPlayer({
           }}
         />
       )}
+      {captionError && (
+        <p role="status" className="notice warning">
+          Altyazı yüklenemedi. Ders kaynaklarını kontrol edin.
+        </p>
+      )}
       <video
         ref={ref}
         hidden={waiting || !!visibleError}
@@ -180,7 +245,16 @@ export default function VideoPlayer({
           setError(new Error('Video oynatılamadı. Dosya adresini ve erişim iznini kontrol edin.'))
         }
       >
-        <track kind="captions" label="Altyazı" />
+        {tracks.map((t, i) => (
+          <track
+            key={t.src}
+            kind="captions"
+            label={t.label}
+            srcLang={t.language}
+            src={t.src}
+            default={i === 0}
+          />
+        ))}
       </video>
     </div>
   );

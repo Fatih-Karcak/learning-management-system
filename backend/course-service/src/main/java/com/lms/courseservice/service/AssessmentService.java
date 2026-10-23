@@ -29,6 +29,8 @@ public class AssessmentService {
     private final EnrollmentClient enrollments;
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
+    private final PlatformEvents events;
+    private final com.lms.courseservice.client.ContentClient contentClient;
 
     public record Question(
         UUID id,
@@ -40,19 +42,49 @@ public class AssessmentService {
 
     public record Quiz(
         @Min(1) @Max(100) int passingScore,
-        @NotNull @Size(min = 1, max = 100) List<@Valid Question> questions
-    ) {}
+        @NotNull @Size(min = 1, max = 100) List<@Valid Question> questions,
+        @Min(1) @Max(100) Integer maxAttempts,
+        @Min(30) @Max(10800) Integer timeLimitSeconds,
+        @Min(1) @Max(100) Integer questionCount,
+        Boolean randomize
+    ) {
+        public Quiz {
+            randomize = Boolean.TRUE.equals(randomize);
+        }
+
+        public Quiz(int passingScore, List<Question> questions) {
+            this(passingScore, questions, null, null, null, false);
+        }
+    }
 
     public record PublicQuestion(UUID id, String prompt, List<String> options) {}
 
-    public record PublicQuiz(int passingScore, List<PublicQuestion> questions) {}
+    public record PublicQuiz(
+        int passingScore,
+        List<PublicQuestion> questions,
+        Integer maxAttempts,
+        Integer timeLimitSeconds,
+        Integer questionCount,
+        boolean randomize
+    ) {}
+
+    public record QuizSession(UUID id, java.time.Instant expiresAt, PublicQuiz quiz) {}
+
+    public record StartInput(@NotNull UUID enrollmentId) {}
+
+    public record QuestionFeedback(UUID questionId, boolean correct, String explanation) {}
 
     public record Answer(@NotNull UUID questionId, @Min(0) int option) {}
 
     public record AttemptInput(
         @NotNull UUID enrollmentId,
-        @NotNull @Size(min = 1, max = 100) List<@Valid Answer> answers
-    ) {}
+        @NotNull @Size(min = 1, max = 100) List<@Valid Answer> answers,
+        UUID sessionId
+    ) {
+        public AttemptInput(UUID enrollmentId, List<Answer> answers) {
+            this(enrollmentId, answers, null);
+        }
+    }
 
     public record Attempt(
         UUID id,
@@ -60,7 +92,8 @@ public class AssessmentService {
         boolean passed,
         int correct,
         int total,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        List<QuestionFeedback> feedback
     ) {}
 
     public record SubmissionInput(
@@ -137,7 +170,9 @@ public class AssessmentService {
 
     @Transactional
     public Quiz save(UUID course, UUID lesson, Quiz request, AuthenticatedUser user) {
-        require(course, lesson, LessonType.QUIZ, user, true);
+        CourseWorkspaceService.requireDirectEditable(
+            require(course, lesson, LessonType.QUIZ, user, true).getSection().getCourse()
+        );
         Set<UUID> ids = new HashSet<>();
         List<Question> normalized = request
             .questions()
@@ -151,7 +186,17 @@ public class AssessmentService {
                 return new Question(id, q.prompt().trim(), q.options(), q.correctOption(), q.explanation());
             })
             .toList();
-        Quiz quiz = new Quiz(request.passingScore(), normalized);
+        Quiz quiz = new Quiz(
+            request.passingScore(),
+            normalized,
+            request.maxAttempts(),
+            request.timeLimitSeconds(),
+            request.questionCount(),
+            request.randomize()
+        );
+        if (
+            quiz.questionCount() != null && quiz.questionCount() > normalized.size()
+        ) throw new IllegalArgumentException("Seçilen soru sayısı bankayı aşıyor");
         jdbc.update(
             "insert into lesson_quizzes(lesson_id,definition) values(?,?) on conflict(lesson_id) do update set definition=excluded.definition,updated_at=now()",
             lesson,
@@ -164,21 +209,136 @@ public class AssessmentService {
     public PublicQuiz view(UUID course, UUID lesson, AuthenticatedUser user) {
         require(course, lesson, LessonType.QUIZ, user, false);
         var quiz = definition(lesson);
+        if (
+            quiz.maxAttempts() != null ||
+            quiz.timeLimitSeconds() != null ||
+            quiz.questionCount() != null ||
+            quiz.randomize()
+        ) return new PublicQuiz(
+            quiz.passingScore(),
+            List.of(),
+            quiz.maxAttempts(),
+            quiz.timeLimitSeconds(),
+            quiz.questionCount(),
+            quiz.randomize()
+        );
+        return publicQuiz(quiz);
+    }
+
+    private PublicQuiz publicQuiz(Quiz quiz) {
         return new PublicQuiz(
             quiz.passingScore(),
             quiz
                 .questions()
                 .stream()
                 .map(q -> new PublicQuestion(q.id(), q.prompt(), q.options()))
-                .toList()
+                .toList(),
+            quiz.maxAttempts(),
+            quiz.timeLimitSeconds(),
+            quiz.questionCount(),
+            quiz.randomize()
         );
+    }
+
+    @Transactional
+    public QuizSession start(UUID course, UUID lesson, StartInput input, AuthenticatedUser user) {
+        require(course, lesson, LessonType.QUIZ, user, false);
+        verifyEnrollment(input.enrollmentId(), course, user.id());
+        jdbc.queryForList("select id from lessons where id=? for update", lesson);
+        var active = jdbc.queryForList(
+            "select * from quiz_sessions where lesson_id=? and student_id=? and enrollment_id=? and not submitted and expires_at>now() order by created_at desc limit 1",
+            lesson,
+            user.id(),
+            input.enrollmentId()
+        );
+        if (!active.isEmpty()) {
+            var a = active.getFirst();
+            return new QuizSession(
+                (UUID) a.get("id"),
+                ((java.sql.Timestamp) a.get("expires_at"))
+                    .toLocalDateTime()
+                    .toInstant(java.time.ZoneOffset.UTC),
+                publicQuiz(json.readValue((String) a.get("definition"), Quiz.class))
+            );
+        }
+        var definition = definition(lesson);
+        if (definition.maxAttempts() != null) {
+            int used = jdbc.queryForObject(
+                "select (select count(*) from quiz_sessions where lesson_id=? and student_id=?)+(select count(*) from quiz_attempts where lesson_id=? and student_id=? and session_id is null)",
+                Integer.class,
+                lesson,
+                user.id(),
+                lesson,
+                user.id()
+            );
+            if (used >= definition.maxAttempts()) throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Deneme hakkınız doldu"
+            );
+        }
+        var selected = new ArrayList<>(definition.questions());
+        if (definition.randomize()) Collections.shuffle(selected, new java.security.SecureRandom());
+        int count =
+            definition.questionCount() == null
+                ? selected.size()
+                : Math.min(definition.questionCount(), selected.size());
+        var quiz = new Quiz(
+            definition.passingScore(),
+            List.copyOf(selected.subList(0, count)),
+            definition.maxAttempts(),
+            definition.timeLimitSeconds(),
+            count,
+            definition.randomize()
+        );
+        UUID id = UUID.randomUUID();
+        var expiry = LocalDateTime.now(java.time.Clock.systemUTC()).plusSeconds(
+            quiz.timeLimitSeconds() == null ? 86400 : quiz.timeLimitSeconds()
+        );
+        jdbc.update(
+            "insert into quiz_sessions(id,lesson_id,student_id,enrollment_id,definition,expires_at) values(?,?,?,?,?,?)",
+            id,
+            lesson,
+            user.id(),
+            input.enrollmentId(),
+            json.writeValueAsString(quiz),
+            expiry
+        );
+        return new QuizSession(id, expiry.toInstant(java.time.ZoneOffset.UTC), publicQuiz(quiz));
     }
 
     @Transactional
     public Attempt attempt(UUID course, UUID lessonId, AttemptInput input, AuthenticatedUser user) {
         var lesson = require(course, lessonId, LessonType.QUIZ, user, false);
         verifyEnrollment(input.enrollmentId(), course, user.id());
-        Quiz quiz = definition(lessonId);
+        Quiz quiz;
+        if (input.sessionId() != null) {
+            var rows = jdbc.queryForList(
+                "select * from quiz_sessions where id=? and lesson_id=? and student_id=? and enrollment_id=? for update",
+                input.sessionId(),
+                lessonId,
+                user.id(),
+                input.enrollmentId()
+            );
+            if (rows.isEmpty()) throw new UnauthorizedException("Test oturumu size ait değil");
+            var row = rows.getFirst();
+            if (Boolean.TRUE.equals(row.get("submitted"))) throw new IllegalStateException(
+                "Test oturumu zaten gönderildi"
+            );
+            if (
+                ((java.sql.Timestamp) row.get("expires_at"))
+                    .toLocalDateTime()
+                    .isBefore(LocalDateTime.now(java.time.Clock.systemUTC()))
+            ) throw new IllegalStateException("Test süresi doldu");
+            quiz = json.readValue((String) row.get("definition"), Quiz.class);
+        } else {
+            quiz = definition(lessonId);
+            if (
+                quiz.maxAttempts() != null ||
+                quiz.timeLimitSeconds() != null ||
+                quiz.questionCount() != null ||
+                quiz.randomize()
+            ) throw new IllegalArgumentException("Önce testi başlatın");
+        }
         if (input.answers().size() != quiz.questions().size()) throw new IllegalArgumentException(
             "Tüm soruları yanıtlayın"
         );
@@ -187,13 +347,16 @@ public class AssessmentService {
             if (answers.put(answer.questionId(), answer.option()) != null) throw new IllegalArgumentException(
                 "Yinelenen yanıt"
             );
+        var feedback = new ArrayList<QuestionFeedback>();
         int correct = 0;
         for (var question : quiz.questions()) {
             Integer answer = answers.get(question.id());
             if (
                 answer == null || answer < 0 || answer >= question.options().size()
             ) throw new IllegalArgumentException("Yanıtlar test sorularıyla uyuşmuyor");
-            if (answer == question.correctOption()) correct++;
+            boolean ok = answer == question.correctOption();
+            if (ok) correct++;
+            feedback.add(new QuestionFeedback(question.id(), ok, question.explanation()));
         }
         double score = Math.round((correct * 1000.0) / quiz.questions().size()) / 10.0;
         boolean passed = score >= quiz.passingScore();
@@ -209,7 +372,25 @@ public class AssessmentService {
             score,
             passed
         );
-        return new Attempt(id, score, passed, correct, quiz.questions().size(), LocalDateTime.now());
+        jdbc.update(
+            "update quiz_attempts set session_id=?,results=? where id=?",
+            input.sessionId(),
+            json.writeValueAsString(feedback),
+            id
+        );
+        if (input.sessionId() != null) jdbc.update(
+            "update quiz_sessions set submitted=true where id=?",
+            input.sessionId()
+        );
+        return new Attempt(
+            id,
+            score,
+            passed,
+            correct,
+            quiz.questions().size(),
+            LocalDateTime.now(java.time.Clock.systemUTC()),
+            feedback
+        );
     }
 
     private void complete(UUID enrollment, Lesson lesson, UUID student) {
@@ -298,13 +479,33 @@ public class AssessmentService {
     public Submission submit(UUID course, UUID lesson, SubmissionInput input, AuthenticatedUser user) {
         require(course, lesson, LessonType.ASSIGNMENT, user, false);
         verifyEnrollment(input.enrollmentId(), course, user.id());
-        if (input.attachmentUrl() != null && !input.attachmentUrl().isBlank()) {
+        if (
+            input.attachmentUrl() != null &&
+            input.attachmentUrl().matches("^/api/v1/media/resources/[0-9a-fA-F-]{36}$")
+        ) {
+            var resource = contentClient.resource(
+                UUID.fromString(input.attachmentUrl().substring(input.attachmentUrl().lastIndexOf('/') + 1))
+            );
+            if (
+                resource == null ||
+                !resource.success() ||
+                resource.data() == null ||
+                !user.id().equals(resource.data().ownerId()) ||
+                !course.equals(resource.data().courseId()) ||
+                !"ASSIGNMENT".equals(resource.data().purpose())
+            ) throw new UnauthorizedException("Ödev dosyası size ve kursa ait değil");
+        } else if (input.attachmentUrl() != null && !input.attachmentUrl().isBlank()) {
             var uri = java.net.URI.create(input.attachmentUrl());
             if (
                 uri.getHost() == null ||
                 !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
             ) throw new IllegalArgumentException("Ek bağlantısı http veya https olmalı");
         }
+        jdbc.update(
+            "insert into assignment_revisions(id,submission_id,content,attachment_url,status,score,feedback) select gen_random_uuid(),id,content,attachment_url,status,score,feedback from assignment_submissions where lesson_id=? and student_id=?",
+            lesson,
+            user.id()
+        );
         int changed = jdbc.update(
             "insert into assignment_submissions(id,lesson_id,student_id,student_name,enrollment_id,content,attachment_url) values(?,?,?,?,?,?,?) " +
                 "on conflict(lesson_id,student_id) do update set content=excluded.content,attachment_url=excluded.attachment_url,status='SUBMITTED',score=null,feedback=null,submitted_at=now(),graded_at=null where assignment_submissions.status<>'ACCEPTED'",
@@ -318,6 +519,28 @@ public class AssessmentService {
         );
         if (changed == 0) throw new IllegalStateException("Onaylanmış ödev tekrar gönderilemez");
         return mine(course, lesson, user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> assignmentHistory(UUID course, UUID lesson, AuthenticatedUser user) {
+        var actual = lessons
+            .findById(lesson)
+            .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+        if (!actual.getSection().getCourse().getId().equals(course)) throw new IllegalArgumentException(
+            "Ders kursa ait değil"
+        );
+        boolean owner = actual.getSection().getCourse().getInstructorId().equals(user.id()) || user.isAdmin();
+        if (!owner) access.requireEnrolled(course, user.id());
+        return owner
+            ? jdbc.queryForList(
+                  "select r.*,s.student_name from assignment_revisions r join assignment_submissions s on s.id=r.submission_id where s.lesson_id=? order by r.created_at desc limit 200",
+                  lesson
+              )
+            : jdbc.queryForList(
+                  "select r.* from assignment_revisions r join assignment_submissions s on s.id=r.submission_id where s.lesson_id=? and s.student_id=? order by r.created_at desc limit 100",
+                  lesson,
+                  user.id()
+              );
     }
 
     @Transactional(readOnly = true)
@@ -378,6 +601,18 @@ public class AssessmentService {
             grade.score(),
             grade.feedback(),
             submissionId
+        );
+        events.enqueue(
+            new com.lms.courseservice.event.PlatformNotice(
+                UUID.randomUUID(),
+                submission.studentId(),
+                course,
+                "Ödeviniz değerlendirildi",
+                grade.feedback() == null ? grade.status().name() : grade.feedback(),
+                "/courses/" + course,
+                "ASSIGNMENT_GRADED",
+                null
+            )
         );
         return jdbc.queryForObject(
             "select * from assignment_submissions where id=?",

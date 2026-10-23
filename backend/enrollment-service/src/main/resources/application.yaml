@@ -41,6 +41,7 @@ services:
     base-url: ${USER_SERVICE_URL:http://localhost:8081}
 
 minio:
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:}
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}

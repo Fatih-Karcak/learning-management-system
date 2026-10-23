@@ -1,32 +1,43 @@
 package com.lms.userservice.repository;
+
 import com.lms.userservice.domain.entity.User;
 import com.lms.userservice.domain.enums.UserRole;
+import jakarta.persistence.LockModeType;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
-import java.util.UUID;
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.Lock;
-import java.util.List;
-
 @Repository
-public interface UserRepository extends JpaRepository<User,UUID> {
+public interface UserRepository extends JpaRepository<User, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.role = 'ADMIN' and u.status = 'ACTIVE' order by u.id")
     List<User> lockActiveAdmins();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.email=:email")
+    Optional<User> findForLogin(String email);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id=:id")
+    Optional<User> findByIdForUpdate(UUID id);
+
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
     Optional<User> findByEmailVerificationToken(String token);
     Optional<User> findByPasswordResetToken(String token);
-    Page<User> findByRole(UserRole role,Pageable pageable);
-    @Query("SELECT u FROM User u WHERE " +
+    Page<User> findByRole(UserRole role, Pageable pageable);
+
+    @Query(
+        "SELECT u FROM User u WHERE " +
             "LOWER(u.firstName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
             "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-            "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))")
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))"
+    )
     Page<User> searchUsers(String query, Pageable pageable);
-
 }

@@ -11,9 +11,32 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/users/admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize(
+    "hasRole('ADMIN') and @adminScopeService.scope(T(java.util.UUID).fromString(authentication.name)) == 'FULL'"
+)
 @RequiredArgsConstructor
 public class AdminUserController {
+
+    private final com.lms.userservice.service.AdminScopeService scopes;
+
+    public record Scope(
+        @jakarta.validation.constraints.Pattern(regexp = "FULL|MODERATION|SUPPORT")
+        @jakarta.validation.constraints.NotBlank
+        String scope,
+        @jakarta.validation.constraints.NotBlank
+        @jakarta.validation.constraints.Size(max = 1000)
+        String reason
+    ) {}
+
+    @PutMapping("/{id}/scope")
+    public ApiResponse<?> scope(
+        @PathVariable UUID id,
+        @Valid @RequestBody Scope input,
+        org.springframework.security.core.Authentication auth
+    ) {
+        scopes.set(id, input.scope(), input.reason(), UUID.fromString(auth.getName()));
+        return ApiResponse.success(null, "Yetki kapsamı güncellendi");
+    }
 
     private final AdminUserService service;
 

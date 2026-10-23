@@ -74,3 +74,7 @@ RUN_LMS_E2E=1 node --test scripts/lms-features.test.mjs
 ```
 
 Bu 13 senaryo gerçek gateway/kullanıcı/kurs/kayıt servislerini, veritabanı işlemlerini, sertifika üretimini ve yetki retlerini sınar. `LMS_E2E_API_URL` varsayılan olarak `http://127.0.0.1:8080/api/v1` olur. Sertifika senaryosu erişilebilir nesne deposu ve çalışan sertifika zamanlayıcısı ister. Bu bulut doğrulamasında S3 test sunucusu kullanıldı; gerçek MinIO dağıtımı veya gerçek Stripe işlemi doğrulanmış sayılmaz.
+
+## Taslak sürümleri ve gerçek kullanım geliştirmeleri
+
+Bölüm/ders düzenleme, taşıma, sıralama ve yayımlama artık çalışma taslağı üzerinden yapılır. Önceki doğrudan uçlar yalnızca ilk `DRAFT` kurs içindir. Önceki bölümde genel düzenleme desteğinin bulunmadığını belirten notlar bu yeni taslak API ve arayüzü için geçerli değildir. [Güncel özellikler, güvenlik, API ve davranış kuralları](../docs/PLATFORM.md) bu sürümün kaynağıdır.

@@ -16,11 +16,12 @@ public class VideoProcessingListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(VideoProcessingRequested event) {
-        log.info(
-                "Medya kaydı commit edildi, video işleme başlatılıyor: {}",
-                event.mediaId()
-        );
+        log.info("Medya kaydı commit edildi, video işleme başlatılıyor: {}", event.mediaId());
 
-        videoProcessingService.processVideoAsync(event.mediaId());
+        try {
+            videoProcessingService.processVideoAsync(event.mediaId());
+        } catch (org.springframework.core.task.TaskRejectedException e) {
+            log.info("Video kuyrukta bekleyecek: {}", event.mediaId());
+        }
     }
 }
