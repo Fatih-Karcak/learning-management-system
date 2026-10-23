@@ -2799,3 +2799,32 @@ button:disabled {
     scroll-behavior: auto !important;
   }
 }
+.rich-editor {
+  min-width: 0;
+}
+.rich-toolbar {
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+.rich-preview {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.rich-preview pre {
+  overflow-x: auto;
+}
+.authoring-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.authoring-row > :first-child {
+  flex: 1 1 220px;
+}

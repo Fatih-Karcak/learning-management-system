@@ -22,7 +22,10 @@ class CourseRegressionTest {
 
     private final CourseRepository courses = mock(CourseRepository.class);
     private final EnrollmentClient enrollment = mock(EnrollmentClient.class);
-    private final CourseAccessPolicy access = new CourseAccessPolicy(enrollment);
+    private final CourseAccessPolicy access = new CourseAccessPolicy(
+        enrollment,
+        mock(CourseAuthoringAccess.class)
+    );
     private final com.lms.courseservice.client.ContentClient content = mock(
         com.lms.courseservice.client.ContentClient.class
     );
@@ -49,7 +52,10 @@ class CourseRegressionTest {
             .videoUrl("private-video")
             .previewAllowed(false)
             .build();
-        var section = Section.builder().id(UUID.randomUUID()).lessons(List.of(lesson)).build();
+        var section = Section.builder()
+            .id(UUID.randomUUID())
+            .lessons(List.of(lesson))
+            .build();
         course.getSections().add(section);
         when(courses.findById(course.getId())).thenReturn(Optional.of(course));
         return course;
@@ -61,12 +67,19 @@ class CourseRegressionTest {
         when(courses.save(course)).thenReturn(course);
         assertEquals(
             CourseStatus.PENDING_REVIEW,
-            service.publishCourse(course.getId(), course.getInstructorId()).getStatus()
+            service
+                .publishCourse(course.getId(), course.getInstructorId())
+                .getStatus()
         );
         assertNull(course.getPublishedAt());
-        assertEquals(CourseStatus.PUBLISHED, service.approveCourse(course.getId()).getStatus());
+        assertEquals(
+            CourseStatus.PUBLISHED,
+            service.approveCourse(course.getId()).getStatus()
+        );
         assertNotNull(course.getPublishedAt());
-        assertThrows(IllegalStateException.class, () -> service.approveCourse(course.getId()));
+        assertThrows(IllegalStateException.class, () ->
+            service.approveCourse(course.getId())
+        );
     }
 
     @Test
@@ -82,7 +95,11 @@ class CourseRegressionTest {
             new com.lms.courseservice.client.ContentClient.Result(
                 true,
                 "ok",
-                new com.lms.courseservice.client.ContentClient.Media(url, 12, "READY")
+                new com.lms.courseservice.client.ContentClient.Media(
+                    url,
+                    12,
+                    "READY"
+                )
             )
         );
         assertEquals(
@@ -109,7 +126,9 @@ class CourseRegressionTest {
     @Test
     void anonymousViewsCannotReadDraftOrNonPreviewContent() {
         var draft = course(CourseStatus.DRAFT);
-        assertThrows(CourseNotFoundException.class, () -> service.getCourseById(draft.getId(), null));
+        assertThrows(CourseNotFoundException.class, () ->
+            service.getCourseById(draft.getId(), null)
+        );
         var published = course(CourseStatus.PUBLISHED);
         var response = service.getCourseById(published.getId(), null);
         var lesson = response.getSections().getFirst().getLessons().getFirst();
@@ -122,7 +141,11 @@ class CourseRegressionTest {
     @Test
     void ownerAndEnrolledStudentsCanReadPaidContentButUnenrolledStudentCannot() {
         var course = course(CourseStatus.PUBLISHED);
-        var owner = new AuthenticatedUser(course.getInstructorId(), "Owner", "INSTRUCTOR");
+        var owner = new AuthenticatedUser(
+            course.getInstructorId(),
+            "Owner",
+            "INSTRUCTOR"
+        );
         assertEquals(
             "Paid article",
             service
@@ -133,7 +156,11 @@ class CourseRegressionTest {
                 .getFirst()
                 .getContent()
         );
-        var student = new AuthenticatedUser(UUID.randomUUID(), "Student", "STUDENT");
+        var student = new AuthenticatedUser(
+            UUID.randomUUID(),
+            "Student",
+            "STUDENT"
+        );
         when(enrollment.check(course.getId(), student.id())).thenReturn(
             new EnrollmentClient.Result(true, false)
         );
@@ -174,11 +201,18 @@ class CourseRegressionTest {
     @Test
     void negativeAndExcessiveDiscountsAreRejected() {
         var course = course(CourseStatus.DRAFT);
-        for (BigDecimal discount : List.of(new BigDecimal("-1"), new BigDecimal("101"))) {
+        for (BigDecimal discount : List.of(
+            new BigDecimal("-1"),
+            new BigDecimal("101")
+        )) {
             var request = new UpdateCourseRequest();
             request.setDiscountPrice(discount);
             assertThrows(IllegalArgumentException.class, () ->
-                service.updateCourse(course.getId(), request, course.getInstructorId())
+                service.updateCourse(
+                    course.getId(),
+                    request,
+                    course.getInstructorId()
+                )
             );
         }
         verify(courses, never()).save(any());
@@ -199,8 +233,12 @@ class CourseRegressionTest {
     void reviewsRequireEnrollment() {
         UUID courseId = UUID.randomUUID();
         UUID studentId = UUID.randomUUID();
-        when(enrollment.check(courseId, studentId)).thenReturn(new EnrollmentClient.Result(true, false));
-        assertThrows(UnauthorizedException.class, () -> access.requireEnrolled(courseId, studentId));
+        when(enrollment.check(courseId, studentId)).thenReturn(
+            new EnrollmentClient.Result(true, false)
+        );
+        assertThrows(UnauthorizedException.class, () ->
+            access.requireEnrolled(courseId, studentId)
+        );
     }
 
     @Test
@@ -212,13 +250,20 @@ class CourseRegressionTest {
         published.setInstructorId(owner);
         var pageable = org.springframework.data.domain.PageRequest.of(0, 10);
         when(courses.findByInstructorId(owner, pageable)).thenReturn(
-            new org.springframework.data.domain.PageImpl<>(List.of(draft, published), pageable, 2)
+            new org.springframework.data.domain.PageImpl<>(
+                List.of(draft, published),
+                pageable,
+                2
+            )
         );
 
         var result = service.getOwnCourses(owner, pageable);
 
         assertEquals(2, result.getTotalElements());
-        assertEquals(CourseStatus.DRAFT, result.getContent().getFirst().getStatus());
+        assertEquals(
+            CourseStatus.DRAFT,
+            result.getContent().getFirst().getStatus()
+        );
         verify(courses).findByInstructorId(owner, pageable);
         verify(courses, never()).findByStatus(any(), any());
         verifyNoInteractions(enrollment);

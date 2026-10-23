@@ -26,6 +26,7 @@ class CourseWorkspaceTest {
     final CategoryRepository categories = mock(CategoryRepository.class);
     final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     final CourseMapper mapper = Mappers.getMapper(CourseMapper.class);
+    final CourseAuthoringAccess authors = mock(CourseAuthoringAccess.class);
     final UUID owner = UUID.randomUUID(),
         id = UUID.randomUUID();
     final Course course = Course.builder()
@@ -48,9 +49,14 @@ class CourseWorkspaceTest {
         jdbc,
         JsonMapper.builder().build(),
         mock(ContentClient.class),
-        Validation.buildDefaultValidatorFactory().getValidator()
+        Validation.buildDefaultValidatorFactory().getValidator(),
+        authors
     );
-    final AuthenticatedUser user = new AuthenticatedUser(owner, "Instructor", "INSTRUCTOR");
+    final AuthenticatedUser user = new AuthenticatedUser(
+        owner,
+        "Instructor",
+        "INSTRUCTOR"
+    );
 
     CourseWorkspaceTest() {
         var category = new Category();
@@ -62,9 +68,32 @@ class CourseWorkspaceTest {
     }
 
     @Test
+    void acceptedEditorCanReadWorkspaceButCannotSubmitOrWithdrawPublication() {
+        var editor = new AuthenticatedUser(
+            UUID.randomUUID(),
+            "Editor",
+            "INSTRUCTOR"
+        );
+        when(authors.canEdit(course, editor.id())).thenReturn(true);
+        assertNotNull(service.get(id, editor));
+        var submit = assertThrows(ResponseStatusException.class, () ->
+            service.submit(id, 0, editor)
+        );
+        assertEquals(403, submit.getStatusCode().value());
+        var withdraw = assertThrows(ResponseStatusException.class, () ->
+            service.withdraw(id, editor)
+        );
+        assertEquals(403, withdraw.getStatusCode().value());
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
     void anotherInstructorCannotReadDraftOrWriteAnything() {
         var error = assertThrows(ResponseStatusException.class, () ->
-            service.get(id, new AuthenticatedUser(UUID.randomUUID(), "Other", "INSTRUCTOR"))
+            service.get(
+                id,
+                new AuthenticatedUser(UUID.randomUUID(), "Other", "INSTRUCTOR")
+            )
         );
         assertEquals(403, error.getStatusCode().value());
         verifyNoInteractions(jdbc);
@@ -90,7 +119,12 @@ class CourseWorkspaceTest {
         course.getSections().add(section);
         var response = mapper.toResponse(course);
         response.setSections(List.of());
-        var doc = new CourseWorkspaceService.Document(response, 1L, Map.of(), Map.of());
+        var doc = new CourseWorkspaceService.Document(
+            response,
+            1L,
+            Map.of(),
+            Map.of()
+        );
         var error = assertThrows(ResponseStatusException.class, () ->
             service.save(id, new CourseWorkspaceService.Save(0, doc), user)
         );
@@ -111,6 +145,8 @@ class CourseWorkspaceTest {
             );
         }
         course.setStatus(CourseStatus.DRAFT);
-        assertDoesNotThrow(() -> CourseWorkspaceService.requireDirectEditable(course));
+        assertDoesNotThrow(() ->
+            CourseWorkspaceService.requireDirectEditable(course)
+        );
     }
 }

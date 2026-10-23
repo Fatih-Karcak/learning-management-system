@@ -16,17 +16,47 @@ public class InternalCourseController {
 
     private final CourseService courses;
     private final String key;
+    private final com.lms.courseservice.service.CourseAuthoringAccess authors;
 
-    public InternalCourseController(CourseService courses, @Value("${internal.api-key:}") String key) {
+    public InternalCourseController(
+        CourseService courses,
+        @Value("${internal.api-key:}") String key,
+        com.lms.courseservice.service.CourseAuthoringAccess authors
+    ) {
         this.courses = courses;
         this.key = key;
+        this.authors = authors;
     }
 
     @GetMapping("/{id}")
     public ApiResponse<CourseResponse> get(
         @PathVariable UUID id,
-        @RequestHeader(value = "X-Internal-Service-Key", required = false) String provided
+        @RequestHeader(
+            value = "X-Internal-Service-Key",
+            required = false
+        ) String provided
     ) {
+        requireKey(provided);
+        return ApiResponse.success(courses.getInternalCourse(id), "Başarılı");
+    }
+
+    @GetMapping("/{id}/authors/{user}")
+    public ApiResponse<Boolean> author(
+        @PathVariable UUID id,
+        @PathVariable UUID user,
+        @RequestHeader(
+            value = "X-Internal-Service-Key",
+            required = false
+        ) String provided
+    ) {
+        requireKey(provided);
+        return ApiResponse.success(
+            authors.canEdit(id, user),
+            "Düzenleme yetkisi"
+        );
+    }
+
+    private void requireKey(String provided) {
         if (
             key.isBlank() ||
             provided == null ||
@@ -34,7 +64,9 @@ public class InternalCourseController {
                 key.getBytes(StandardCharsets.UTF_8),
                 provided.getBytes(StandardCharsets.UTF_8)
             )
-        ) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Servis kimliği doğrulanamadı");
-        return ApiResponse.success(courses.getInternalCourse(id), "Başarılı");
+        ) throw new ResponseStatusException(
+            HttpStatus.UNAUTHORIZED,
+            "Servis kimliği doğrulanamadı"
+        );
     }
 }

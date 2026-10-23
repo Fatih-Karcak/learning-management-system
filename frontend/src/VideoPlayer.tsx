@@ -121,6 +121,19 @@ export default function VideoPlayer({
     let hls: Hls | undefined;
     let refreshing = false;
     if (/\.m3u8(?:\?|$)/i.test(url)) {
+      if (
+        protectedMedia &&
+        window.MediaSource &&
+        !MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E"')
+      ) {
+        setError(
+          new Error(
+            'Bu tarayıcı H.264 video biçimini desteklemiyor. Güncel Chrome veya Edge ile deneyin.',
+          ),
+        );
+        video.removeEventListener('loadedmetadata', restore);
+        return;
+      }
       if (Hls.isSupported()) {
         hls = new Hls({
           xhrSetup(xhr, requestUrl) {

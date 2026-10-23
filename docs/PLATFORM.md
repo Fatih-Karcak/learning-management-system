@@ -6,6 +6,8 @@
 
 Eğitmen kursu oluşturur ve çalışma taslağında ders/bölüm ekler, düzenler, sıralar ve taşır. Yeni taslakta henüz yayımlanmamış dersler kaldırılabilir. Sorular, kaynaklar ve altyazılar aynı taslağa bağlıdır. Medya kitaplığında 20 dosyaya kadar sıralı toplu yükleme yapılabilir.
 
+Biçimlendirme düğmeleri ve güvenli metin ön izlemesi, ders kopyalama, hazır/kişisel kurs şablonları ve davet kabulüyle ortak eğitmen düzenlemesi vardır. [İçerik araçları rehberi](AUTHORING.md) yetki ve kopyalama kurallarını açıklar.
+
 **Taslağı kaydet** öğrencilere görünür içeriği değiştirmez. **İncelemeye gönder** başvuruyu kilitler; düzenlemek için geri çekmek gerekir. Yönetici taslağın tamamını ön izler, onaylar veya gerekçeyle düzeltme ister. Onay tek veritabanı işlemiyle dersleri, kurs bilgilerini, testleri ve kaynakları yayımlar; yayın geçmişi saklanır. Eşzamanlı düzenlemede eski `revision` ile gelen kayıt 409 alır ve diğer değişikliği ezmez.
 
 Ders kimlikleri korunur. Yayımlanmış ders kaldırılamaz veya türü değiştirilemez. Metin, video, kaynak, başlık, sıra ve bölüm değişebilir. Taşınan derste eski ilerleme yeni bölümle eşleştirilir. Eski doğrudan düzenleme API'leri yayımlanmış/incelemedeki kursu değiştiremez.

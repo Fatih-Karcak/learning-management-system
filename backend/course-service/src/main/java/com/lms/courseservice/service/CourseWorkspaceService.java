@@ -32,6 +32,7 @@ public class CourseWorkspaceService {
     private final ObjectMapper json;
     private final ContentClient content;
     private final Validator validator;
+    private final CourseAuthoringAccess authors;
 
     public record Material(
         @NotBlank @Size(max = 200) String title,
@@ -65,8 +66,17 @@ public class CourseWorkspaceService {
     private Course owner(UUID id, AuthenticatedUser user) {
         var course = courses
             .findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kurs bulunamadı"));
-        if (!course.getInstructorId().equals(user.id()) && !user.isAdmin()) throw new ResponseStatusException(
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Kurs bulunamadı"
+                )
+            );
+        if (
+            !user.isAdmin() &&
+            !course.getInstructorId().equals(user.id()) &&
+            !authors.canEdit(course, user.id())
+        ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
             "Kurs size ait değil"
         );
@@ -74,7 +84,9 @@ public class CourseWorkspaceService {
     }
 
     public static void requireDirectEditable(Course course) {
-        if (course.getStatus() != CourseStatus.DRAFT) throw new ResponseStatusException(
+        if (
+            course.getStatus() != CourseStatus.DRAFT
+        ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
             "Yayındaki veya incelemedeki kursu çalışma taslağından düzenleyin"
         );
@@ -95,7 +107,10 @@ public class CourseWorkspaceService {
                     rs -> {
                         quizzes.put(
                             lesson.getId(),
-                            json.readValue(rs.getString(1), AssessmentService.Quiz.class)
+                            json.readValue(
+                                rs.getString(1),
+                                AssessmentService.Quiz.class
+                            )
                         );
                     },
                     lesson.getId()
@@ -105,13 +120,23 @@ public class CourseWorkspaceService {
                     rs -> {
                         materials.put(
                             lesson.getId(),
-                            Arrays.asList(json.readValue(rs.getString(1), Material[].class))
+                            Arrays.asList(
+                                json.readValue(
+                                    rs.getString(1),
+                                    Material[].class
+                                )
+                            )
                         );
                     },
                     lesson.getId()
                 );
             }
-        return new Document(mapper.toResponse(course), course.getCategory().getId(), quizzes, materials);
+        return new Document(
+            mapper.toResponse(course),
+            course.getCategory().getId(),
+            quizzes,
+            materials
+        );
     }
 
     @Transactional(readOnly = true)
@@ -140,11 +165,15 @@ public class CourseWorkspaceService {
     public Workspace save(UUID id, Save input, AuthenticatedUser user) {
         var course = locked(id, user);
         var previous = get(id, user);
-        if (previous.revision() != input.revision()) throw new ResponseStatusException(
+        if (
+            previous.revision() != input.revision()
+        ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
             "Taslak başka bir pencerede değişti. Yenileyip değişikliklerinizi yeniden uygulayın"
         );
-        if ("PENDING_REVIEW".equals(previous.status())) throw new ResponseStatusException(
+        if (
+            "PENDING_REVIEW".equals(previous.status())
+        ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
             "İnceleme sürüyor; önce başvuruyu geri çekin"
         );
@@ -160,13 +189,17 @@ public class CourseWorkspaceService {
 
     @Transactional
     public Workspace submit(UUID id, long revision, AuthenticatedUser user) {
-        locked(id, user);
+        requirePublisher(locked(id, user), user);
         var workspace = get(id, user);
-        if (workspace.revision() != revision || revision == 0) throw new ResponseStatusException(
+        if (
+            workspace.revision() != revision || revision == 0
+        ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
             "Önce güncel taslağı kaydedin"
         );
-        if (!workspace.checklist().isEmpty()) throw new IllegalArgumentException(
+        if (
+            !workspace.checklist().isEmpty()
+        ) throw new IllegalArgumentException(
             String.join("; ", workspace.checklist())
         );
         validate(workspace.document(), owner(id, user));
@@ -180,7 +213,7 @@ public class CourseWorkspaceService {
 
     @Transactional
     public Workspace withdraw(UUID id, AuthenticatedUser user) {
-        locked(id, user);
+        requirePublisher(locked(id, user), user);
         jdbc.update(
             "update course_workspaces set status='DRAFT',revision=revision+1 where course_id=? and status='PENDING_REVIEW'",
             id
@@ -190,24 +223,36 @@ public class CourseWorkspaceService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> pending(AuthenticatedUser user) {
-        if (!user.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (!user.isAdmin()) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN
+        );
         return jdbc.queryForList(
             "select w.course_id,w.revision,w.submitted_at,c.title,c.instructor_name from course_workspaces w join courses c on c.id=w.course_id where w.status='PENDING_REVIEW' order by w.submitted_at limit 100"
         );
     }
 
     @Transactional
-    public Workspace decide(UUID id, long revision, Decision decision, AuthenticatedUser user) {
-        if (!user.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    public Workspace decide(
+        UUID id,
+        long revision,
+        Decision decision,
+        AuthenticatedUser user
+    ) {
+        if (!user.isAdmin()) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN
+        );
         var course = locked(id, user);
         var w = get(id, user);
         if (
             !"PENDING_REVIEW".equals(w.status()) || w.revision() != revision
-        ) throw new ResponseStatusException(HttpStatus.CONFLICT, "İncelenen taslak değişti");
+        ) throw new ResponseStatusException(
+            HttpStatus.CONFLICT,
+            "İncelenen taslak değişti"
+        );
         if ("REJECT".equals(decision.action())) {
-            if (decision.reason() == null || decision.reason().isBlank()) throw new IllegalArgumentException(
-                "Düzeltme gerekçesi gerekli"
-            );
+            if (
+                decision.reason() == null || decision.reason().isBlank()
+            ) throw new IllegalArgumentException("Düzeltme gerekçesi gerekli");
             jdbc.update(
                 "update course_workspaces set status='DRAFT',feedback=?,revision=revision+1 where course_id=?",
                 decision.reason(),
@@ -215,7 +260,9 @@ public class CourseWorkspaceService {
             );
         } else {
             validate(w.document(), course);
-            if (!checklist(w.document()).isEmpty()) throw new IllegalArgumentException(
+            if (
+                !checklist(w.document()).isEmpty()
+            ) throw new IllegalArgumentException(
                 "Yayın kontrol listesini tamamlayın"
             );
             verifyMedia(w.document(), course);
@@ -270,10 +317,16 @@ public class CourseWorkspaceService {
     }
 
     @Transactional(readOnly = true)
-    public List<Material> materials(UUID courseId, UUID lessonId, AuthenticatedUser user) {
+    public List<Material> materials(
+        UUID courseId,
+        UUID lessonId,
+        AuthenticatedUser user
+    ) {
         var c = courses
             .findById(courseId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            .orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND)
+            );
         access.requireVisible(c, user);
         if (!access.canReadContent(c, user)) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
@@ -293,21 +346,29 @@ public class CourseWorkspaceService {
         );
         return values.isEmpty()
             ? List.of()
-            : Arrays.asList(json.readValue(values.getFirst(), Material[].class));
+            : Arrays.asList(
+                  json.readValue(values.getFirst(), Material[].class)
+              );
     }
 
     private void validate(Document d, Course existing) {
         if (
-            d == null || d.course() == null || d.quizzes() == null || d.materials() == null
+            d == null ||
+            d.course() == null ||
+            d.quizzes() == null ||
+            d.materials() == null
         ) throw new IllegalArgumentException("Taslak eksik");
-        if (json.writeValueAsString(d).length() > 10 * 1024 * 1024) throw new IllegalArgumentException(
-            "Taslak 10 MB sınırını aşıyor"
-        );
+        if (
+            json.writeValueAsString(d).length() > 10 * 1024 * 1024
+        ) throw new IllegalArgumentException("Taslak 10 MB sınırını aşıyor");
         var c = d.course();
-        if (!existing.getId().equals(c.getId())) throw new IllegalArgumentException("Kurs kimliği uyuşmuyor");
+        if (
+            !existing.getId().equals(c.getId())
+        ) throw new IllegalArgumentException("Kurs kimliği uyuşmuyor");
         text(c.getTitle(), 3, 200, "Kurs başlığı");
         if (
-            c.getTargetAudience() != null && c.getTargetAudience().length() > 2000
+            c.getTargetAudience() != null &&
+            c.getTargetAudience().length() > 2000
         ) throw new IllegalArgumentException("Hedef kitle açıklaması çok uzun");
         text(c.getDescription(), 1, 100000, "Açıklama");
         text(c.getShortDescription(), 1, 500, "Kısa açıklama");
@@ -320,26 +381,35 @@ public class CourseWorkspaceService {
         ) throw new IllegalArgumentException("Seviye veya fiyat geçersiz");
         if (
             c.getDiscountPrice() != null &&
-            (c.getDiscountPrice().signum() < 0 || c.getDiscountPrice().compareTo(c.getPrice()) > 0)
+            (c.getDiscountPrice().signum() < 0 ||
+                c.getDiscountPrice().compareTo(c.getPrice()) > 0)
         ) throw new IllegalArgumentException("İndirimli fiyat geçersiz");
-        if (!categories.existsById(d.categoryId())) throw new IllegalArgumentException("Kategori bulunamadı");
-        if (c.getSections() == null || c.getSections().size() > 100) throw new IllegalArgumentException(
-            "En fazla 100 bölüm olabilir"
-        );
+        if (
+            !categories.existsById(d.categoryId())
+        ) throw new IllegalArgumentException("Kategori bulunamadı");
+        if (
+            c.getSections() == null || c.getSections().size() > 100
+        ) throw new IllegalArgumentException("En fazla 100 bölüm olabilir");
         var sectionIds = new HashSet<UUID>();
         var lessonIds = new HashSet<UUID>();
         for (var s : c.getSections()) {
-            if (s.getId() == null || !sectionIds.add(s.getId())) throw new IllegalArgumentException(
-                "Yinelenen bölüm"
-            );
+            if (
+                s.getId() == null || !sectionIds.add(s.getId())
+            ) throw new IllegalArgumentException("Yinelenen bölüm");
             text(s.getTitle(), 1, 200, "Bölüm başlığı");
-            if (s.getLessons() == null || s.getLessons().size() > 200) throw new IllegalArgumentException(
+            if (
+                s.getLessons() == null || s.getLessons().size() > 200
+            ) throw new IllegalArgumentException(
                 "Bölümde en fazla 200 ders olabilir"
             );
             for (var l : s.getLessons()) {
                 if (
-                    l.getId() == null || !lessonIds.add(l.getId()) || l.getType() == null
-                ) throw new IllegalArgumentException("Ders kimliği veya türü geçersiz");
+                    l.getId() == null ||
+                    !lessonIds.add(l.getId()) ||
+                    l.getType() == null
+                ) throw new IllegalArgumentException(
+                    "Ders kimliği veya türü geçersiz"
+                );
                 text(l.getTitle(), 1, 200, "Ders başlığı");
                 if (
                     l.getContent() != null && l.getContent().length() > 100000
@@ -347,7 +417,9 @@ public class CourseWorkspaceService {
             }
         }
         // Published lesson identities and assessment kinds remain stable: old progress/certificates stay valid.
-        if (existing.getPublishedAt() != null) for (var s : existing.getSections())
+        if (
+            existing.getPublishedAt() != null
+        ) for (var s : existing.getSections())
             for (var l : s.getLessons()) {
                 var next = c
                     .getSections()
@@ -355,13 +427,19 @@ public class CourseWorkspaceService {
                     .flatMap(x -> x.getLessons().stream())
                     .filter(x -> x.getId().equals(l.getId()))
                     .findFirst();
-                if (next.isEmpty() || next.get().getType() != l.getType()) throw new ResponseStatusException(
+                if (
+                    next.isEmpty() || next.get().getType() != l.getType()
+                ) throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Yayımlanmış ders silinemez veya türü değiştirilemez. İçeriği güncelleyebilir ya da kursu arşivleyebilirsiniz"
                 );
             }
         for (var id : sectionIds) {
-            var owners = jdbc.queryForList("select course_id from sections where id=?", UUID.class, id);
+            var owners = jdbc.queryForList(
+                "select course_id from sections where id=?",
+                UUID.class,
+                id
+            );
             if (
                 !owners.isEmpty() && !owners.getFirst().equals(existing.getId())
             ) throw new IllegalArgumentException("Bölüm başka bir kursa ait");
@@ -381,7 +459,8 @@ public class CourseWorkspaceService {
                 q == null ||
                 !lessonIds.contains(id) ||
                 !validator.validate(q).isEmpty() ||
-                (q.questionCount() != null && q.questionCount() > q.questions().size())
+                (q.questionCount() != null &&
+                    q.questionCount() > q.questions().size())
             ) throw new IllegalArgumentException("Test tanımı geçersiz");
             var ids = new HashSet<UUID>();
             for (var question : q.questions())
@@ -396,30 +475,54 @@ public class CourseWorkspaceService {
                 !lessonIds.contains(id) || items == null || items.size() > 20
             ) throw new IllegalArgumentException("Kaynak listesi geçersiz");
             for (var item : items) {
-                if (!validator.validate(item).isEmpty()) throw new IllegalArgumentException(
+                if (
+                    !validator.validate(item).isEmpty()
+                ) throw new IllegalArgumentException(
                     "Kaynak bilgileri geçersiz"
                 );
                 URI u;
                 try {
                     u = URI.create(item.url());
                 } catch (Exception e) {
-                    throw new IllegalArgumentException("Kaynak adresi geçersiz");
+                    throw new IllegalArgumentException(
+                        "Kaynak adresi geçersiz"
+                    );
                 }
                 if (
-                    !item.url().matches("^/api/v1/media/resources/[0-9a-fA-F-]{36}$") &&
-                    (!"https".equals(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null)
-                ) throw new IllegalArgumentException("Kaynak adresi HTTPS olmalı");
+                    !item
+                        .url()
+                        .matches(
+                            "^/api/v1/media/resources/[0-9a-fA-F-]{36}$"
+                        ) &&
+                    (!"https".equals(u.getScheme()) ||
+                        u.getHost() == null ||
+                        u.getUserInfo() != null)
+                ) throw new IllegalArgumentException(
+                    "Kaynak adresi HTTPS olmalı"
+                );
                 if (
                     "SUBTITLE".equals(item.type()) &&
-                    (item.language() == null || !item.language().matches("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?"))
+                    (item.language() == null ||
+                        !item
+                            .language()
+                            .matches("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?"))
                 ) throw new IllegalArgumentException("Altyazı dili gerekli");
             }
         });
     }
 
     private void text(String s, int min, int max, String name) {
-        if (s == null || s.trim().length() < min || s.length() > max) throw new IllegalArgumentException(
-            name + " geçersiz"
+        if (
+            s == null || s.trim().length() < min || s.length() > max
+        ) throw new IllegalArgumentException(name + " geçersiz");
+    }
+
+    private void requirePublisher(Course course, AuthenticatedUser user) {
+        if (
+            !user.isAdmin() && !course.getInstructorId().equals(user.id())
+        ) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN,
+            "Yayın başvurusunu yalnızca kurs sahibi yönetebilir"
         );
     }
 
@@ -449,15 +552,18 @@ public class CourseWorkspaceService {
         ) issues.add("En az bir ders ekleyin");
         if (c.getSections() != null) for (var s : c.getSections())
             for (var l : s.getLessons()) {
-                if (l.getType() == LessonType.QUIZ && !d.quizzes().containsKey(l.getId())) issues.add(
-                    l.getTitle() + ": test soruları eksik"
-                );
                 if (
-                    (l.getType() == LessonType.ARTICLE || l.getType() == LessonType.ASSIGNMENT) &&
+                    l.getType() == LessonType.QUIZ &&
+                    !d.quizzes().containsKey(l.getId())
+                ) issues.add(l.getTitle() + ": test soruları eksik");
+                if (
+                    (l.getType() == LessonType.ARTICLE ||
+                        l.getType() == LessonType.ASSIGNMENT) &&
                     (l.getContent() == null || l.getContent().isBlank())
                 ) issues.add(l.getTitle() + ": içerik eksik");
                 if (
-                    l.getType() == LessonType.VIDEO && (l.getVideoUrl() == null || l.getVideoUrl().isBlank())
+                    l.getType() == LessonType.VIDEO &&
+                    (l.getVideoUrl() == null || l.getVideoUrl().isBlank())
                 ) issues.add(l.getTitle() + ": video eksik");
             }
         return issues;
@@ -468,20 +574,27 @@ public class CourseWorkspaceService {
             for (var material : items)
                 if (material.url().startsWith("/api/v1/media/resources/")) {
                     var resource = content.resource(
-                        UUID.fromString(material.url().substring(material.url().lastIndexOf('/') + 1))
+                        UUID.fromString(
+                            material
+                                .url()
+                                .substring(material.url().lastIndexOf('/') + 1)
+                        )
                     );
                     if (
                         resource == null ||
                         !resource.success() ||
                         resource.data() == null ||
-                        !course.getInstructorId().equals(resource.data().ownerId()) ||
                         !course.getId().equals(resource.data().courseId()) ||
                         !"MATERIAL".equals(resource.data().purpose())
-                    ) throw new IllegalArgumentException("Kaynak bu kursa ve eğitmene ait değil");
+                    ) throw new IllegalArgumentException(
+                        "Kaynak bu kursa ve eğitmene ait değil"
+                    );
                     if (
                         "SUBTITLE".equals(material.type()) &&
                         !"text/vtt".equals(resource.data().contentType())
-                    ) throw new IllegalArgumentException("Altyazı WebVTT olmalı");
+                    ) throw new IllegalArgumentException(
+                        "Altyazı WebVTT olmalı"
+                    );
                 }
 
         for (var s : d.course().getSections())
@@ -496,7 +609,11 @@ public class CourseWorkspaceService {
                     try {
                         var result = content.linkVideo(
                             UUID.fromString(match.group(1)),
-                            new ContentClient.LinkRequest(course.getId(), l.getId(), course.getInstructorId())
+                            new ContentClient.LinkRequest(
+                                course.getId(),
+                                l.getId(),
+                                course.getInstructorId()
+                            )
                         );
                         if (
                             result == null ||
@@ -505,9 +622,13 @@ public class CourseWorkspaceService {
                             !"READY".equals(result.data().status()) ||
                             result.data().durationSeconds() == null ||
                             result.data().durationSeconds() <= 0
-                        ) throw new IllegalStateException(l.getTitle() + ": video henüz hazır değil");
+                        ) throw new IllegalStateException(
+                            l.getTitle() + ": video henüz hazır değil"
+                        );
                         l.setDurationSeconds(result.data().durationSeconds());
-                    } catch (org.springframework.web.client.RestClientException e) {
+                    } catch (
+                        org.springframework.web.client.RestClientException e
+                    ) {
                         throw new ResponseStatusException(
                             HttpStatus.SERVICE_UNAVAILABLE,
                             "Video doğrulanamadı",
@@ -535,8 +656,14 @@ public class CourseWorkspaceService {
             c.getLanguage(),
             original.getId()
         );
-        jdbc.update("delete from course_requirements where course_id=?", original.getId());
-        jdbc.update("delete from course_outcomes where course_id=?", original.getId());
+        jdbc.update(
+            "delete from course_requirements where course_id=?",
+            original.getId()
+        );
+        jdbc.update(
+            "delete from course_outcomes where course_id=?",
+            original.getId()
+        );
         if (c.getRequirements() != null) for (var r : c.getRequirements())
             jdbc.update(
                 "insert into course_requirements(course_id,requirement) values(?,?)",
@@ -544,7 +671,11 @@ public class CourseWorkspaceService {
                 r
             );
         if (c.getOutcomes() != null) for (var r : c.getOutcomes())
-            jdbc.update("insert into course_outcomes(course_id,outcome) values(?,?)", original.getId(), r);
+            jdbc.update(
+                "insert into course_outcomes(course_id,outcome) values(?,?)",
+                original.getId(),
+                r
+            );
         var sectionIds = new ArrayList<UUID>();
         var lessonIds = new ArrayList<UUID>();
         for (int si = 0; si < c.getSections().size(); si++) {
@@ -581,16 +712,24 @@ public class CourseWorkspaceService {
                 jdbc.update(
                     "insert into lesson_materials(lesson_id,document) values(?,?) on conflict(lesson_id) do update set document=excluded.document",
                     l.getId(),
-                    json.writeValueAsString(d.materials().getOrDefault(l.getId(), List.of()))
+                    json.writeValueAsString(
+                        d.materials().getOrDefault(l.getId(), List.of())
+                    )
                 );
             }
         }
         // Only unpublished content may be removed; validation above protects all published lessons.
         for (var s : original.getSections())
             for (var l : s.getLessons())
-                if (!lessonIds.contains(l.getId())) jdbc.update("delete from lessons where id=?", l.getId());
+                if (!lessonIds.contains(l.getId())) jdbc.update(
+                    "delete from lessons where id=?",
+                    l.getId()
+                );
         for (var s : original.getSections())
-            if (!sectionIds.contains(s.getId())) jdbc.update("delete from sections where id=?", s.getId());
+            if (!sectionIds.contains(s.getId())) jdbc.update(
+                "delete from sections where id=?",
+                s.getId()
+            );
         jdbc.update(
             "update courses set duration_minutes=(select coalesce(ceil(sum(l.duration_seconds)/60.0),0) from lessons l join sections s on s.id=l.section_id where s.course_id=?) where id=?",
             original.getId(),

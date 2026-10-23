@@ -1,0 +1,31 @@
+# Local staging only. Compose >= 2.24.4 supports !override.
+x-staging-env: &staging-env
+  MINIO_PUBLIC_ENDPOINT: http://127.0.0.1:19000
+  APP_PUBLIC_BASE_URL: http://127.0.0.1:18088
+  APP_FRONTEND_BASE_URL: http://127.0.0.1:18088
+services:
+  user-service:
+    environment: *staging-env
+  course-service:
+    environment: *staging-env
+  enrollment-service:
+    environment: *staging-env
+  content-service:
+    environment: *staging-env
+  notification-service:
+    environment: *staging-env
+  api-gateway:
+    environment: *staging-env
+  payment-service:
+    environment: *staging-env
+  web:
+    ports: !override ["127.0.0.1:18088:8088", "127.0.0.1:19000:9000"]
+    volumes:
+      - ./Caddyfile.staging:/etc/caddy/Caddyfile:ro
+  prometheus:
+    ports: !override ["127.0.0.1:19090:9090"]
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports: ["127.0.0.1:18025:8025"]
+    networks: [app]

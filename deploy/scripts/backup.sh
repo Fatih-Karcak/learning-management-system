@@ -5,6 +5,8 @@ repo_root=$(cd "$(dirname "$0")/../.." && pwd)
 compose_file=${LMS_COMPOSE_FILE:-$repo_root/deploy/compose.yml}
 env_file=${LMS_ENV_FILE:-$repo_root/deploy/.env}
 compose=(docker compose --env-file "$env_file" -f "$compose_file")
+if [[ -n "${LMS_COMPOSE_OVERRIDE:-}" ]]; then compose+=(-f "$LMS_COMPOSE_OVERRIDE"); fi
+if [[ -n "${LMS_PROJECT_NAME:-}" ]]; then compose+=(--project-name "$LMS_PROJECT_NAME"); fi
 backup_dir=${1:?Yedek dizinini belirtin}
 mkdir -p "$backup_dir"
 backup_dir=$(cd "$backup_dir" && pwd)

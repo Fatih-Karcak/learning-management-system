@@ -23,7 +23,7 @@ Bu bulut ortamındaki backend yardımcıları:
 bash /workspace/.lms-setup/start-core.sh
 ```
 
-Medya/video/sertifika işlemleri için ayrıca gerçek MinIO/S3 ve içerik servisi; ödeme için Stripe yapılandırması gerekir. İçerik servisinin başlangıcı önceki ortam kurulumunda MinIO indirme erişimi nedeniyle engelliydi. Arayüz bu servislerin hatalarını gösterir; başarılı işlem görüntüsü üretmez.
+Medya/video/sertifika işlemleri için ayrıca gerçek MinIO/S3 ve içerik servisi; ödeme için Stripe yapılandırması gerekir. Bu bulutta MinIO'nun sabit resmî kaynak sürümü derlenip gerçek depolama ile doğrulandı. Yeni bir ortamda depolamayı ayrıca başlatın; [yerel deneme rehberi](../deploy/STAGING.md) kurulumu açıklar.
 
 ## Yapılandırma
 
@@ -36,7 +36,7 @@ Medya/video/sertifika işlemleri için ayrıca gerçek MinIO/S3 ve içerik servi
 
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, `INTERNAL_API_KEY`, veritabanı ve S3 parolaları yalnızca backend'e aittir. Bunları `VITE_` değişkenlerine koymayın. Kart verileri Stripe Elements üzerinden işlenir. Ödeme sonucu ve kurs kaydı backend/webhook yanıtıyla doğrulanır. Backend'deki Stripe hesabı ve frontend yayınlanabilir anahtarı aynı test/canlı hesaba ait olmalıdır.
 
-Erişim token'ı sekmeye ait `sessionStorage` içinde tutulur ve API'ye `Authorization` başlığıyla gönderilir. 401 yanıtında oturum ve kullanıcıya ait sorgu önbelleği temizlenir. Backend refresh endpoint'i sağlamadığı için otomatik token yenileme yoktur. Rol menüleri kullanım kolaylığı sağlar; gerçek yetkilendirme backend'de uygulanır.
+Erişim token'ı sekmeye ait `sessionStorage` içinde tutulur ve API'ye `Authorization` başlığıyla gönderilir. 401 yanıtında `/auth/refresh` üzerinden tekilleştirilmiş oturum yenilemesi denenir; başarısızsa oturum ve kullanıcıya ait sorgu önbelleği temizlenir. Refresh token her kullanımda değişir. Rol menüleri kullanım kolaylığı sağlar; gerçek yetkilendirme backend'de uygulanır.
 
 ## Kapsam
 
@@ -51,12 +51,12 @@ Erişim token'ı sekmeye ait `sessionStorage` içinde tutulur ve API'ye `Authori
 | Sertifika     | Tamamlanan kursun sertifikasını görüntüleme, süreli PDF bağlantısı ve herkese açık doğrulama kodu sorgusu.                                          |
 | Eğitmen       | Kurs/müfredat yönetimi, yönetici incelemesine gönderme, arşivleme, test hazırlama, ödev değerlendirme, öğrenciler ve ilerleme listesi.              |
 | Medya         | Kullanıcıya ait dosyaların listesi; kurs/dersle ilişkilendirilen görsel/video yükleme; işleme durumu, ayrıntı, bağlantı kopyalama ve silme.         |
-| Bildirim      | Kullanıcının e-posta bildirim kayıtları ve gönderim durumları. Backend'de okundu/okunmadı işlemi yoktur.                                            |
+| Bildirim      | Uygulama içi gelen kutusu, okundu işlemi, e-posta tercihleri ve gönderim durumları.                                                                 |
 | Yönetim       | Yönetici özeti, kullanıcı rolü/durumu ve işlem kaydı, kurs onayı/ret/arşiv, kategori yönetimi, gerekçeli kayıt verme/iptal ve öğrenci ilerlemesi.   |
 
 Backend entegrasyonunu tamamlamak için eklenen küçük API uzantıları:
 
-- `GET /api/v1/courses/mine`: kimliği doğrulanmış eğitmenin **tüm durumdaki** kursları; başka bir kullanıcının ID'sini kabul etmez. Mevcut herkese açık eğitmen endpoint'i yalnızca yayınlanmış kursları döndürür.
+- `GET /api/v1/courses/mine`: kimliği doğrulanmış eğitmenin kendi ve ortak düzenleme davetini kabul ettiği **tüm durumdaki** kursları; başka bir kullanıcının ID'sini kabul etmez. Mevcut herkese açık eğitmen endpoint'i yalnızca yayınlanmış kursları döndürür.
 - `GET /api/v1/courses/categories`: veritabanındaki kategorilerin ID/ad/açıklama listesi.
 - `GET /api/v1/media/my`: kimliği doğrulanmış eğitmenin/yöneticinin kendi medya dosyaları; sayfalıdır.
 - Bildirim servisinde isteğe bağlı `APP_FRONTEND_BASE_URL` desteği.
@@ -66,7 +66,7 @@ Backend entegrasyonunu tamamlamak için eklenen küçük API uzantıları:
 - Video bildirimleri beş saniyede bir gönderilir; backend süre ve izlenen aralıkları kontrol eder. İleri sarmak veya aynı bölümü tekrar izlemek tamamlanmamış aralıklara kredi vermez. Test ve ödev tamamlaması backend sonucundan alınır. Arayüz kendisi kurs yüzdesi veya sertifika üretmez.
 - Ücretsiz kayıt `/enrollments/free/{courseId}` kullanır; kart formuna gönderilmez. Yönetici ayrıca gerekçeli kayıt verebilir. Ücretli ödeme ve iade akışı mevcut yapısını korur.
 - Kupon alanı mevcut istek sözleşmesine gönderilir; tutar olarak yalnızca sunucunun döndürdüğü değer kullanılır. Backend şu anda kupon hesaplaması uygulamaz.
-- Bölüm/ders genel düzenleme seçenekleri mevcut endpoint'lerle sınırlıdır. Video bağlama/değiştirme, test içeriğini düzenleme ve kurs arşivleme desteklenir; genel bölüm/ders güncellemesi ve kursu kalıcı silme bu sürümde bulunmaz.
+- Bölüm ve dersler çalışma taslağında düzenlenir, sıralanır, taşınır ve kopyalanır. Yayındaki ders kimlikleri korunur; kalıcı kurs silme yerine arşivleme kullanılır. [Şablon ve ekip rehberi](../docs/AUTHORING.md) ortak düzenleme kurallarını açıklar.
 - Görseller için MinIO'nun döndürdüğü bağlantılar sürelidir. Kalıcı kurs kapaklarında kalıcı, herkese açık bir görsel URL'si kullanın.
 - PDF, e-posta, video dönüştürme ve kurs kaydı asenkron olabilir; servis ve ağ yapılandırmasına bağlı hatalar kullanıcıya gösterilir.
 
@@ -81,11 +81,13 @@ E2E_REAL_BACKEND=1 npm run test:e2e -- tests/backend.spec.ts
 npm run format:check
 ```
 
-Playwright varsayılan olarak bu ortamda bulunan `/usr/bin/chromium` kullanır. Farklı bir kurulumda `PLAYWRIGHT_CHROMIUM_PATH` verin. Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve `frontend-e2e-…@example.test` adresli yerel bir eğitmen ile incelemeye gönderilmiş test kursu oluşturur; üretim veritabanında çalıştırmayın. Diğer tarayıcı testleri backend'i taklit eder ve gerçek Stripe/S3 işlemi doğrulamaz.
+Yerelde Playwright bulunan `/usr/bin/chromium` kullanır; `PLAYWRIGHT_CHROMIUM_PATH` ile açık yol seçilebilir. `PLAYWRIGHT_BROWSER_CHANNEL=chrome` seçildiğinde otomatik sistem Chromium yolu kullanılmaz; önce `npx playwright install chrome` çalıştırın. CI Chrome kanalını açıkça seçer. Video senaryoları H.264 desteğini, tamponlanmış görüntüyü ve gerçekten çözülen kareleri kontrol eder. Testler video başlamazsa zaman aşımı yerine medya durumunu gösteren bir doğrulama hatası verir.
+
+Gerçek backend testi PostgreSQL/Kafka/gateway/user/course servislerini gerektirir ve deneme hesapları/kursları oluşturur; üretim veritabanında çalıştırmayın. `platform.spec.ts` ve `authoring.spec.ts` içindeki gerçek servis akışları için ilgili API betiklerinin oluşturduğu özel fixture dosyaları gerekir. Diğer senaryolar kontrollü API yanıtları kullanır. `E2E_BASE_URL` verilirse hazır sunucuya bağlanılır, Vite otomatik başlatılmaz; [deneme rehberine](../deploy/STAGING.md) bakın.
 
 `E2E_VIDEO=1` için PATH'te FFmpeg gerekir. İki ek test, yüklenen videonun seçilen metin dersine bağlanmasını ve öğrenci hesabında HLS manifest/segment isteklerinin yetkili gönderilmesini sınar; görüntü genişliğini ve ilerleyen oynatma süresini ölçer. İşlenen videonun hazır olana kadar beklemesi de kontrol edilir. Bu testlerde API yanıtları taklit edilir, video verisi gerçekten çözülür.
 
-Öğrenci derste yalnızca başlık/metin görüyorsa eğitmen hesabında **Kurs müfredatı → Video ekle → Medya kitaplığından video seç → Videoyu derse bağla** yolunu kullanın. Yeni yüklemelerde **İlgili ders** seçimi bağlantıyı otomatik kurar. Metin içerik korunur; öğrenci sayfasında oynatıcı da görünür.
+Öğrenci derste yalnızca başlık/metin görüyorsa eğitmen çalışma taslağında ilgili dersi açın, türünü video yapıp medya kitaplığından videosunu seçin. Taslağı kaydedin, incelemeye gönderin ve yöneticiyle onaylayın. Yeni yüklemelerde **İlgili ders** seçimi videoyu taslağa bağlar; öğrenciye onaydan sonra görünür.
 
 Backend regresyon testleri `backend/` klasöründen çalıştırılır:
 

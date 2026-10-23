@@ -63,13 +63,13 @@ Alternatif olarak bir modülün içinden `sh mvnw spring-boot:run` çalıştır�
 | İçerik ve medya   | 8085 |
 | Bildirim          | 8086 |
 
-Frontend yalnızca gateway'e bağlanır. İç servis portlarını dışarıya açmayın. PostgreSQL ve Kafka ortak altyapıdır; içerik/video/sertifika işlemleri ayrıca çalışan MinIO/S3 gerektirir. Bu bulut ortamındaki MinIO indirme engeli, klasör düzeninden bağımsız olarak devam eder.
+Frontend yalnızca gateway'e bağlanır. İç servis portlarını dışarıya açmayın. PostgreSQL ve Kafka ortak altyapıdır; içerik/video/sertifika işlemleri ayrıca çalışan MinIO/S3 gerektirir. Bu bulutta imaj/ikili indirme engeli resmî sabit kaynak sürümünden MinIO derlenerek aşıldı ve gerçek depolama doğrulandı. Yeni ortam kurulumu ve kaynak imajı seçeneği [yerel deneme rehberindedir](../deploy/STAGING.md).
 
 ## Ders videosu ekleme ve oynatma
 
 Medya kitaplığına dosya yüklemek ile videoyu derse eklemek ayrı işlemlerdir. Kitaplıkta **Video** türünü, ilgili kursu ve dersi seçerek yüklediğinizde arayüz videoyu otomatik derse bağlar. Ders seçilmeden yüklenen dosya yalnızca kitaplıkta kalır. Mevcut metin derslerini düzeltmek için **Eğitmen stüdyosu → Kurs → Kurs müfredatı → Video ekle** yolundan hazır videoyu seçip **Videoyu derse bağla** düğmesine basın. Ders video türüne geçer; yazılı içerik korunur.
 
-Kurs servisi ders sahibini doğrular, içerik servisine ortak `INTERNAL_API_KEY` ile videoyu bağlar ve göreli gateway adresini kaydeder. İçerik servisi videonun aynı eğitmene ait olduğunu doğrular. Başka kursa bağlı video taşınamaz; ilgili kurs için tekrar yüklenmelidir. Daha önce kurs seçilmeden yüklenen video bağlanırken kurs bilgisi de tamamlanır; böylece kayıtlı öğrenciler manifest ve segmentlere erişebilir. Kurs ve içerik servislerinin aynı anahtarla çalışması gerekir. Bu değişiklikten sonra ikisini yeniden başlatın ve frontend'i yenileyin.
+Kurs servisi düzenleme yetkisini doğrular, içerik servisine ortak `INTERNAL_API_KEY` ile videoyu bağlar ve göreli gateway adresini kaydeder. İçerik servisi videonun sahibini veya aynı kursun ortak medya kitaplığına ait olduğunu doğrular. Başka kursa bağlı video taşınamaz; ilgili kurs için tekrar yüklenmelidir. Daha önce kurs seçilmeden yüklenen video bağlanırken kurs bilgisi de tamamlanır; böylece kayıtlı öğrenciler manifest ve segmentlere erişebilir. Kurs ve içerik servislerinin aynı anahtarla çalışması gerekir. Bu değişiklikten sonra ikisini yeniden başlatın ve frontend'i yenileyin. Taslak değişiklikleri öğrencide yönetici onayından sonra görünür; ortak düzenleme kuralları [içerik araçları rehberindedir](../docs/AUTHORING.md).
 
 FFmpeg kaynak codec'ini kopyalamak yerine H.264/AAC HLS çıktısı üretir. Sessiz ve bir saniyeden kısa videolar desteklenir. Dosyanın yüklenmiş olması, işlenmesinin tamamlandığı anlamına gelmez; öğrenci oynatıcısı **Video hazırlanıyor** durumunu gösterir ve hazır olduğunda akışı açar. **Başarısız** durumundaki dosyada kitaplık ayrıntısını kontrol edin; eski uyumsuz çıktılar için videoyu yeniden yükleyin.
 

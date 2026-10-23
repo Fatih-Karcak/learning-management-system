@@ -24,16 +24,34 @@ public class MediaController {
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<MediaAssetResponse>>> getOwnMedia(
+    public ResponseEntity<
+        ApiResponse<org.springframework.data.domain.Page<MediaAssetResponse>>
+    > getOwnMedia(
         Authentication authentication,
+        @RequestParam(required = false) UUID courseId,
         org.springframework.data.domain.Pageable pageable
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(mediaService.getOwnMedia(requester(authentication), pageable), "Başarılı")
+            ApiResponse.success(
+                courseId == null
+                    ? mediaService.getOwnMedia(
+                          requester(authentication),
+                          pageable
+                      )
+                    : mediaService.getCourseLibrary(
+                          courseId,
+                          requester(authentication),
+                          pageable
+                      ),
+                "Başarılı"
+            )
         );
     }
 
-    @PostMapping(value = "/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(
+        value = "/video",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<MediaAssetResponse>> uploadVideo(
         @RequestParam("file") MultipartFile file,
@@ -43,13 +61,21 @@ public class MediaController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
             ApiResponse.success(
-                mediaService.uploadVideo(file, courseId, lessonId, requester(authentication)),
+                mediaService.uploadVideo(
+                    file,
+                    courseId,
+                    lessonId,
+                    requester(authentication)
+                ),
                 "Video yüklendi, işleniyor"
             )
         );
     }
 
-    @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(
+        value = "/image",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     @PreAuthorize("hasRole('INSTRUCTOR') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<MediaAssetResponse>> uploadImage(
         @RequestParam("file") MultipartFile file,
@@ -59,7 +85,12 @@ public class MediaController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
             ApiResponse.success(
-                mediaService.uploadImage(file, courseId, lessonId, requester(authentication)),
+                mediaService.uploadImage(
+                    file,
+                    courseId,
+                    lessonId,
+                    requester(authentication)
+                ),
                 "Resim yüklendi"
             )
         );
@@ -72,7 +103,11 @@ public class MediaController {
     ) {
         return ResponseEntity.ok(
             ApiResponse.success(
-                mediaService.getMedia(id, requester(authentication), role(authentication)),
+                mediaService.getMedia(
+                    id,
+                    requester(authentication),
+                    role(authentication)
+                ),
                 "Başarılı"
             )
         );
@@ -83,16 +118,30 @@ public class MediaController {
         @PathVariable UUID id,
         Authentication authentication
     ) {
-        mediaService.deleteMedia(id, requester(authentication), role(authentication));
+        mediaService.deleteMedia(
+            id,
+            requester(authentication),
+            role(authentication)
+        );
         return ResponseEntity.ok(ApiResponse.success(null, "Medya silindi"));
     }
 
     // ── HLS streaming uçları ──
 
-    @GetMapping(value = "/{id}/manifest.m3u8", produces = "application/vnd.apple.mpegurl")
-    public ResponseEntity<String> getManifest(@PathVariable UUID id, Authentication authentication) {
+    @GetMapping(
+        value = "/{id}/manifest.m3u8",
+        produces = "application/vnd.apple.mpegurl"
+    )
+    public ResponseEntity<String> getManifest(
+        @PathVariable UUID id,
+        Authentication authentication
+    ) {
         return ResponseEntity.ok(
-            mediaService.getManifestContent(id, requester(authentication), role(authentication))
+            mediaService.getManifestContent(
+                id,
+                requester(authentication),
+                role(authentication)
+            )
         );
     }
 
@@ -114,7 +163,8 @@ public class MediaController {
     }
 
     private UUID requester(Authentication authentication) {
-        return authentication == null || "anonymousUser".equals(authentication.getName())
+        return authentication == null ||
+            "anonymousUser".equals(authentication.getName())
             ? null
             : UUID.fromString(authentication.getName());
     }

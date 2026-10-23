@@ -1,5 +1,7 @@
 # VPS üzerinde yayınlama
 
+Sunucu ve alan adı olmadan denemek için [yerel deneme kurulumunu](STAGING.md) kullanın. İnternete açık yayın için aşağıdaki HTTPS kurulumu gerekir.
+
 React ve Spring ayrı klasörlerde kalır. Bu dağıtım React'i Caddy ile, altı Spring servisini ayrı konteynerlerde çalıştırır. PostgreSQL, Kafka, MinIO, ClamAV ve Prometheus da aynı özel Docker ağındadır. Mevcut ödeme servisi isteğe bağlı `payments` profilindedir; ücretsiz kurs pilotunda gerekli değildir.
 
 Bu dosyalar kurulumu tanımlar. Gerçek sunucu, DNS, SMTP ve harici yedekleme hesabı ayrıca sağlanmalıdır. Tek VPS yüksek erişilebilirlik sağlamaz. İki eşzamanlı video dönüştürmesiyle başlangıç için 4–8 vCPU, 16 GB RAM ve yeterli SSD alanı planlayın. Kaynak ihtiyacını pilot ölçümleriyle doğrulayın.
@@ -67,4 +69,4 @@ Bu işlem hedefteki nesneleri silmeden dört bucket'ı kopyalar. İlk kullanımd
 
 Frontend Dockerfile isteğe bağlı `build_ca` BuildKit secret'ını destekler. Özel CA gerekiyorsa sertifikayı bu kanaldan sağlayın; TLS doğrulamasını kapatmayın. Docker derleme ortamı paket deposunu ve tanımlı proxy'nin DNS adını çözebilmelidir. Proxy ayarlarını Docker'ın standart build argümanlarıyla iletin; parola veya token'ı Dockerfile'a yazmayın. Yayımlanabilir Stripe anahtarı ödeme profili kullanılacaksa `VITE_STRIPE_PUBLISHABLE_KEY` ile derlenir; gizli Stripe anahtarları yalnızca backend ortamındadır.
 
-Bu bulutta MinIO imajları için kayıt defteri erişimi reddedildi. Üretim sunucusunda imaj erişimini önceden doğrulayın; kurumunuzun onaylı imaj aynası gerekiyorsa Compose imaj kaynağını o kaynağa göre düzenleyin. Bu engel uygulamanın S3 test sunucusuyla doğrulanmasıyla giderilmiş sayılmaz.
+Bu bulutta MinIO imajları için kayıt defteri erişimi reddedildi; resmî sabit kaynak sürümünden gerçek MinIO derlenip depolama ve video akışları doğrulandı. Üretim sunucusunda imaj erişimini önceden doğrulayın. Gerekiyorsa `MINIO_IMAGE` ile onaylı bir imaj seçin veya [kaynak Dockerfile seçeneğini](STAGING.md#minio-kayıt-deposuna-erişilemiyorsa) kullanın. Kaynak Dockerfile'ın tam derlemesi ve sunucuda çalıştırılması bu yerel doğrulamadan ayrı bir adımdır.

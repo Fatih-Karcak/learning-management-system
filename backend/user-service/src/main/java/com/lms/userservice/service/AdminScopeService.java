@@ -15,7 +15,11 @@ public class AdminScopeService {
     private final JdbcTemplate jdbc;
 
     public String scope(UUID id) {
-        return jdbc.queryForObject("select admin_scope from users where id=?", String.class, id);
+        return jdbc.queryForObject(
+            "select admin_scope from users where id=?",
+            String.class,
+            id
+        );
     }
 
     public static boolean allows(String scope, String path, String method) {
@@ -25,6 +29,12 @@ public class AdminScopeService {
             path.equals("/api/v1/users/me") ||
             path.startsWith("/api/v1/users/me/")
         ) return true;
+        if (
+            path.startsWith("/api/v1/courses/") &&
+            (path.contains("/team") ||
+                path.contains("/templates") ||
+                path.equals("/api/v1/courses/invitations"))
+        ) return false;
         if ("MODERATION".equals(scope)) return (
             path.startsWith("/api/v1/courses/") ||
             path.startsWith("/api/v1/reviews/") ||
@@ -56,12 +66,22 @@ public class AdminScopeService {
             "Tam yönetici yetkisi gerekli"
         );
         if (
-            target.equals(actor) || !Set.of("FULL", "MODERATION", "SUPPORT").contains(scope)
-        ) throw new IllegalArgumentException("Kendi yetkinizi değiştiremezsiniz veya kapsam geçersiz");
+            target.equals(actor) ||
+            !Set.of("FULL", "MODERATION", "SUPPORT").contains(scope)
+        ) throw new IllegalArgumentException(
+            "Kendi yetkinizi değiştiremezsiniz veya kapsam geçersiz"
+        );
         if (
-            jdbc.update("update users set admin_scope=? where id=? and role='ADMIN'", scope, target) != 1
+            jdbc.update(
+                "update users set admin_scope=? where id=? and role='ADMIN'",
+                scope,
+                target
+            ) != 1
         ) throw new IllegalArgumentException("Hedef kullanıcı yönetici olmalı");
-        jdbc.update("update user_sessions set revoked=true where user_id=?", target);
+        jdbc.update(
+            "update user_sessions set revoked=true where user_id=?",
+            target
+        );
         jdbc.update(
             "insert into admin_audit(id,actor_id,target_id,action,reason) values(?,?,?, ?,?)",
             UUID.randomUUID(),

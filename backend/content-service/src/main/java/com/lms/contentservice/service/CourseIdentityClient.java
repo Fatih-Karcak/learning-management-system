@@ -29,9 +29,30 @@ public class CourseIdentityClient {
 
     public record Section(java.util.List<Lesson> lessons) {}
 
-    public record Course(UUID id, UUID instructorId, String status, java.util.List<Section> sections) {}
+    public record Course(
+        UUID id,
+        UUID instructorId,
+        String status,
+        java.util.List<Section> sections
+    ) {}
 
     public record Envelope(boolean success, Course data) {}
+
+    public record Permission(boolean success, Boolean data) {}
+
+    public boolean canEdit(UUID course, UUID user) {
+        if (user == null) return false;
+        var response = client
+            .get()
+            .uri("/api/v1/internal/courses/{id}/authors/{user}", course, user)
+            .retrieve()
+            .body(Permission.class);
+        return (
+            response != null &&
+            response.success() &&
+            Boolean.TRUE.equals(response.data())
+        );
+    }
 
     public boolean owner(UUID course, UUID user) {
         var response = client

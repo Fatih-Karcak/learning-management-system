@@ -8,6 +8,8 @@ restore_db="lms_restore_check_$(date +%s)_$$"
 compose_file=${LMS_COMPOSE_FILE:-$repo_root/deploy/compose.yml}
 env_file=${LMS_ENV_FILE:-$repo_root/deploy/.env}
 compose=(docker compose --env-file "$env_file" -f "$compose_file")
+if [[ -n "${LMS_COMPOSE_OVERRIDE:-}" ]]; then compose+=(-f "$LMS_COMPOSE_OVERRIDE"); fi
+if [[ -n "${LMS_PROJECT_NAME:-}" ]]; then compose+=(--project-name "$LMS_PROJECT_NAME"); fi
 cleanup(){ "${compose[@]}" exec -T postgres dropdb -U lms_user --if-exists "$restore_db" >/dev/null; }
 trap cleanup EXIT
 "${compose[@]}" exec -T postgres createdb -U lms_user "$restore_db"

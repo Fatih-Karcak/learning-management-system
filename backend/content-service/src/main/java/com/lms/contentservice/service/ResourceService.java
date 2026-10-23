@@ -46,8 +46,13 @@ public class ResourceService {
     public record Download(Resource resource, InputStream stream) {}
 
     public Resource metadata(UUID id) {
-        var rows = jdbc.queryForList("select * from learning_resources where id=?", id);
-        if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        var rows = jdbc.queryForList(
+            "select * from learning_resources where id=?",
+            id
+        );
+        if (rows.isEmpty()) throw new ResponseStatusException(
+            HttpStatus.NOT_FOUND
+        );
         var r = rows.getFirst();
         return new Resource(
             id,
@@ -62,7 +67,9 @@ public class ResourceService {
     }
 
     public static String validate(byte[] data, String name) {
-        if (data.length == 0 || data.length > 25 * 1024 * 1024) throw new ResponseStatusException(
+        if (
+            data.length == 0 || data.length > 25 * 1024 * 1024
+        ) throw new ResponseStatusException(
             HttpStatus.PAYLOAD_TOO_LARGE,
             "Dosya 25 MB sınırını aşıyor veya boş"
         );
@@ -82,12 +89,18 @@ public class ResourceService {
             } catch (CharacterCodingException e) {
                 throw new IllegalArgumentException("Metin UTF-8 olmalı");
             }
-            if (text.indexOf(0) >= 0) throw new IllegalArgumentException("Metin dosyası geçersiz");
+            if (text.indexOf(0) >= 0) throw new IllegalArgumentException(
+                "Metin dosyası geçersiz"
+            );
             if (lower.endsWith(".vtt")) {
-                if (data.length > 1024 * 1024) throw new IllegalArgumentException(
+                if (
+                    data.length > 1024 * 1024
+                ) throw new IllegalArgumentException(
                     "Altyazı en fazla 1 MB olabilir"
                 );
-                if (!text.stripLeading().startsWith("WEBVTT")) throw new IllegalArgumentException(
+                if (
+                    !text.stripLeading().startsWith("WEBVTT")
+                ) throw new IllegalArgumentException(
                     "Geçerli WebVTT altyazısı gerekli"
                 );
                 return "text/vtt";
@@ -103,7 +116,10 @@ public class ResourceService {
     private void scan(byte[] data) {
         if (!scanRequired) return;
         try (var socket = new java.net.Socket()) {
-            socket.connect(new java.net.InetSocketAddress(scanHost, 3310), 3000);
+            socket.connect(
+                new java.net.InetSocketAddress(scanHost, 3310),
+                3000
+            );
             socket.setSoTimeout(30000);
             var out = new DataOutputStream(socket.getOutputStream());
             out.write("zINSTREAM\0".getBytes(StandardCharsets.US_ASCII));
@@ -121,7 +137,9 @@ public class ResourceService {
                 response.write(value);
             }
             String status = response.toString(StandardCharsets.UTF_8);
-            if (!status.startsWith("stream: OK")) throw new ResponseStatusException(
+            if (
+                !status.startsWith("stream: OK")
+            ) throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY,
                 "Dosya güvenlik taramasından geçemedi"
             );
@@ -134,35 +152,65 @@ public class ResourceService {
     }
 
     @Transactional
-    public Resource upload(MultipartFile file, UUID course, String purpose, UUID user, String role)
-        throws IOException {
-        if (!Set.of("MATERIAL", "ASSIGNMENT").contains(purpose)) throw new IllegalArgumentException(
-            "Dosya amacı geçersiz"
-        );
+    public Resource upload(
+        MultipartFile file,
+        UUID course,
+        String purpose,
+        UUID user,
+        String role
+    ) throws IOException {
+        if (
+            !Set.of("MATERIAL", "ASSIGNMENT").contains(purpose)
+        ) throw new IllegalArgumentException("Dosya amacı geçersiz");
         boolean owner = courses.owner(course, user);
-        if (purpose.equals("MATERIAL") && !owner) throw new ResponseStatusException(
+        if (
+            purpose.equals("MATERIAL") &&
+            !Set.of("INSTRUCTOR", "ADMIN").contains(role)
+        ) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN,
+            "Kaynak yüklemek için eğitmen yetkisi gerekli"
+        );
+        if (
+            purpose.equals("MATERIAL") && !courses.canEdit(course, user)
+        ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
             "Yalnızca kurs eğitmeni kaynak ekleyebilir"
         );
         if (
             purpose.equals("ASSIGNMENT") &&
-            (owner || !Boolean.TRUE.equals(enrollments.checkEnrollment(course, user).data()))
-        ) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ödev dosyası için öğrenci kaydı gerekli");
-        if (file.getSize() > 25 * 1024 * 1024) throw new ResponseStatusException(
+            (owner ||
+                !Boolean.TRUE.equals(
+                    enrollments.checkEnrollment(course, user).data()
+                ))
+        ) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN,
+            "Ödev dosyası için öğrenci kaydı gerekli"
+        );
+        if (
+            file.getSize() > 25 * 1024 * 1024
+        ) throw new ResponseStatusException(
             HttpStatus.PAYLOAD_TOO_LARGE,
             "Dosya en fazla 25 MB olabilir"
         );
         String name =
             file.getOriginalFilename() == null
                 ? "file"
-                : file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._ -]", "_");
+                : file
+                      .getOriginalFilename()
+                      .replaceAll("[^a-zA-Z0-9._ -]", "_");
         if (name.length() > 200) name = name.substring(name.length() - 200);
         byte[] data = file.getBytes();
         String type = validate(data, name);
         scan(data);
         UUID id = UUID.randomUUID();
         String key = "resources/" + id + "/" + name;
-        storage.upload(bucket, key, new ByteArrayInputStream(data), data.length, type);
+        storage.upload(
+            bucket,
+            key,
+            new ByteArrayInputStream(data),
+            data.length,
+            type
+        );
         jdbc.update(
             "insert into learning_resources(id,owner_id,course_id,purpose,name,content_type,size_bytes,storage_key) values(?,?,?,?,?,?,?,?)",
             id,
@@ -179,12 +227,18 @@ public class ResourceService {
 
     public Download download(UUID id, UUID user, String role) {
         var resource = metadata(id);
-        boolean allowed = user.equals(resource.ownerId()) || "ADMIN".equals(role);
+        boolean allowed =
+            user.equals(resource.ownerId()) || "ADMIN".equals(role);
         if (!allowed) allowed = "MATERIAL".equals(resource.purpose())
-            ? courses.owner(resource.courseId(), user) ||
-              Boolean.TRUE.equals(enrollments.checkEnrollment(resource.courseId(), user).data())
+            ? courses.canEdit(resource.courseId(), user) ||
+              Boolean.TRUE.equals(
+                  enrollments.checkEnrollment(resource.courseId(), user).data()
+              )
             : courses.owner(resource.courseId(), user);
-        if (!allowed) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Dosyaya erişim yetkiniz yok");
+        if (!allowed) throw new ResponseStatusException(
+            HttpStatus.FORBIDDEN,
+            "Dosyaya erişim yetkiniz yok"
+        );
         String key = jdbc.queryForObject(
             "select storage_key from learning_resources where id=?",
             String.class,

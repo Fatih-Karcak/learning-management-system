@@ -89,7 +89,7 @@ services:
       retries: 10
     networks: [app]
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
     command: server /data --console-address ':9001'
     restart: unless-stopped
     environment:

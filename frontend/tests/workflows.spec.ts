@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { startDecodedVideo } from './videoAssertions';
 
 const course = {
   id: 'course-1',
@@ -116,7 +117,8 @@ async function mockApi(page: Page, role = 'STUDENT') {
       path.endsWith('/inbox') ||
       path.endsWith('/workspaces') ||
       path.endsWith('/versions') ||
-      path.endsWith('/recommendations')
+      path.endsWith('/recommendations') ||
+      path.endsWith('/invitations')
     )
       data = [];
     else if (path === '/api/v1/courses/course-1') data = course;
@@ -284,7 +286,20 @@ test.describe('decoded student video playback', () => {
     durationSeconds: 3,
     streamUrl,
   };
-  test.beforeAll(() => {
+  test.beforeAll(async ({ browser }) => {
+    const probe = await browser.newPage();
+    try {
+      const h264 = await probe.evaluate(
+        () =>
+          !!window.MediaSource && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E"'),
+      );
+      expect(
+        h264,
+        'H.264 decoding is required. Run with PLAYWRIGHT_BROWSER_CHANNEL=chrome and install Chrome.',
+      ).toBe(true);
+    } finally {
+      await probe.close();
+    }
     fixtureDir = mkdtempSync(join(tmpdir(), 'lms-playback-'));
     execFileSync('ffmpeg', [
       '-hide_banner',
@@ -390,15 +405,7 @@ test.describe('decoded student video playback', () => {
       });
       await student.goto('/learn/enrollment-1');
       const video = student.locator('video');
-      await expect(video).toBeVisible();
-      await video.evaluate(async (element) => {
-        const video = element as HTMLVideoElement;
-        video.muted = true;
-        await video.play();
-      });
-      await expect
-        .poll(() => video.evaluate((element) => (element as HTMLVideoElement).currentTime))
-        .toBeGreaterThan(0.5);
+      await startDecodedVideo(video);
       expect(await video.evaluate((element) => (element as HTMLVideoElement).videoWidth)).toBe(320);
       expect(manifests).toBeGreaterThan(0);
       expect(segments).toBeGreaterThan(0);
@@ -437,17 +444,32 @@ test.describe('decoded student video playback', () => {
     expect(streamRequests).toBe(0);
     ready = true;
     const video = page.locator('video');
-    await expect(video).toBeVisible({ timeout: 10000 });
-    await video.evaluate(async (element) => {
-      const video = element as HTMLVideoElement;
-      video.muted = true;
-      await video.play();
-    });
-    await expect
-      .poll(() => video.evaluate((element) => (element as HTMLVideoElement).currentTime))
-      .toBeGreaterThan(0.3);
+    await startDecodedVideo(video);
   });
 });
+test('unsupported H.264 playback shows a useful error before starting a protected stream', async ({
+  page,
+}) => {
+  await session(page);
+  await mockApi(page);
+  await page.addInitScript(() => {
+    const supported = MediaSource.isTypeSupported.bind(MediaSource);
+    MediaSource.isTypeSupported = (type) => !type.includes('avc1') && supported(type);
+  });
+  const id = '6df6a12f-fae2-483e-aef3-2850881bef22',
+    playable = structuredClone(course);
+  Object.assign(playable.sections[0].lessons[1], { videoUrl: `/api/v1/media/${id}/manifest.m3u8` });
+  await page.route('**/api/v1/courses/course-1', (route) =>
+    route.fulfill({ json: envelope(playable) }),
+  );
+  await page.route(`**/api/v1/media/${id}`, (route) =>
+    route.fulfill({ json: envelope({ id, status: 'READY', type: 'VIDEO', durationSeconds: 3 }) }),
+  );
+  await page.goto('/learn/enrollment-1?lesson=lesson-2');
+  await expect(page.getByRole('alert')).toContainText('H.264');
+  await expect(page.locator('video')).toBeHidden();
+});
+
 test('public catalog search, category selection, detail and preview work', async ({ page }) => {
   await mockApi(page);
   await page.goto('/catalog');

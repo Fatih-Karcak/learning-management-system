@@ -7,6 +7,8 @@ import type { Category, Course, Media, Page } from '../types';
 import VideoPlayer from '../VideoPlayer';
 import CourseWorkspace from './Workspace';
 import { VideoOperations } from './Platform';
+import RichTextEditor from '../RichTextEditor';
+import { CourseInvitations, TemplateLauncher } from './CourseAuthoring';
 import {
   Badge,
   Cover,
@@ -34,10 +36,12 @@ export function Instructor() {
         title="Eğitmen stüdyosu"
         description="Bilgini paylaş, birinin yolculuğuna ilham ol."
       >
+        <TemplateLauncher />
         <Link className="button primary" to="/instructor/new">
           <Plus size={18} /> Yeni kurs oluştur
         </Link>
       </PageTitle>
+      <CourseInvitations />
       {courses.isPending ? (
         <Loading />
       ) : courses.error ? (
@@ -154,7 +158,7 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
         />
       </Field>
       <Field label="Kurs açıklaması" hint="Başlıklar ve listeler için Markdown kullanabilirsin.">
-        <textarea name="description" rows={6} required defaultValue={course?.description} />
+        <RichTextEditor name="description" rows={6} required defaultValue={course?.description} />
       </Field>
       <div className="form-grid">
         <Field label="Fiyat (₺)">

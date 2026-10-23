@@ -73,7 +73,7 @@ sh user-service/mvnw -B -Dtest=AdminUserTest,AccountRegressionTest,CourseRegress
 RUN_LMS_E2E=1 node --test scripts/lms-features.test.mjs
 ```
 
-Bu 13 senaryo gerçek gateway/kullanıcı/kurs/kayıt servislerini, veritabanı işlemlerini, sertifika üretimini ve yetki retlerini sınar. `LMS_E2E_API_URL` varsayılan olarak `http://127.0.0.1:8080/api/v1` olur. Sertifika senaryosu erişilebilir nesne deposu ve çalışan sertifika zamanlayıcısı ister. Bu bulut doğrulamasında S3 test sunucusu kullanıldı; gerçek MinIO dağıtımı veya gerçek Stripe işlemi doğrulanmış sayılmaz.
+Bu 13 senaryo gerçek gateway/kullanıcı/kurs/kayıt servislerini, veritabanı işlemlerini, sertifika üretimini ve yetki retlerini sınar. `LMS_E2E_API_URL` varsayılan olarak `http://127.0.0.1:8080/api/v1` olur. Sertifika senaryosu erişilebilir nesne deposu ve çalışan sertifika zamanlayıcısı ister. İlk doğrulamada S3 test sunucusu kullanılmıştı; 23 Ekim 2026 kontrolü resmî kaynaktan derlenen gerçek MinIO ile tekrarlandı. Bu, tam Docker dağıtımını veya gerçek Stripe işlemini doğrulamaz; [güncel doğrulama kaydını](../docs/VALIDATION.md) inceleyin.
 
 ## Taslak sürümleri ve gerçek kullanım geliştirmeleri
 

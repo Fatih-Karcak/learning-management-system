@@ -36,14 +36,20 @@ jobs:
           }
       - working-directory: frontend
         run: npm ci
-      - run: node --test deploy/scripts/check-config.test.mjs
+      - run: node --test deploy/scripts/*.test.mjs
+      - name: Validate local staging configuration
+        run: |
+          node deploy/scripts/prepare-staging.mjs "$RUNNER_TEMP/lms-staging.env"
+          node deploy/scripts/check-config.mjs "$RUNNER_TEMP/lms-staging.env"
+          docker compose --env-file "$RUNNER_TEMP/lms-staging.env" -f deploy/compose.yml -f deploy/compose.staging.yml config --quiet
+          for script in deploy/scripts/*.sh; do bash -n "$script"; done
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chrome
       - working-directory: frontend
         run: npm test && npm run build && npm run format:check
       - working-directory: frontend
-        env: { E2E_VIDEO: "1" }
+        env: { E2E_VIDEO: "1", PLAYWRIGHT_BROWSER_CHANNEL: chrome }
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

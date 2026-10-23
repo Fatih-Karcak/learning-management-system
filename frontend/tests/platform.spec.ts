@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { startDecodedVideo } from './videoAssertions';
 const enabled = process.env.E2E_REAL_BACKEND === '1' && !!process.env.LMS_E2E_FIXTURE_PATH;
 type Session = { accessToken: string; refreshToken: string; user: { id: string } };
 const fixtures = () => JSON.parse(readFileSync(process.env.LMS_E2E_FIXTURE_PATH!, 'utf8'));
@@ -20,15 +21,7 @@ test.describe('real platform experience', () => {
     await login(page, f.student);
     await page.goto(`/learn/${f.enrollmentId}?lesson=${f.video}`);
     const video = page.locator('video');
-    await expect(video).toBeVisible();
-    await video.evaluate(async (element) => {
-      const v = element as HTMLVideoElement;
-      v.muted = true;
-      await v.play();
-    });
-    await expect
-      .poll(() => video.evaluate((e) => (e as HTMLVideoElement).currentTime))
-      .toBeGreaterThan(0.5);
+    await startDecodedVideo(video);
     await expect
       .poll(() => video.evaluate((e) => (e as HTMLVideoElement).textTracks[0]?.cues?.length || 0))
       .toBeGreaterThan(0);
@@ -39,7 +32,7 @@ test.describe('real platform experience', () => {
     await expect
       .poll(async () => {
         const response = await page.request.get(
-          `http://127.0.0.1:8080/api/v1/progress/${f.enrollmentId}`,
+          `${process.env.LMS_E2E_API_URL || 'http://127.0.0.1:8080/api/v1'}/progress/${f.enrollmentId}`,
           { headers: { Authorization: `Bearer ${f.student.accessToken}` } },
         );
         return (await response.json()).data.find(

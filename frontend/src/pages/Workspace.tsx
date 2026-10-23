@@ -8,6 +8,10 @@ import { Badge, ErrorBox, Field, Loading, Modal, PageTitle, Success } from '../u
 import VideoPlayer from '../VideoPlayer';
 import { AssignmentGrading, CourseStudents, CourseDiscussion } from './LearningFeatures';
 import { CourseAnalytics, Announcements } from './Platform';
+import RichTextEditor from '../RichTextEditor';
+import { duplicateLesson } from '../courseAuthoring';
+import { useAuth } from '../auth';
+import { CourseTeam } from './CourseAuthoring';
 const blankQuiz = (): Quiz => ({ passingScore: 70, questions: [] });
 const blankQuestion = () => ({
   id: crypto.randomUUID(),
@@ -24,6 +28,7 @@ export default function CourseWorkspace({
   review?: boolean;
 }) {
   const client = useQueryClient();
+  const { session } = useAuth();
   const query = useQuery({
     queryKey: ['workspace', courseId],
     queryFn: () => api<Workspace>(`/courses/${courseId}/workspace`),
@@ -39,7 +44,7 @@ export default function CourseWorkspace({
   });
   const media = useQuery({
     queryKey: ['workspace-media', courseId],
-    queryFn: () => api<Page<Media>>('/media/my?size=100&sort=createdAt,desc'),
+    queryFn: () => api<Page<Media>>(`/media/my?courseId=${courseId}&size=100&sort=createdAt,desc`),
     enabled: !review,
     refetchInterval: (q) =>
       q.state.data?.content.some((m) => m.status === 'PROCESSING') ? 4000 : false,
@@ -71,6 +76,16 @@ export default function CourseWorkspace({
       void client.invalidateQueries({ queryKey: ['course', courseId] });
       void client.invalidateQueries({ queryKey: ['workspace', courseId] });
       void client.invalidateQueries({ queryKey: ['own-courses'] });
+    },
+  });
+  const saveTemplate = useMutation({
+    mutationFn: (name: string) =>
+      api(`/courses/${courseId}/templates`, {
+        method: 'POST',
+        body: body({ name, revision: workspace!.revision }),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['course-templates'] });
     },
   });
   const action = useMutation({
@@ -116,6 +131,7 @@ export default function CourseWorkspace({
     return query.error ? <ErrorBox error={query.error} /> : <Loading />;
   const w = workspace,
     c = w.document.course;
+  const canManage = session?.user.id === c.instructorId || session?.user.role === 'ADMIN';
   const locked = review || w.status === 'PENDING_REVIEW';
   const publishedLessonIds = new Set(
     live.data?.publishedAt ? live.data.sections?.flatMap((s) => s.lessons.map((l) => l.id)) : [],
@@ -209,16 +225,18 @@ export default function CourseWorkspace({
               >
                 Taslağı kaydet
               </button>
-              <button
-                className="button secondary"
-                disabled={dirty || w.revision === 0 || action.isPending || uploading}
-                onClick={() => action.mutate('submit')}
-              >
-                İncelemeye gönder
-              </button>
+              {canManage && (
+                <button
+                  className="button secondary"
+                  disabled={dirty || w.revision === 0 || action.isPending || uploading}
+                  onClick={() => action.mutate('submit')}
+                >
+                  İncelemeye gönder
+                </button>
+              )}
             </>
           )}
-          {!review && locked && (
+          {!review && canManage && locked && (
             <button
               className="button secondary"
               disabled={action.isPending}
@@ -245,7 +263,19 @@ export default function CourseWorkspace({
               </button>
             </>
           )}
-          {!review && live.data?.status !== 'ARCHIVED' && (
+          {!review && (
+            <button
+              className="button secondary"
+              disabled={dirty || saveTemplate.isPending}
+              onClick={() => {
+                const name = window.prompt('Kişisel şablon adı');
+                if (name?.trim()) saveTemplate.mutate(name.trim());
+              }}
+            >
+              Şablon olarak kaydet
+            </button>
+          )}
+          {!review && canManage && live.data?.status !== 'ARCHIVED' && (
             <button
               className="text-button danger"
               disabled={dirty || archive.isPending}
@@ -263,6 +293,19 @@ export default function CourseWorkspace({
           )}
         </div>
       </div>
+      {!review && !canManage && (
+        <p className="notice">
+          Bu kursta ortak eğitmensiniz. Taslağı düzenleyebilirsiniz; yayın başvurusunu kurs sahibi
+          gönderir.
+        </p>
+      )}
+      {saveTemplate.error && <ErrorBox error={saveTemplate.error} />}
+      {saveTemplate.isSuccess && (
+        <Success>
+          Kişisel şablon kaydedildi. Eğitmen stüdyosundaki şablon listesinden yeni kurs
+          oluşturabilirsiniz.
+        </Success>
+      )}
       {archive.error && <ErrorBox error={archive.error} />}
       {archive.isSuccess && (
         <Success>Kurs arşivlendi. Mevcut öğrencilerin erişimi korunuyor.</Success>
@@ -360,12 +403,12 @@ export default function CourseWorkspace({
               />
             </Field>
             <Field label="Açıklama">
-              <textarea
+              <RichTextEditor
                 rows={6}
                 value={c.description || ''}
-                onChange={(e) =>
+                onChange={(value) =>
                   change((n) => {
-                    n.document.course.description = e.target.value;
+                    n.document.course.description = value;
                   })
                 }
               />
@@ -545,6 +588,18 @@ export default function CourseWorkspace({
                     >
                       ↓
                     </button>
+                    <button
+                      className="button secondary small"
+                      disabled={locked}
+                      aria-label={`${l.title} dersini kopyala`}
+                      onClick={() =>
+                        change((next) => {
+                          duplicateLesson(next, l.id);
+                        })
+                      }
+                    >
+                      Dersi kopyala
+                    </button>
                   </div>
                 ))}
                 {!locked && (
@@ -605,15 +660,18 @@ export default function CourseWorkspace({
               ['announcements', 'Duyurular'],
               ['questions', 'Soru-cevap'],
               ['versions', 'Yayın geçmişi'],
-            ].map(([key, label]) => (
-              <button
-                className="button secondary"
-                key={key}
-                onClick={() => setTool(tool === key ? undefined : key)}
-              >
-                {label}
-              </button>
-            ))}
+              ['team', 'Kurs ekibi'],
+            ]
+              .filter(([key]) => canManage || ['team', 'versions'].includes(key))
+              .map(([key, label]) => (
+                <button
+                  className="button secondary"
+                  key={key}
+                  onClick={() => setTool(tool === key ? undefined : key)}
+                >
+                  {label}
+                </button>
+              ))}
           </div>
           {tool === 'students' && <CourseStudents courseId={courseId} />}{' '}
           {tool === 'reports' && <CourseAnalytics courseId={courseId} course={c} />}{' '}
@@ -622,6 +680,7 @@ export default function CourseWorkspace({
             <CourseDiscussion courseId={courseId} instructorId={c.instructorId} />
           )}{' '}
           {tool === 'versions' && <VersionHistory courseId={courseId} />}
+          {tool === 'team' && <CourseTeam courseId={courseId} />}
         </>
       )}
       {lesson && (
@@ -693,12 +752,12 @@ export default function CourseWorkspace({
                   : 'Ders metni'
               }
             >
-              <textarea
+              <RichTextEditor
                 rows={7}
                 value={lesson.content || ''}
-                onChange={(e) =>
+                onChange={(value) =>
                   editLesson((l) => {
-                    l.content = e.target.value;
+                    l.content = value;
                   })
                 }
               />
@@ -988,7 +1047,7 @@ export default function CourseWorkspace({
           </fieldset>
           {!!uploadError && <ErrorBox error={uploadError} />}{' '}
           {uploading && <p role="status">Dosya yükleniyor…</p>}
-          {lesson.type === 'ASSIGNMENT' && (
+          {!review && canManage && lesson.type === 'ASSIGNMENT' && (
             <AssignmentGrading courseId={courseId} lessonId={lesson.id} />
           )}
           <p className="muted">

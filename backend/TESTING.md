@@ -37,7 +37,7 @@ Güvenlik ve iş kuralları:
 - Kullanıcı kimliği ve rolü servislerde doğrulanmış JWT/Authentication nesnesinden alınır. İstemcinin kimlik başlıkları yetki kaynağı değildir.
 - Gateway pasif/yasaklı hesapları ve rolü değişmiş eski token'ları reddeder. Hesap durumunu doğrulayamıyorsa korumalı isteği iletmez.
 - Refresh token API erişim token'ı olarak kullanılamaz. Internal API'ler servis anahtarı ister; iç servis portları ayrıca özel ağda tutulmalıdır.
-- Taslaklar sahibi/yönetici tarafından görülebilir. Anonim veya kayıtlı olmayan öğrenciye ders metni/video adresi yalnızca ön izlemeye açık derslerde döner. Kurs meta verisi ve ders kimlikleri katalog/kayıt iş akışı için korunur.
+- Taslaklar sahibi, yetkili yönetici ve kabul edilmiş aktif ortak eğitmen tarafından görülebilir. Anonim veya kayıtlı olmayan öğrenciye ders metni/video adresi yalnızca ön izlemeye açık derslerde döner. Kurs meta verisi ve ders kimlikleri katalog/kayıt iş akışı için korunur.
 - Kurs yayımlanırken en az bir ders bulunmalıdır; yayımlanmış kursun son dersi silinemez. Yorum yapmak için aktif/tamamlanmış kurs kaydı gerekir.
 - Ödeme durumu ile bildirim olayları aynı veritabanı işleminde payment_outbox'a yazılır. Gönderilemeyen olaylar tekrar denenir. Yinelenen başarı bildirimi terminal ödeme durumunu değiştirmez; aynı ödeme için ikinci makbuz olayı oluşturmaz.
 - Kurs sayacı enrollment kimliğiyle tekrar işlemeyi engeller. Mesajlaşma en az bir kez teslim esasına dayanır; üretim gözlemlemesinde outbox kuyruğu ve Kafka hata konuları izlenmelidir.
@@ -73,3 +73,7 @@ E2E_VIDEO=1 E2E_REAL_BACKEND=1 npm run test:e2e
 Gerçek yeni platform tarayıcı senaryoları için aynı `LMS_E2E_FIXTURE_PATH` dosyasını verin. Bu değişken yoksa `platform.spec.ts` senaryoları açıkça atlanır. Dosya gerçek oturum içerir; Git'e eklemeyin. Başarısız gerçek oturum testlerinin trace dosyalarını da gizli veri olarak değerlendirin.
 
 Üretim Compose biçim kontrolü `docker compose --env-file deploy/.env -f deploy/compose.yml config --quiet` ile yapılır. Bu işlem imaj derlemez veya sunucuya dağıtım yapmaz. Gerçek üretim doğrulaması [dağıtım yönergesindedir](../deploy/README.md).
+
+Ortak eğitmen ve şablon senaryoları depo kökünden `RUN_LMS_E2E=1 node --test backend/scripts/course-authoring.test.mjs` ile çalışır; aynı yönetici ve Mailhog değişkenlerini kullanır. E-posta doğrulama, kabulden önce erişimin reddi, kabul/revokasyon, eşzamanlı taslaklar, rol değişince erişimin kesilmesi, özel şablonlar ve yeni kimlikler kontrol edilir. Bu betik gerçek MinIO ister: geçerli imzalı nesne bağlantısının açıldığını, imzasız/değiştirilmiş bağlantıların 403 aldığını doğrular. İmza kontrolü yapmayan S3 taklidiyle bu test geçmemelidir.
+
+`LMS_AUTHORING_FIXTURE_PATH` verilirse `frontend/tests/authoring.spec.ts` için özel izinli oturum dosyası oluşur. `E2E_REAL_BACKEND=1` ve bu yolu verin. `E2E_BASE_URL` hazır Caddy/deneme sunucusuna yönlendirir. Yerel kurulum ve ortam değişkenleri [deneme rehberindedir](../deploy/STAGING.md).
