@@ -98,7 +98,7 @@ export default function CourseDetail() {
   return (
     <>
       <Link className="back-link" to="/catalog">
-        <ArrowLeft size={16} /> Kurslara dön
+        <ArrowLeft size={16} /> Back to courses
       </Link>
       <div className="course-detail-layout">
         <div>
@@ -110,26 +110,26 @@ export default function CourseDetail() {
           <p className="detail-description">{c.shortDescription}</p>
           {c.targetAudience && (
             <section className="panel">
-              <h2>Bu kurs kimler için?</h2>
+              <h2>Who is this course for?</h2>
               <p className="pre-wrap">{c.targetAudience}</p>
             </section>
           )}
           <div className="detail-meta">
             <span className="rating">
               <Star size={16} fill="currentColor" /> {(c.averageRating || 0).toFixed(1)}{' '}
-              <small>({c.totalReviews || 0} değerlendirme)</small>
+              <small>({c.totalReviews || 0} reviews)</small>
             </span>
             <span>
-              <Users size={16} /> {c.totalEnrollments || 0} öğrenci
+              <Users size={16} /> {c.totalEnrollments || 0} learners
             </span>
             <span>
               <Globe size={16} /> {c.language}
             </span>
           </div>
           <div className="instructor-line">
-            <Avatar name={c.instructorName || 'Eğitmen'} />
+            <Avatar name={c.instructorName || 'Instructor'} />
             <div>
-              <small>EĞİTMEN</small>
+              <small>INSTRUCTOR</small>
               <strong>
                 {c.instructorId ? (
                   <Link to={`/instructors/${c.instructorId}`}>{c.instructorName}</Link>
@@ -141,7 +141,7 @@ export default function CourseDetail() {
           </div>
           {!!c.outcomes?.length && (
             <section className="panel outcomes">
-              <h2>Neler öğreneceksin?</h2>
+              <h2>What you will learn</h2>
               <div className="outcomes-grid">
                 {c.outcomes.map((o, i) => (
                   <p key={i}>
@@ -153,13 +153,13 @@ export default function CourseDetail() {
             </section>
           )}
           <section className="detail-section">
-            <h2>Bu kurs hakkında</h2>
+            <h2>About this course</h2>
             <div className="prose">
               <ReactMarkdown>{c.description || c.shortDescription}</ReactMarkdown>
             </div>
             {!!c.requirements?.length && (
               <>
-                <h3>Başlamadan önce</h3>
+                <h3>Before you start</h3>
                 <ul>
                   {c.requirements.map((r, i) => (
                     <li key={i}>{r}</li>
@@ -170,10 +170,10 @@ export default function CourseDetail() {
           </section>
           <section className="detail-section">
             <div className="section-heading">
-              <h2>Kurs içeriği</h2>
+              <h2>Course content</h2>
               <span>
-                {c.sections?.length || 0} bölüm ·{' '}
-                {c.sections?.reduce((n, s) => n + (s.lessons?.length || 0), 0) || 0} ders
+                {c.sections?.length || 0} sections ·{' '}
+                {c.sections?.reduce((n, s) => n + (s.lessons?.length || 0), 0) || 0} lessons
               </span>
             </div>
             {c.sections?.map((section, i) => (
@@ -181,7 +181,7 @@ export default function CourseDetail() {
                 <summary>
                   <span>{String(i + 1).padStart(2, '0')}</span>
                   {section.title}
-                  <small>{section.lessons?.length || 0} ders</small>
+                  <small>{section.lessons?.length || 0} lessons</small>
                 </summary>
                 <div>
                   {section.lessons?.map((lesson) => (
@@ -197,21 +197,19 @@ export default function CourseDetail() {
                         <LockKeyhole size={15} />
                       )}
                       <span>{lesson.title}</span>
-                      <small>
-                        {lesson.previewAllowed ? 'Ön izleme' : lessonTypes[lesson.type]}
-                      </small>
+                      <small>{lesson.previewAllowed ? 'Preview' : lessonTypes[lesson.type]}</small>
                       {!!lesson.durationSeconds && (
-                        <small>{Math.ceil(lesson.durationSeconds / 60)} dk</small>
+                        <small>{Math.ceil(lesson.durationSeconds / 60)} min</small>
                       )}
                     </button>
                   ))}
                 </div>
               </details>
             ))}
-            {!c.sections?.length && <p className="muted">Dersler henüz eklenmemiş.</p>}
+            {!c.sections?.length && <p className="muted">No lessons have been added yet.</p>}
           </section>
           <section className="detail-section">
-            <h2>Öğrenciler ne düşünüyor?</h2>
+            <h2>What learners are saying</h2>
             {reviews.isPending ? (
               <Loading />
             ) : reviews.error ? (
@@ -221,7 +219,7 @@ export default function CourseDetail() {
                 {reviews.data?.content.map((r) => (
                   <article className="review" key={r.id}>
                     <div className="review-heading">
-                      <Avatar name={r.studentName || 'Öğrenci'} src={r.studentAvatarUrl} />
+                      <Avatar name={r.studentName || 'Learner'} src={r.studentAvatarUrl} />
                       <div>
                         <strong>{r.studentName}</strong>
                         <small>{date(r.createdAt)}</small>
@@ -232,17 +230,17 @@ export default function CourseDetail() {
                           className="text-button danger"
                           disabled={moderate.isPending}
                           onClick={() => {
-                            const reason = window.prompt('Değerlendirmeyi kaldırma gerekçesi');
+                            const reason = window.prompt('Reason for removing this review');
                             if (reason) moderate.mutate({ id: r.id, reason });
                           }}
                         >
-                          Moderasyonla kaldır
+                          Remove through moderation
                         </button>
                       )}
                       {session?.user.id === r.studentId && (
                         <button
                           className="icon-button danger"
-                          aria-label="Yorumu sil"
+                          aria-label="Delete review"
                           disabled={remove.isPending}
                           onClick={() => {
                             if (window.confirm('Yorumunuz silinsin mi?')) remove.mutate(r.id);
@@ -255,9 +253,7 @@ export default function CourseDetail() {
                     <p>{r.comment}</p>
                   </article>
                 ))}
-                {!reviews.data?.content.length && (
-                  <p className="muted">Henüz değerlendirme yapılmamış.</p>
-                )}
+                {!reviews.data?.content.length && <p className="muted">No reviews yet.</p>}
                 <Pagination
                   page={reviewPage}
                   pages={reviews.data?.totalPages || 0}
@@ -269,24 +265,24 @@ export default function CourseDetail() {
             {remove.error && <ErrorBox error={remove.error} />}{' '}
             {session?.user.role === 'STUDENT' && enrollment.data && (
               <form className="panel review-form" onSubmit={addReview}>
-                <h3>Deneyimini paylaş</h3>
-                <Field label="Puanın">
+                <h3>Share your experience</h3>
+                <Field label="Your rating">
                   <select name="rating">
                     {[5, 4, 3, 2, 1].map((n) => (
                       <option key={n} value={n}>
-                        {n} yıldız
+                        {n} stars
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Yorumun">
+                <Field label="Your review">
                   <textarea name="comment" maxLength={2000} rows={3} />
                 </Field>
                 {review.error && <ErrorBox error={review.error} />}{' '}
                 {review.isSuccess ? (
-                  <p className="success-text">Yorumun yayınlandı.</p>
+                  <p className="success-text">Your review has been published.</p>
                 ) : (
-                  <Submit busy={review.isPending}>Değerlendir</Submit>
+                  <Submit busy={review.isPending}>Leave a review</Submit>
                 )}
               </form>
             )}
@@ -296,29 +292,28 @@ export default function CourseDetail() {
           <Cover course={c} />
           <div className="purchase-body">
             <div className="purchase-price">
-              <strong>{price === 0 ? 'Ücretsiz' : money(price)}</strong>
+              <strong>{price === 0 ? 'Free' : money(price)}</strong>
               {c.discountPrice != null && c.discountPrice < c.price && <del>{money(c.price)}</del>}
             </div>
             {owner ? (
               <Link className="button primary" to={`/instructor/${c.id}`}>
-                Kursu düzenle <ArrowRight size={17} />
+                Edit course <ArrowRight size={17} />
               </Link>
             ) : enrollment.error ? (
               <ErrorBox error={enrollment.error} retry={() => void enrollment.refetch()} />
             ) : enrollment.data ? (
               <Link className="button primary" to="/my-learning">
-                Öğrenim alanına git <ArrowRight size={17} />
+                Go to my learning <ArrowRight size={17} />
               </Link>
             ) : c.status !== 'PUBLISHED' ? (
-              <p className="notice">Bu kurs yeni kayıtlara kapalı.</p>
+              <p className="notice">This course is closed to new enrollments.</p>
             ) : price === 0 && session ? (
               <button
                 className="button primary"
                 disabled={join.isPending}
                 onClick={() => join.mutate()}
               >
-                {join.isPending ? 'Kayıt yapılıyor…' : 'Ücretsiz kursa katıl'}{' '}
-                <ArrowRight size={17} />
+                {join.isPending ? 'Enrolling…' : 'Join free course'} <ArrowRight size={17} />
               </button>
             ) : (
               <Link
@@ -326,27 +321,29 @@ export default function CourseDetail() {
                 to={price === 0 ? '/login' : `/checkout/${c.id}`}
                 state={price === 0 ? { from: `/courses/${c.id}` } : undefined}
               >
-                {price === 0 ? 'Kursa katıl' : 'Kursa kaydol'} <ArrowRight size={17} />
+                {price === 0 ? 'Enroll in course' : 'Enroll in course'} <ArrowRight size={17} />
               </Link>
             )}
             {join.error && <ErrorBox error={join.error} />}
-            <p className="purchase-note">Kendi hızında öğren, istediğin zaman devam et.</p>
+            <p className="purchase-note">Learn at your own pace and return whenever you like.</p>
             <div className="purchase-features">
               <span>
-                <GraduationCap size={18} /> Uzman eğitmen rehberliği
+                <GraduationCap size={18} /> Guidance from experienced instructors
               </span>
               <span>
                 <Clock size={18} />{' '}
-                {c.durationMinutes ? `${c.durationMinutes} dakika içerik` : 'Kendi hızında öğrenme'}
+                {c.durationMinutes
+                  ? `${c.durationMinutes} minutes of content`
+                  : 'Self-paced learning'}
               </span>
               <span>
-                <Check size={18} /> İlerleme takibi ve sertifika
+                <Check size={18} /> Progress tracking and certification
               </span>
             </div>
             <Badge value={c.status} />
             {c.previewVideoUrl && (
               <button className="text-button" onClick={() => setShowTrailer(true)}>
-                <Play size={15} /> Tanıtım videosunu izle
+                <Play size={15} /> Watch course trailer
               </button>
             )}
           </div>
@@ -354,7 +351,7 @@ export default function CourseDetail() {
       </div>
       <RecommendedCourses courseId={c.id} />
       {showTrailer && c.previewVideoUrl && (
-        <Modal title="Kurs tanıtımı" onClose={() => setShowTrailer(false)}>
+        <Modal title="Course trailer" onClose={() => setShowTrailer(false)}>
           <VideoPlayer src={c.previewVideoUrl} />
         </Modal>
       )}
@@ -368,8 +365,8 @@ export default function CourseDetail() {
             </div>
           ) : (
             <Empty
-              title="İçerik henüz kullanılamıyor"
-              text="Dersi görüntülemek için kursa kaydolman veya içeriğin hazırlanmasını beklemen gerekebilir."
+              title="Content is not available yet"
+              text="You may need to enroll or wait for this lesson to be prepared."
             />
           )}
         </Modal>

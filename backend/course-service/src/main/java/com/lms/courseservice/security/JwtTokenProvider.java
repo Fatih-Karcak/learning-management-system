@@ -44,7 +44,7 @@ public class JwtTokenProvider {
                     && java.util.Set.of("STUDENT", "INSTRUCTOR", "ADMIN").contains(role)
                     && claims.getExpiration() != null && claims.getIssuedAt() != null;
         } catch (JwtException | IllegalArgumentException e) {
-            log.error("Geçersiz JWT token: {}", e.getMessage());
+            log.error("Invalid JWT token: {}", e.getMessage());
             return false;
         }
     }

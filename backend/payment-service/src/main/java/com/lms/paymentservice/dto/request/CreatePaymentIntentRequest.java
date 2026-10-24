@@ -8,7 +8,7 @@ import java.util.UUID;
 @Data
 public class CreatePaymentIntentRequest {
 
-    @NotNull(message = "Kurs ID boş olamaz")
+    @NotNull(message = "Course ID is required")
     private UUID courseId;
 
     // Kupon kodu (opsiyonel)

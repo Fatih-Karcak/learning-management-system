@@ -23,12 +23,12 @@ public class LearningManagementController {
 
     @PostMapping("/free/{courseId}")
     public ApiResponse<EnrollmentResponse> free(@PathVariable UUID courseId, Authentication auth) {
-        return ApiResponse.success(service.enrollFree(courseId, id(auth)), "Kursa kaydoldunuz");
+        return ApiResponse.success(service.enrollFree(courseId, id(auth)), "You have enrolled in the course");
     }
 
     @GetMapping("/summary")
     public ApiResponse<Map<String, Object>> summary(Authentication auth) {
-        return ApiResponse.success(service.summary(id(auth)), "Başarılı");
+        return ApiResponse.success(service.summary(id(auth)), "Successful");
     }
 
     @GetMapping("/courses/{courseId}/students")
@@ -48,14 +48,14 @@ public class LearningManagementController {
                     .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")),
                 pageable
             ),
-            "Başarılı"
+            "Successful"
         );
     }
 
     @GetMapping("/admin/summary")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<Map<String, Object>> adminSummary() {
-        return ApiResponse.success(service.summary(null), "Başarılı");
+        return ApiResponse.success(service.summary(null), "Successful");
     }
 
     @PostMapping("/admin/grant")
@@ -64,7 +64,7 @@ public class LearningManagementController {
         @Valid @RequestBody LearningManagementService.Grant request,
         Authentication auth
     ) {
-        return ApiResponse.success(service.grant(request, id(auth)), "Kayıt oluşturuldu");
+        return ApiResponse.success(service.grant(request, id(auth)), "Enrollment created");
     }
 
     @PostMapping("/admin/{enrollmentId}/revoke")
@@ -75,6 +75,6 @@ public class LearningManagementController {
         Authentication auth
     ) {
         service.revoke(enrollmentId, request.get("reason"), id(auth));
-        return ApiResponse.success(null, "Kayıt iptal edildi");
+        return ApiResponse.success(null, "Enrollment revoked");
     }
 }

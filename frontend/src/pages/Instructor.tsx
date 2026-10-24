@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Copy, FileVideo, Image, Plus, Trash2, Upload } from 'lucide-react';
@@ -9,6 +9,8 @@ import CourseWorkspace from './Workspace';
 import { VideoOperations } from './Platform';
 import RichTextEditor from '../RichTextEditor';
 import { CourseInvitations, TemplateLauncher } from './CourseAuthoring';
+import { uploadVideo } from '../uploads';
+import { useAuth } from '../auth';
 import {
   Badge,
   Cover,
@@ -32,13 +34,13 @@ export function Instructor() {
   return (
     <>
       <PageTitle
-        eyebrow="BİLDİKLERİN DEĞERLİ"
-        title="Eğitmen stüdyosu"
-        description="Bilgini paylaş, birinin yolculuğuna ilham ol."
+        eyebrow="YOUR KNOWLEDGE MATTERS"
+        title="Instructor studio"
+        description="Share your knowledge and inspire someone's journey."
       >
         <TemplateLauncher />
         <Link className="button primary" to="/instructor/new">
-          <Plus size={18} /> Yeni kurs oluştur
+          <Plus size={18} /> Create a new course
         </Link>
       </PageTitle>
       <CourseInvitations />
@@ -56,11 +58,11 @@ export function Instructor() {
                   <Badge value={c.status} />
                   <h3>{c.title}</h3>
                   <div className="card-bottom">
-                    <span>{c.totalEnrollments || 0} öğrenci</span>
+                    <span>{c.totalEnrollments || 0} learners</span>
                     <strong>{money(c.discountPrice ?? c.price)}</strong>
                   </div>
                   <Link className="button secondary" to={`/instructor/${c.id}`}>
-                    Kursu düzenle <ArrowRight size={16} />
+                    Edit course <ArrowRight size={16} />
                   </Link>
                 </div>
               </article>
@@ -70,11 +72,11 @@ export function Instructor() {
         </>
       ) : (
         <Empty
-          title="İlk kursunun hikâyesi burada başlasın."
-          text="Taslağını oluştur, derslerini ekle ve hazır olduğunda yayınla."
+          title="Your first course starts here."
+          text="Create a draft, add lessons and publish when you are ready."
         >
           <Link className="button primary" to="/instructor/new">
-            <Plus size={17} /> Kurs oluştur
+            <Plus size={17} /> Create course
           </Link>
         </Empty>
       )}
@@ -96,7 +98,7 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
     const discountPrice =
       f.get('discountPrice') === '' ? undefined : Number(f.get('discountPrice'));
     if (discountPrice !== undefined && discountPrice > price) {
-      setError(new Error('İndirimli fiyat normal fiyattan yüksek olamaz.'));
+      setError(new Error('The discounted price cannot exceed the regular price.'));
       return;
     }
     setBusy(true);
@@ -129,18 +131,18 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
   }
   return (
     <form className="panel editor-form" onSubmit={submit}>
-      <h2>Kurs bilgileri</h2>
-      <Field label="Kurs başlığı">
+      <h2>Course details</h2>
+      <Field label="Course title">
         <input
           name="title"
           minLength={10}
           maxLength={200}
           required
           defaultValue={course?.title}
-          placeholder="Öğrencilerin ne öğrenecek?"
+          placeholder="What will your learners achieve?"
         />
       </Field>
-      <Field label="Kısa açıklama" hint="Katalogda görünen açıklama. En fazla 500 karakter.">
+      <Field label="Short description" hint="Shown in the catalog. Maximum 500 characters.">
         <textarea
           name="shortDescription"
           rows={2}
@@ -149,7 +151,7 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           defaultValue={course?.shortDescription}
         />
       </Field>
-      <Field label="Bu kurs kimler için?">
+      <Field label="Who is this course for?">
         <textarea
           name="targetAudience"
           rows={3}
@@ -157,11 +159,11 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           defaultValue={course?.targetAudience}
         />
       </Field>
-      <Field label="Kurs açıklaması" hint="Başlıklar ve listeler için Markdown kullanabilirsin.">
+      <Field label="Course description" hint="Use Markdown for headings and lists.">
         <RichTextEditor name="description" rows={6} required defaultValue={course?.description} />
       </Field>
       <div className="form-grid">
-        <Field label="Fiyat (₺)">
+        <Field label="Price (TRY)">
           <input
             name="price"
             type="number"
@@ -172,11 +174,11 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           />
         </Field>
         <Field
-          label="İndirimli fiyat (₺)"
+          label="Discounted price (TRY)"
           hint={
             course?.discountPrice != null
-              ? 'İndirimi kaldırmak için normal fiyatı gir.'
-              : 'İsteğe bağlı.'
+              ? 'Enter the regular price to remove the discount.'
+              : 'Optional.'
           }
         >
           <input
@@ -188,10 +190,10 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           />
         </Field>
         {!course && (
-          <Field label="Kategori">
+          <Field label="Category">
             <select name="categoryId" required defaultValue="">
               <option value="" disabled>
-                Kategori seç
+                Select category
               </option>
               {categories.data?.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -201,7 +203,7 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
             </select>
           </Field>
         )}
-        <Field label="Seviye">
+        <Field label="Level">
           <select name="level" defaultValue={course?.level || 'ALL_LEVELS'}>
             {Object.entries(levels).map(([k, v]) => (
               <option key={k} value={k}>
@@ -211,12 +213,12 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
           </select>
         </Field>
         {!course && (
-          <Field label="Eğitim dili">
-            <input name="language" defaultValue="Türkçe" required />
+          <Field label="Course language">
+            <input name="language" defaultValue="English" required />
           </Field>
         )}
       </div>
-      <Field label="Kapak görseli adresi">
+      <Field label="Course cover URL">
         <input
           name="thumbnailUrl"
           type="url"
@@ -225,15 +227,15 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
         />
       </Field>
       {!course && (
-        <Field label="Tanıtım videosu adresi">
+        <Field label="Course trailer URL">
           <input name="previewVideoUrl" type="url" placeholder="https://…" />
         </Field>
       )}
       <div className="form-grid">
-        <Field label="Ön koşullar" hint="Her satıra bir madde yaz.">
+        <Field label="Requirements" hint="Enter one item per line.">
           <textarea name="requirements" rows={4} defaultValue={course?.requirements?.join('\n')} />
         </Field>
-        <Field label="Kazanımlar" hint="Her satıra bir kazanım yaz.">
+        <Field label="Learning outcomes" hint="Enter one learning outcome per line.">
           <textarea name="outcomes" rows={4} defaultValue={course?.outcomes?.join('\n')} />
         </Field>
       </div>
@@ -241,7 +243,7 @@ function CourseForm({ course, onSaved }: { course?: Course; onSaved: (c: Course)
         <ErrorBox error={categories.error} retry={() => void categories.refetch()} />
       )}{' '}
       {!!error && <ErrorBox error={error} />}
-      <Submit busy={busy}>{course ? 'Değişiklikleri kaydet' : 'Taslağı oluştur'}</Submit>
+      <Submit busy={busy}>{course ? 'Save changes' : 'Create draft'}</Submit>
     </form>
   );
 }
@@ -255,12 +257,12 @@ function CreateCourseView() {
   return (
     <>
       <Link className="back-link" to="/instructor">
-        <ArrowLeft size={16} /> Kurslarım
+        <ArrowLeft size={16} /> My courses
       </Link>
       <PageTitle
-        eyebrow="EĞİTMEN STÜDYOSU"
-        title="Bilgini bir kursa dönüştür."
-        description="Önce kurs bilgilerini ekle, ardından derslerini taslakta hazırla."
+        eyebrow="INSTRUCTOR STUDIO"
+        title="Turn your knowledge into a course."
+        description="Start with course details, then prepare lessons in your draft."
       />
       <CourseForm
         onSaved={(course) => {
@@ -273,6 +275,10 @@ function CreateCourseView() {
   );
 }
 export function MediaLibrary() {
+  const { session } = useAuth();
+  const uploadController = useRef<AbortController | null>(null);
+  const [uploadProgress, setUploadProgress] = useState({ sent: 0, total: 0 });
+  useEffect(() => () => uploadController.current?.abort(), []);
   const client = useQueryClient();
   const [params] = useSearchParams();
   const [page, setPage] = useState(0);
@@ -282,6 +288,20 @@ export function MediaLibrary() {
   const [kind, setKind] = useState('image');
   const [selectedCourse, setSelectedCourse] = useState(params.get('course') || '');
   const [inspect, setInspect] = useState<string>();
+  const pendingUploads = useQuery({
+    queryKey: ['pending-uploads'],
+    queryFn: () =>
+      api<{ id: string; file_name: string; received_bytes: number; total_bytes: number }[]>(
+        '/media/uploads',
+      ),
+  });
+  const cancelUpload = useMutation({
+    mutationFn: (id: string) => api(`/media/uploads/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['pending-uploads'] });
+    },
+  });
+
   const media = useQuery({
     queryKey: ['media', page],
     queryFn: () => api<Page<Media>>(`/media/my?size=12&page=${page}&sort=createdAt,desc`),
@@ -307,7 +327,7 @@ export function MediaLibrary() {
     mutationFn: (id: string) => api(`/media/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['media'] });
-      setSuccess('Dosya silindi.');
+      setSuccess('File deleted.');
     },
   });
   async function upload(e: FormEvent<HTMLFormElement>) {
@@ -317,33 +337,47 @@ export function MediaLibrary() {
     const files = values.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
     if (!files.length) return;
     if (files.length > 20) {
-      setError(new Error('Tek seferde en fazla 20 dosya yükleyin.'));
+      setError(new Error('Upload up to 20 files at a time.'));
       return;
     }
     if (files.length > 1 && values.get('lessonId')) {
       setError(
         new Error(
-          'Birden çok dosya için ders seçimini kaldırın. Videoları daha sonra taslaktaki derslere ekleyin.',
+          'Clear the lesson selection when uploading multiple files. Attach videos from the course editor afterward.',
         ),
       );
       return;
     }
     const max = kind === 'image' ? 10 * 1024 * 1024 : 2 * 1024 * 1024 * 1024;
     if (files.some((f) => f.size > max)) {
-      setError(new Error('Dosyalardan biri boyut sınırını aşıyor.'));
+      setError(new Error('One of the files exceeds the size limit.'));
       return;
     }
     setBusy(true);
+    uploadController.current = new AbortController();
     setError(null);
     setSuccess('');
     let uploadedCount = 0;
     try {
       for (const file of files) {
-        setSuccess(`${uploadedCount + 1}/${files.length}: ${file.name} yükleniyor…`);
+        setSuccess(`${uploadedCount + 1}/${files.length}: ${file.name} uploading…`);
         const data = new FormData();
         data.set('file', file);
         if (values.get('courseId')) data.set('courseId', String(values.get('courseId')));
-        const uploaded = await api<Media>(`/media/${kind}`, { method: 'POST', body: data });
+        const uploaded =
+          kind === 'video'
+            ? await uploadVideo(
+                file,
+                String(values.get('courseId') || '') || undefined,
+                session!.user.id,
+                (sent, total) => setUploadProgress({ sent, total }),
+                uploadController.current.signal,
+              )
+            : await api<Media>('/media/image', {
+                method: 'POST',
+                body: data,
+                signal: uploadController.current.signal,
+              });
         uploadedCount++;
         if (kind === 'video' && values.get('lessonId')) {
           const id = String(values.get('lessonId'));
@@ -354,7 +388,9 @@ export function MediaLibrary() {
             ?.flatMap((s) => s.lessons)
             .find((l) => l.id === id);
           if (!lesson)
-            throw new Error('Ders taslakta bulunamadı. Videoyu kurs düzenleyicisinden seçin.');
+            throw new Error(
+              'The lesson was not found in the draft. Select the video in the course editor.',
+            );
           lesson.videoUrl = uploaded.streamUrl;
           lesson.durationSeconds = uploaded.durationSeconds || 0;
           lesson.type = 'VIDEO';
@@ -369,58 +405,60 @@ export function MediaLibrary() {
         void client.invalidateQueries({ queryKey: ['video-picker'] });
       }
       setSuccess(
-        `${uploadedCount} dosya yüklendi. Videolar hazır olduğunda kurs taslağında seçip incelemeye gönderin.`,
+        `${uploadedCount} ${uploadedCount === 1 ? 'file' : 'files'} uploaded. Select ready videos in the course draft and submit it for review.`,
       );
       form.reset();
     } catch (e) {
-      setError(
-        new Error(
-          `${uploadedCount}/${files.length} dosya yüklendi. ${e instanceof Error ? e.message : 'Yükleme tamamlanamadı.'}`,
-        ),
-      );
+      if (uploadController.current?.signal.aborted && kind === 'video') {
+        setSuccess(
+          'Upload paused. Select the same file and course to continue from the saved position.',
+        );
+      } else
+        setError(
+          new Error(
+            `${uploadedCount}/${files.length} files uploaded. ${e instanceof Error ? e.message : 'The upload could not be completed.'}`,
+          ),
+        );
     } finally {
       setBusy(false);
+      void pendingUploads.refetch();
     }
   }
   async function copy(url?: string) {
     if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
-      setSuccess('Medya bağlantısı kopyalandı.');
+      setSuccess('Media link copied.');
     } catch {
-      setError(
-        new Error(
-          'Bağlantı kopyalanamadı. Dosya ayrıntısından bağlantıyı seçip kopyalayabilirsiniz.',
-        ),
-      );
+      setError(new Error('The link could not be copied. You can select it in the file details.'));
     }
   }
   return (
     <>
       <PageTitle
-        eyebrow="İÇERİĞİNE HAYAT VER"
-        title="Medya kitaplığı"
-        description="Görsellerini ve videolarını yükle, kurslarında kullan."
+        eyebrow="BRING YOUR CONTENT TO LIFE"
+        title="Media library"
+        description="Upload images and videos to use in your courses."
       />
       <section className="panel">
         <h2>
-          <Upload size={20} /> Yeni dosya yükle
+          <Upload size={20} /> Upload a new file
         </h2>
         <form onSubmit={upload}>
           <div className="form-grid">
-            <Field label="Dosya türü">
+            <Field label="File type">
               <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="image">Görsel · En fazla 10 MB</option>
-                <option value="video">Video · En fazla 2 GB</option>
+                <option value="image">Image · Up to 10 MB</option>
+                <option value="video">Video · Up to 2 GB</option>
               </select>
             </Field>
-            <Field label="İlgili kurs">
+            <Field label="Related course">
               <select
                 name="courseId"
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
               >
-                <option value="">Kursa bağlı değil</option>
+                <option value="">Not linked to a course</option>
                 {courses.data?.content.map((c) => (
                   <option value={c.id} key={c.id}>
                     {c.title}
@@ -429,15 +467,15 @@ export function MediaLibrary() {
               </select>
             </Field>
             <Field
-              label="İlgili ders (isteğe bağlı)"
+              label="Related lesson (optional)"
               hint={
                 kind === 'video'
-                  ? 'Tek video seçerseniz ders taslağı güncellenir. Yayın için taslağı incelemeye gönderin.'
+                  ? 'Selecting one video updates the lesson draft. Submit the draft for review to publish it.'
                   : undefined
               }
             >
               <select name="lessonId" key={`${selectedCourse}-${kind}`}>
-                <option value="">Ders seçilmedi</option>
+                <option value="">No lesson selected</option>
                 {course.data?.sections
                   ?.flatMap((s) => s.lessons || [])
                   .filter((l) => kind !== 'video' || ['VIDEO', 'ARTICLE'].includes(l.type))
@@ -448,7 +486,7 @@ export function MediaLibrary() {
                   ))}
               </select>
             </Field>
-            <Field label="Dosya seç">
+            <Field label="Choose files">
               <input
                 key={kind}
                 name="file"
@@ -460,18 +498,62 @@ export function MediaLibrary() {
             </Field>
           </div>
           {!!error && <ErrorBox error={error} />}
-          <Submit busy={busy}>{busy ? 'Dosya yükleniyor…' : 'Dosyayı yükle'}</Submit>
+          {busy && kind === 'video' && (
+            <div role="status">
+              <progress max={uploadProgress.total || 1} value={uploadProgress.sent} />
+              <span>
+                {Math.floor((100 * uploadProgress.sent) / (uploadProgress.total || 1))}% uploaded
+              </span>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => uploadController.current?.abort()}
+              >
+                Pause upload
+              </button>
+            </div>
+          )}
+          <p className="muted">
+            Interrupted video uploads can resume for seven days. Select the same file and course to
+            continue.
+          </p>
+          <Submit busy={busy}>{busy ? 'Uploading file…' : 'Upload file'}</Submit>
         </form>
         {courses.error && <ErrorBox error={courses.error} />}{' '}
         {course.error && <ErrorBox error={course.error} />}
       </section>
+      {pendingUploads.error && <ErrorBox error={pendingUploads.error} />}
+      {cancelUpload.error && <ErrorBox error={cancelUpload.error} />}
+      {!!pendingUploads.data?.length && (
+        <section className="panel">
+          <h2>Unfinished video uploads</h2>
+          <p>
+            Select the same file and course above to resume, or cancel an upload to free its slot.
+          </p>
+          {pendingUploads.data.map((upload) => (
+            <div className="section-heading" key={upload.id}>
+              <span>
+                {upload.file_name} ·{' '}
+                {Math.floor((100 * upload.received_bytes) / upload.total_bytes)}% uploaded
+              </span>
+              <button
+                className="button secondary"
+                disabled={busy || cancelUpload.isPending}
+                onClick={() => cancelUpload.mutate(upload.id)}
+              >
+                Cancel upload
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       <VideoOperations />
       {success && <Success>{success}</Success>}
       {remove.error && <ErrorBox error={remove.error} />}
       <div className="section-heading">
-        <h2>Dosyalarım</h2>
+        <h2>My files</h2>
         <button className="text-button" onClick={() => void media.refetch()}>
-          Yenile
+          Refresh
         </button>
       </div>
       {media.isPending ? (
@@ -496,16 +578,16 @@ export function MediaLibrary() {
                 <h3>{m.originalFileName}</h3>
                 <p>
                   {(m.sizeBytes / 1024 / 1024).toFixed(1)} MB{' '}
-                  {m.durationSeconds ? ` · ${Math.ceil(m.durationSeconds / 60)} dk` : ''}
+                  {m.durationSeconds ? ` · ${Math.ceil(m.durationSeconds / 60)} min` : ''}
                 </p>
                 {m.failureReason && <p className="error-text">{m.failureReason}</p>}
                 <div className="form-actions">
                   <button className="button secondary small" onClick={() => setInspect(m.id)}>
-                    Ayrıntı
+                    Details
                   </button>
                   <button
                     className="icon-button"
-                    aria-label="Medya bağlantısını kopyala"
+                    aria-label="Copy media link"
                     disabled={m.status !== 'READY'}
                     onClick={() => void copy(m.streamUrl)}
                   >
@@ -513,12 +595,12 @@ export function MediaLibrary() {
                   </button>
                   <button
                     className="icon-button danger"
-                    aria-label={`${m.originalFileName} dosyasını sil`}
+                    aria-label={`${m.originalFileName} delete file`}
                     disabled={remove.isPending}
                     onClick={() => {
                       if (
                         window.confirm(
-                          'Dosya kalıcı olarak silinsin mi? Bağlı dersler etkilenebilir.',
+                          'Permanently delete this file? Linked lessons may be affected.',
                         )
                       )
                         remove.mutate(m.id);
@@ -534,12 +616,12 @@ export function MediaLibrary() {
         </>
       ) : (
         <Empty
-          title="İçeriklerin için yer hazır."
-          text="İlk görselini veya videonu yükleyerek başla."
+          title="Ready for your content."
+          text="Start by uploading your first image or video."
         />
       )}
       {inspect && (
-        <Modal title="Dosya ayrıntısı" onClose={() => setInspect(undefined)}>
+        <Modal title="File details" onClose={() => setInspect(undefined)}>
           {details.isPending ? (
             <Loading />
           ) : details.error ? (
@@ -553,12 +635,14 @@ export function MediaLibrary() {
                   details.data.status === 'READY' &&
                   details.data.streamUrl && <VideoPlayer src={details.data.streamUrl} />}
                 {details.data.status === 'PROCESSING' && (
-                  <p role="status">Video işleniyor. Hazır olduğunda oynatılabilir.</p>
+                  <p role="status">
+                    Video processing is in progress. Playback will be available when it is ready.
+                  </p>
                 )}
                 {details.data.failureReason && (
                   <ErrorBox error={new Error(details.data.failureReason)} />
                 )}
-                <Field label="Medya bağlantısı">
+                <Field label="Media link">
                   <input
                     readOnly
                     value={details.data.streamUrl || ''}
@@ -566,8 +650,8 @@ export function MediaLibrary() {
                   />
                 </Field>
                 <p className="muted">
-                  Video bağlantısını ders oluştururken kullanabilirsin. Görsel bağlantıları belirli
-                  bir süre için geçerlidir.
+                  Use the video link when creating a lesson. Private image links expire; use the
+                  course cover uploader for a permanent cover.
                 </p>
               </>
             )

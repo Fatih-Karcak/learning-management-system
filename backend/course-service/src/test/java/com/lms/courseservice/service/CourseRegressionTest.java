@@ -24,7 +24,8 @@ class CourseRegressionTest {
     private final EnrollmentClient enrollment = mock(EnrollmentClient.class);
     private final CourseAccessPolicy access = new CourseAccessPolicy(
         enrollment,
-        mock(CourseAuthoringAccess.class)
+        mock(CourseAuthoringAccess.class),
+        mock(LearningPolicyService.class)
     );
     private final com.lms.courseservice.client.ContentClient content = mock(
         com.lms.courseservice.client.ContentClient.class

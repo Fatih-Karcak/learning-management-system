@@ -1,3 +1,4 @@
+import Reminders from './Reminders';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -42,13 +43,13 @@ export function CourseAnalytics({ courseId, course }: { courseId: string; course
     lessons = course.sections?.flatMap((s) => s.lessons) || [];
   return (
     <section className="panel">
-      <h2>Öğrenme raporu</h2>
+      <h2>Learning report</h2>
       <div className="stats-grid">
         {[
-          ['Kayıt', d.learning.summary.enrolled],
-          ['Tamamlayan', d.learning.summary.completed],
-          ['14 gündür çalışmayan', d.learning.summary.inactive],
-          ['Ortalama ilerleme', `%${Math.round(d.learning.summary.average_progress)}`],
+          ['Enrolled', d.learning.summary.enrolled],
+          ['Completed', d.learning.summary.completed],
+          ['Inactive for 14 days', d.learning.summary.inactive],
+          ['Average progress', `${Math.round(d.learning.summary.average_progress)}%`],
         ].map(([label, value]) => (
           <article key={label} className="panel">
             <small>{label}</small>
@@ -58,15 +59,15 @@ export function CourseAnalytics({ courseId, course }: { courseId: string; course
       </div>
       <div className="table-scroll">
         <table>
-          <caption>Ders bazında katılım ve sonuçlar</caption>
+          <caption>Lesson participation and results</caption>
           <thead>
             <tr>
-              <th>Ders</th>
-              <th>Başlayan</th>
-              <th>Tamamlayan</th>
-              <th>Test ortalaması</th>
-              <th>Bekleyen ödev</th>
-              <th>Çözülmemiş soru</th>
+              <th>Lesson</th>
+              <th>Started</th>
+              <th>Completed</th>
+              <th>Average quiz score</th>
+              <th>Pending assignments</th>
+              <th>Unresolved questions</th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +81,7 @@ export function CourseAnalytics({ courseId, course }: { courseId: string; course
                   <th>{l.title}</th>
                   <td>{progress?.started || 0}</td>
                   <td>{progress?.completed || 0}</td>
-                  <td>{quiz ? `%${quiz.average_score}` : '—'}</td>
+                  <td>{quiz ? `${quiz.average_score}%` : '—'}</td>
                   <td>{assignment?.pending || 0}</td>
                   <td>{question?.unresolved || 0}</td>
                 </tr>
@@ -90,8 +91,8 @@ export function CourseAnalytics({ courseId, course }: { courseId: string; course
         </table>
       </div>
       <p className="muted">
-        Başlayan ve tamamlayan sayıları ders ilerlemesi kaydedilen aktif öğrencileri gösterir.
-        Raporlar izleme süresi, test ve ödev kayıtlarına dayanır.
+        Started and completed counts represent active learners with saved progress. Reports use
+        playback, quiz and assignment records.
       </p>
     </section>
   );
@@ -120,7 +121,7 @@ export function Announcements({
   });
   return (
     <section className="panel">
-      <h2>Kurs duyuruları</h2>
+      <h2>Course announcements</h2>
       {instructor && (
         <form
           onSubmit={(e) => {
@@ -129,16 +130,14 @@ export function Announcements({
             send.mutate({ title: f.get('title'), content: f.get('content') });
           }}
         >
-          <Field label="Duyuru başlığı">
+          <Field label="Announcement title">
             <input name="title" required maxLength={200} />
           </Field>
-          <Field label="Duyuru metni">
+          <Field label="Announcement text">
             <textarea name="content" required maxLength={10000} rows={4} />
           </Field>
-          <Submit busy={send.isPending}>Duyuruyu yayımla</Submit>
-          {send.isSuccess && (
-            <Success>Duyuru kaydedildi. Öğrencilere bildirim gönderilecek.</Success>
-          )}
+          <Submit busy={send.isPending}>Publish announcement</Submit>
+          {send.isSuccess && <Success>Announcement saved. Learners will be notified.</Success>}
           {send.error && <ErrorBox error={send.error} />}
         </form>
       )}
@@ -155,7 +154,7 @@ export function Announcements({
           </article>
         ))
       ) : (
-        <p className="muted">Henüz duyuru yok.</p>
+        <p className="muted">No announcements yet.</p>
       )}
     </section>
   );
@@ -223,35 +222,34 @@ export function StudyPlan() {
   return (
     <>
       <PageTitle
-        eyebrow="ÖĞRENME ALIŞKANLIĞIN"
-        title="Çalışma planım"
-        description="Hedeflerini belirle, çalışma zamanını takip et ve derslerine dön."
+        eyebrow="BUILD YOUR LEARNING HABIT"
+        title="My study plan"
+        description="Set goals, track your study time and return to your lessons."
       />
+      <Reminders />
       {q.error && <ErrorBox error={q.error} />}{' '}
       {q.isPending ? (
         <Loading />
       ) : (
         <>
           <section className="panel">
-            <h2>Bu haftaki video çalışman</h2>
+            <h2>Your video study time this week</h2>
             <p>
               {Math.round(q.data?.weekMinutes || 0)} / {prefs.data?.weeklyTargetMinutes ?? 60}{' '}
-              dakika
+              minutes
             </p>
             <progress
               max={prefs.data?.weeklyTargetMinutes ?? 60}
               value={q.data?.weekMinutes || 0}
             />
-            <p className="muted">
-              Süre, videolardaki doğrulanmış benzersiz izleme kapsamından hesaplanır.
-            </p>
+            <p className="muted">Time is calculated from verified unique video coverage.</p>
             <details>
-              <summary>Son 28 gün</summary>
+              <summary>Last 28 days</summary>
               <table>
                 <thead>
                   <tr>
-                    <th>Tarih</th>
-                    <th>Dakika</th>
+                    <th>Date</th>
+                    <th>Minutes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,10 +262,10 @@ export function StudyPlan() {
                 </tbody>
               </table>
             </details>
-            <Link to="/security">Haftalık hedefini değiştir</Link>
+            <Link to="/security">Change your weekly target</Link>
           </section>
           <section className="panel">
-            <h2>Çalışma takvimim</h2>
+            <h2>My study schedule</h2>
             <form
               className="form-grid"
               onSubmit={(e) => {
@@ -279,15 +277,15 @@ export function StudyPlan() {
                 });
               }}
             >
-              <Field label="Çalışma hedefi">
+              <Field label="Study goal">
                 <input
                   required
                   name="title"
                   maxLength={200}
-                  placeholder="Örneğin: Java dersini tekrar et"
+                  placeholder="For example: review the Java lesson"
                 />
               </Field>
-              <Field label="Çalışma tarihi">
+              <Field label="Study date">
                 <input
                   required
                   type="date"
@@ -295,7 +293,7 @@ export function StudyPlan() {
                   defaultValue={new Date().toISOString().slice(0, 10)}
                 />
               </Field>
-              <Submit busy={action.isPending}>Plana ekle</Submit>
+              <Submit busy={action.isPending}>Add to plan</Submit>
             </form>
             {q.data?.tasks.map((t) => (
               <article className="lesson-row" key={t.id}>
@@ -318,25 +316,25 @@ export function StudyPlan() {
                     action.mutate({ path: `/enrollments/learning/tasks/${t.id}`, method: 'DELETE' })
                   }
                 >
-                  Sil
+                  Delete
                 </button>
               </article>
             ))}
           </section>
           <section className="panel">
-            <h2>Yer imlerim</h2>
+            <h2>My bookmarks</h2>
             {q.data?.bookmarks.length ? (
               q.data.bookmarks.map((b) => (
                 <p key={b.id}>
                   <Link
                     to={`/learn/${b.enrollment_id}?lesson=${b.lesson_id}&time=${b.position_seconds}`}
                   >
-                    {b.title} · {b.course_title} · {b.position_seconds} sn
+                    {b.title} · {b.course_title} · {b.position_seconds} s
                   </Link>
                 </p>
               ))
             ) : (
-              <p>Ders ekranından önemli yerlere yer imi ekleyebilirsin.</p>
+              <p>Add bookmarks to important moments from the lesson page.</p>
             )}
           </section>
         </>
@@ -414,7 +412,7 @@ export function LessonBookmarks({
   });
   return (
     <section className="feature-section">
-      <h3>Yer imleri</h3>
+      <h3>Bookmarks</h3>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -422,20 +420,20 @@ export function LessonBookmarks({
           add.mutate(String(f.get('title')));
         }}
       >
-        <Field label={`Bu konuma yer imi ekle (${position} sn)`}>
+        <Field label={`Bookmark this position (${position} s)`}>
           <input name="title" required maxLength={200} />
         </Field>
-        <Submit busy={add.isPending}>Yer imi ekle</Submit>
+        <Submit busy={add.isPending}>Add bookmark</Submit>
       </form>
       {q.data
         ?.filter((b) => b.lesson_id === lessonId)
         .map((b) => (
           <p key={b.id}>
             <button className="text-button" onClick={() => onSeek(b.position_seconds)}>
-              {b.title} · {b.position_seconds} sn
+              {b.title} · {b.position_seconds} s
             </button>
             <button className="text-button danger" onClick={() => remove.mutate(b.id)}>
-              Sil
+              Delete
             </button>
           </p>
         ))}
@@ -482,7 +480,7 @@ export function LessonMaterials({
   }
   return (
     <section className="feature-section">
-      <h3>Ders kaynakları</h3>
+      <h3>Lesson resources</h3>
       {q.error && <ErrorBox error={q.error} />}{' '}
       {q.data
         ?.filter((m) => m.type === 'RESOURCE')
@@ -494,7 +492,7 @@ export function LessonMaterials({
           </p>
         ))}
       {q.data && !q.data.some((m) => m.type === 'RESOURCE') && (
-        <p className="muted">Bu ders için ek kaynak bulunmuyor.</p>
+        <p className="muted">No additional resources for this lesson.</p>
       )}
       {!!error && <ErrorBox error={error} />}
     </section>
@@ -515,7 +513,7 @@ export function Wishlist() {
   });
   return (
     <>
-      <PageTitle title="İstek listem" />
+      <PageTitle title="My wishlist" />
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
@@ -528,14 +526,14 @@ export function Wishlist() {
             </h2>
             <p>{c.instructor_name}</p>
             <button className="text-button danger" onClick={() => remove.mutate(c.id)}>
-              Listeden kaldır
+              Remove from list
             </button>
           </article>
         ))
       ) : (
         <Empty
-          title="İstek listen boş"
-          text="Kurs sayfasından daha sonra öğrenmek istediğin kursları ekleyebilirsin."
+          title="Your wishlist is empty"
+          text="Add courses you want to study later from their course pages."
         />
       )}
       {remove.error && <ErrorBox error={remove.error} />}
@@ -564,7 +562,7 @@ export function WishButton({ courseId }: { courseId: string }) {
         disabled={m.isPending || q.isPending}
         onClick={() => m.mutate()}
       >
-        {found ? 'İstek listesinden kaldır' : 'İstek listeme ekle'}
+        {found ? 'Remove from wishlist' : 'Add to wishlist'}
       </button>
       {m.error && <ErrorBox error={m.error} />}
     </>
@@ -595,7 +593,7 @@ export function Inbox() {
   });
   return (
     <section className="panel">
-      <h2>Gelen kutusu</h2>
+      <h2>Inbox</h2>
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
@@ -613,19 +611,19 @@ export function Inbox() {
                   to={n.path}
                   onClick={() => read.mutate(n.id)}
                 >
-                  Görüntüle
+                  View
                 </Link>
               )}
               {!n.read_at && (
                 <button className="text-button" onClick={() => read.mutate(n.id)}>
-                  Okundu işaretle
+                  Mark as read
                 </button>
               )}
             </div>
           </article>
         ))
       ) : (
-        <p>Henüz uygulama içi bildirim yok.</p>
+        <p>No in-app notifications yet.</p>
       )}
       {read.error && <ErrorBox error={read.error} />}
     </section>
@@ -642,7 +640,7 @@ export function RecommendedCourses({ courseId }: { courseId: string }) {
   });
   return q.data?.length ? (
     <section className="panel">
-      <h2>İlgini çekebilecek kurslar</h2>
+      <h2>Courses you may enjoy</h2>
       <div className="form-grid">
         {q.data.map((c) => (
           <article key={c.id}>
@@ -676,13 +674,13 @@ export function VideoOperations() {
   });
   return (
     <section className="panel">
-      <h2>Video işleme durumu</h2>
+      <h2>Video processing status</h2>
       {q.error && <ErrorBox error={q.error} />}{' '}
       {q.data?.length ? (
         q.data.map((v) => (
           <article className="notice" key={v.id}>
             <h3>{v.original_file_name}</h3>
-            <p>{v.status === 'PROCESSING' ? 'İşleniyor' : 'İşlenemedi'}</p>
+            <p>{v.status === 'PROCESSING' ? 'Processing' : 'Processing failed'}</p>
             {v.failure_reason && <p>{v.failure_reason}</p>}
             {v.status === 'FAILED' && (
               <button
@@ -690,13 +688,13 @@ export function VideoOperations() {
                 disabled={retry.isPending}
                 onClick={() => retry.mutate(v.id)}
               >
-                Yeniden işle
+                Retry processing
               </button>
             )}
           </article>
         ))
       ) : (
-        <p>Bekleyen veya başarısız video işlemi yok.</p>
+        <p>No pending or failed video jobs.</p>
       )}
       {retry.error && <ErrorBox error={retry.error} />}
     </section>

@@ -30,7 +30,7 @@ public class DiscussionController {
     ) {
         return ApiResponse.success(
             service.list(courseId, lessonId, query, unanswered, user, pageable),
-            "Başarılı"
+            "Successful"
         );
     }
 
@@ -40,7 +40,7 @@ public class DiscussionController {
         @Valid @RequestBody DiscussionService.QuestionInput request,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.ask(courseId, request, user), "Soru kaydedildi");
+        return ApiResponse.success(service.ask(courseId, request, user), "Question saved");
     }
 
     @GetMapping("/{questionId}/replies")
@@ -49,7 +49,7 @@ public class DiscussionController {
         @PathVariable UUID questionId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.replies(courseId, questionId, user), "Başarılı");
+        return ApiResponse.success(service.replies(courseId, questionId, user), "Successful");
     }
 
     @PostMapping("/{questionId}/replies")
@@ -59,7 +59,7 @@ public class DiscussionController {
         @Valid @RequestBody DiscussionService.ReplyInput request,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.reply(courseId, questionId, request, user), "Yanıt kaydedildi");
+        return ApiResponse.success(service.reply(courseId, questionId, request, user), "Reply saved");
     }
 
     @PutMapping("/{questionId}/accepted/{replyId}")
@@ -70,7 +70,7 @@ public class DiscussionController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         service.accept(courseId, questionId, replyId, user);
-        return ApiResponse.success(null, "Yanıt kabul edildi");
+        return ApiResponse.success(null, "Answer accepted");
     }
 
     @DeleteMapping("/{questionId}")
@@ -80,6 +80,6 @@ public class DiscussionController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         service.delete(courseId, questionId, user);
-        return ApiResponse.success(null, "Soru silindi");
+        return ApiResponse.success(null, "Question deleted");
     }
 }

@@ -35,12 +35,12 @@ public class AdminBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments arguments) {
         if (email.isBlank() && password.isBlank()) return;
         if (!email.contains("@") || password.length() < 12) throw new IllegalStateException(
-            "İlk yönetici için geçerli e-posta ve en az 12 karakter parola gerekli"
+            "The initial administrator requires a valid email and a password of at least 12 characters"
         );
         var existing = users.findByEmail(email.trim().toLowerCase(java.util.Locale.ROOT));
         if (existing.isPresent()) {
             if (existing.get().getRole() != UserRole.ADMIN) throw new IllegalStateException(
-                "İlk yönetici e-postası başka bir hesap tarafından kullanılıyor"
+                "The initial administrator email is already used by another account"
             );
             return;
         }
@@ -49,7 +49,7 @@ public class AdminBootstrap implements ApplicationRunner {
                 .email(email.trim().toLowerCase(java.util.Locale.ROOT))
                 .password(encoder.encode(password))
                 .firstName("Platform")
-                .lastName("Yöneticisi")
+                .lastName("Administrator")
                 .role(UserRole.ADMIN)
                 .status(UserStatus.ACTIVE)
                 .emailVerified(true)

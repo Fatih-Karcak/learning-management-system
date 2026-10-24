@@ -26,7 +26,7 @@ public class EnrollmentEventConsumer {
             PaymentCompletedEvent event) {
 
         log.info(
-                "Payment event alındı: {}",
+                "Payment event received: {}",
                 event.paymentId()
         );
 
@@ -42,7 +42,7 @@ public class EnrollmentEventConsumer {
             RefundCompletedEvent event) {
 
         log.info(
-                "Refund event alındı: {}",
+                "Refund event received: {}",
                 event.paymentId()
         );
 

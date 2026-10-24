@@ -22,7 +22,7 @@ public class CourseTemplateController {
     public ApiResponse<?> list(
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.list(user), "Şablonlar");
+        return ApiResponse.success(service.list(user), "Templates");
     }
 
     @PostMapping("/{id}/templates")
@@ -33,7 +33,7 @@ public class CourseTemplateController {
     ) {
         return ApiResponse.success(
             service.save(id, input, user),
-            "Kişisel şablon kaydedildi"
+            "Personal template saved"
         );
     }
 
@@ -43,7 +43,7 @@ public class CourseTemplateController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         service.delete(id, user);
-        return ApiResponse.success(null, "Şablon silindi");
+        return ApiResponse.success(null, "Template deleted");
     }
 
     @PostMapping("/templates/{id}/create")
@@ -54,7 +54,7 @@ public class CourseTemplateController {
     ) {
         return ApiResponse.success(
             service.create(id, input, user),
-            "Şablondan taslak oluşturuldu"
+            "Draft created from template"
         );
     }
 }

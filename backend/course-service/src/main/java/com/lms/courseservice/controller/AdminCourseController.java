@@ -21,7 +21,7 @@ public class AdminCourseController {
 
     @GetMapping("/summary")
     public ApiResponse<Map<String, Object>> summary() {
-        return ApiResponse.success(service.summary(), "Başarılı");
+        return ApiResponse.success(service.summary(), "Successful");
     }
 
     @GetMapping
@@ -30,7 +30,7 @@ public class AdminCourseController {
         @RequestParam(required = false) CourseStatus status,
         Pageable pageable
     ) {
-        return ApiResponse.success(service.list(query, status, pageable), "Başarılı");
+        return ApiResponse.success(service.list(query, status, pageable), "Successful");
     }
 
     @PostMapping("/{id}/decision")
@@ -41,7 +41,7 @@ public class AdminCourseController {
     ) {
         return ApiResponse.success(
             service.decide(id, request, UUID.fromString(auth.getName())),
-            "Karar kaydedildi"
+            "Decision saved"
         );
     }
 
@@ -49,7 +49,7 @@ public class AdminCourseController {
     public ApiResponse<CourseService.CategorySummary> addCategory(
         @Valid @RequestBody AdminCourseService.CategoryInput request
     ) {
-        return ApiResponse.success(service.saveCategory(null, request), "Kategori eklendi");
+        return ApiResponse.success(service.saveCategory(null, request), "Category added");
     }
 
     @PutMapping("/categories/{id}")
@@ -57,12 +57,12 @@ public class AdminCourseController {
         @PathVariable Long id,
         @Valid @RequestBody AdminCourseService.CategoryInput request
     ) {
-        return ApiResponse.success(service.saveCategory(id, request), "Kategori güncellendi");
+        return ApiResponse.success(service.saveCategory(id, request), "Category updated");
     }
 
     @DeleteMapping("/categories/{id}")
     public ApiResponse<Void> deleteCategory(@PathVariable Long id) {
         service.deleteCategory(id);
-        return ApiResponse.success(null, "Kategori silindi");
+        return ApiResponse.success(null, "Category deleted");
     }
 }

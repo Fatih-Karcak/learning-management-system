@@ -47,13 +47,13 @@ describe('API boundary', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response(body({ success: false, message: 'Bu kursa kayıtlı değilsiniz' }), {
+        new Response(body({ success: false, message: 'You are not enrolled in this course' }), {
           status: 403,
         }),
       ),
     );
     await expect(api('/progress/enrollment')).rejects.toMatchObject({
-      message: 'Bu kursa kayıtlı değilsiniz',
+      message: 'You are not enrolled in this course',
       status: 403,
     });
   });
@@ -69,7 +69,7 @@ describe('API boundary', () => {
     );
     await expect(api('/media/my')).rejects.toMatchObject({
       status: 502,
-      message: 'İlgili hizmete şu anda ulaşılamıyor.',
+      message: 'This service is currently unreachable.',
     });
   });
   it('rejects application failures even with HTTP 200', async () => {
@@ -77,9 +77,11 @@ describe('API boundary', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValue(new Response(body({ success: false, message: 'İşlem reddedildi' }))),
+        .mockResolvedValue(
+          new Response(body({ success: false, message: 'The action was rejected' })),
+        ),
     );
-    await expect(api('/courses')).rejects.toThrow('İşlem reddedildi');
+    await expect(api('/courses')).rejects.toThrow('The action was rejected');
   });
   it('allows only web links from API values', () => {
     expect(safeUrl('javascript:alert(1)')).toBeUndefined();

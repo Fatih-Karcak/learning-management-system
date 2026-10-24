@@ -17,7 +17,7 @@ public class PaymentEventConsumer {
     @KafkaListener(topics = "payment-receipt", groupId = "notification-service",
             containerFactory = "paymentReceiptContainerFactory")
     public void handlePaymentReceipt(PaymentReceiptEvent event) {
-        log.info("Ödeme makbuzu eventi alındı: {}", event.paymentId());
+        log.info("Payment receipt event received: {}", event.paymentId());
         notificationService.sendPaymentReceiptEmail(event);
     }
 }

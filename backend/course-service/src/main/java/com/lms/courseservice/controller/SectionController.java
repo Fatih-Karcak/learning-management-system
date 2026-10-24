@@ -31,14 +31,14 @@ public class SectionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
                         sectionService.createSection(request, user.id()),
-                        "Bölüm oluşturuldu"));
+                        "Section created"));
     }
 
     @GetMapping("/course/{courseId}")
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getSections(
             @PathVariable UUID courseId, @AuthenticationPrincipal AuthenticatedUser viewer) {
         return ResponseEntity.ok(ApiResponse.success(
-                sectionService.getSectionsByCourse(courseId, viewer), "Başarılı"));
+                sectionService.getSectionsByCourse(courseId, viewer), "Successful"));
     }
 
     @DeleteMapping("/{id}")
@@ -47,6 +47,6 @@ public class SectionController {
             @PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser user) {
         sectionService.deleteSection(id, user.id());
-        return ResponseEntity.ok(ApiResponse.success(null, "Bölüm silindi"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Section deleted"));
     }
 }

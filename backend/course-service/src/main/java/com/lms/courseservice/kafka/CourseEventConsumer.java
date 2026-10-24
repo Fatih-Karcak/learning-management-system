@@ -20,7 +20,7 @@ public class CourseEventConsumer {
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handleCourseEnrolled(CourseEnrolledEvent event) {
-        log.info("Kursa kayıt eventi alındı - CourseId: {}, StudentId: {}",
+        log.info("Course enrollment event received - CourseId: {}, StudentId: {}",
                 event.courseId(), event.studentId());
         courseService.incrementEnrollmentCount(event.courseId(), event.enrollmentId());
     }

@@ -38,9 +38,9 @@ public class CourseTemplateService {
     public record Template(String id, String name, boolean builtIn) {}
 
     private static final List<Template> BUILT_INS = List.of(
-        new Template("starter", "Temel eğitim", true),
-        new Template("workshop", "Uygulamalı atölye", true),
-        new Template("assessment", "Test ve değerlendirme", true)
+        new Template("starter", "Starter course", true),
+        new Template("workshop", "Practical workshop", true),
+        new Template("assessment", "Assessment course", true)
     );
 
     @Transactional(readOnly = true)
@@ -72,7 +72,7 @@ public class CourseTemplateService {
             workspace.revision() != input.revision()
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Taslak değişti; güncel halini kaydedip tekrar deneyin"
+            "The draft changed; save the latest version and try again"
         );
         jdbc.queryForList(
             "select pg_advisory_xact_lock(hashtextextended(?,0))",
@@ -85,7 +85,7 @@ public class CourseTemplateService {
         );
         if (count != null && count >= 25) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "En fazla 25 kişisel şablon saklayabilirsiniz"
+            "You can store up to 25 personal templates"
         );
         var id = UUID.randomUUID();
         jdbc.update(
@@ -108,7 +108,7 @@ public class CourseTemplateService {
             ) != 1
         ) throw new ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "Şablon bulunamadı"
+            "Template not found"
         );
     }
 
@@ -130,7 +130,7 @@ public class CourseTemplateService {
             );
             if (rows.isEmpty()) throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Şablon bulunamadı"
+                "Template not found"
             );
             source = json.readValue(
                 rows.getFirst(),
@@ -142,12 +142,12 @@ public class CourseTemplateService {
         request.setTitle(input.title().trim());
         request.setCategoryId(input.categoryId());
         request.setDescription(
-            nonblank(c.getDescription(), "Kurs açıklamasını düzenleyin.")
+            nonblank(c.getDescription(), "Edit the course description.")
         );
         request.setShortDescription(
             nonblank(
                 c.getShortDescription(),
-                "Kursun kısa açıklamasını düzenleyin."
+                "Edit the short course description."
             )
         );
         request.setTargetAudience(c.getTargetAudience());
@@ -155,7 +155,7 @@ public class CourseTemplateService {
         request.setLevel(
             c.getLevel() == null ? CourseLevel.ALL_LEVELS : c.getLevel()
         );
-        request.setLanguage(nonblank(c.getLanguage(), "Türkçe"));
+        request.setLanguage(nonblank(c.getLanguage(), "English"));
         request.setRequirements(c.getRequirements());
         request.setOutcomes(c.getOutcomes());
         var created = courses.createCourse(
@@ -219,7 +219,7 @@ public class CourseTemplateService {
                                 x.prompt(),
                                 List.copyOf(x.options()),
                                 x.correctOption(),
-                                x.explanation()
+                                x.explanation(),x.questionType(),x.correctOptions(),x.weight()
                             )
                         )
                         .toList(),
@@ -243,39 +243,39 @@ public class CourseTemplateService {
                     .toList()
             );
         });
-        return new CourseWorkspaceService.Document(
-            created,
-            category,
-            quizzes,
-            materials
-        );
+        var assignments=new LinkedHashMap<UUID,AssignmentPolicyService.Policy>();
+        source.assignments().forEach((id,policy)->{
+            if(ids.containsKey(id)) assignments.put(ids.get(id),new AssignmentPolicyService.Policy(0,null,policy.allowLate(),
+                policy.rubric().stream().map(criterion->new AssignmentPolicyService.Criterion(UUID.randomUUID(),criterion.label(),criterion.maxPoints())).toList()));
+        });
+        return new CourseWorkspaceService.Document(created,category,quizzes,materials,assignments);
     }
 
     private CourseWorkspaceService.Document builtIn(String type) {
         var c = new CourseResponse();
         c.setDescription(
-            "## Kurs hakkında\nHedeflerinizi, öğrenme yolunu ve uygulamaları açıklayın."
+            "## About this course\n\nDescribe your goals, the learning journey and practical activities."
         );
-        c.setShortDescription("Bu kursun kazandıracağı becerileri açıklayın.");
-        c.setRequirements(List.of("Ön koşulları düzenleyin"));
-        c.setOutcomes(List.of("Öğrenme kazanımlarını düzenleyin"));
+        c.setShortDescription("Describe the skills learners will develop in this course.");
+        c.setRequirements(List.of("Edit the requirements"));
+        c.setOutcomes(List.of("Edit the learning outcomes"));
         var intro = lesson(
-            "Hoş geldiniz",
+            "Welcome",
             LessonType.ARTICLE,
-            "## Başlamadan önce\nKursun hedeflerini ve çalışma düzenini açıklayın."
+            "## Before you begin\n\nExplain the course goals and study approach."
         );
         var practice = lesson(
-            "Uygulama ödevi",
+            "Practical assignment",
             LessonType.ASSIGNMENT,
-            "## Görev\nBeklenen çıktıyı açıklayın.\n\n## Değerlendirme\n- Doğruluk\n- Açıklık\n- Uygulama"
+            "## Task\n\nDescribe the expected outcome.\n\n## Assessment\n\n- Accuracy\n- Clarity\n- Application"
         );
         var section = new SectionResponse();
         section.setId(UUID.randomUUID());
-        section.setTitle("Öğrenme yolculuğu");
+        section.setTitle("Learning journey");
         section.setOrderIndex(0);
         var quizzes = new LinkedHashMap<UUID, AssessmentService.Quiz>();
         if ("assessment".equals(type)) {
-            var quiz = lesson("Bilgi kontrolü", LessonType.QUIZ, "");
+            var quiz = lesson("Knowledge check", LessonType.QUIZ, "");
             quizzes.put(
                 quiz.getId(),
                 new AssessmentService.Quiz(
@@ -283,10 +283,10 @@ public class CourseTemplateService {
                     List.of(
                         new AssessmentService.Question(
                             UUID.randomUUID(),
-                            "Örnek soruyu kendi konunuzla değiştirin",
-                            List.of("Doğru seçenek", "Diğer seçenek"),
+                            "Replace this example question with your own topic",
+                            List.of("Correct option", "Another option"),
                             0,
-                            "Yanıtın açıklamasını düzenleyin"
+                            "Edit the answer explanation"
                         )
                     )
                 )
@@ -300,9 +300,9 @@ public class CourseTemplateService {
                 List.of(
                     intro,
                     lesson(
-                        "İlk konu",
+                        "First topic",
                         LessonType.ARTICLE,
-                        "## Konu\nKavramı açıklayın ve bir örnek ekleyin."
+                        "## Topic\n\nExplain the concept and add an example."
                     ),
                     practice
                 )

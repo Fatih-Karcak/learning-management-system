@@ -37,7 +37,7 @@ public class InternalCourseController {
         ) String provided
     ) {
         requireKey(provided);
-        return ApiResponse.success(courses.getInternalCourse(id), "Başarılı");
+        return ApiResponse.success(courses.getInternalCourse(id), "Successful");
     }
 
     @GetMapping("/{id}/authors/{user}")
@@ -52,7 +52,7 @@ public class InternalCourseController {
         requireKey(provided);
         return ApiResponse.success(
             authors.canEdit(id, user),
-            "Düzenleme yetkisi"
+            "Editing permission"
         );
     }
 
@@ -66,7 +66,7 @@ public class InternalCourseController {
             )
         ) throw new ResponseStatusException(
             HttpStatus.UNAUTHORIZED,
-            "Servis kimliği doğrulanamadı"
+            "Service authentication failed"
         );
     }
 }

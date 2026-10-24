@@ -52,6 +52,20 @@ public class MediaService {
     private static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024; // 10 MB
 
     @Transactional
+    public MediaAssetResponse registerUploadedVideo(UUID id, UUID owner, UUID course, String name,
+        String contentType, long size, String rawKey) {
+        requireCourseEditor(course, owner);
+        var existing = mediaAssetRepository.findById(id);
+        if (existing.isPresent()) return toResponse(existing.get());
+        var asset = MediaAsset.builder().id(id).ownerId(owner).courseId(course).type(AssetType.VIDEO)
+            .status(MediaStatus.PROCESSING).originalFileName(name).contentType(contentType)
+            .sizeBytes(size).rawStorageKey(rawKey).build();
+        mediaAssetRepository.save(asset);
+        eventPublisher.publishEvent(new VideoProcessingRequested(id));
+        return toResponse(asset);
+    }
+
+    @Transactional
     public MediaAssetResponse uploadVideo(
         MultipartFile file,
         UUID courseId,
@@ -60,18 +74,18 @@ public class MediaService {
     ) {
         requireCourseEditor(courseId, instructorId);
         if (file.isEmpty()) throw new UnsupportedMediaException(
-            "Dosya boş olamaz"
+            "The file must not be empty"
         );
 
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("video/")) {
             throw new UnsupportedMediaException(
-                "Sadece video dosyaları kabul edilir: " + contentType
+                "Only video files are accepted: " + contentType
             );
         }
         if (file.getSize() > MAX_VIDEO_SIZE) {
             throw new UnsupportedMediaException(
-                "Video boyutu 2GB sınırını aşıyor"
+                "The video exceeds the 2 GB size limit"
             );
         }
 
@@ -88,7 +102,7 @@ public class MediaService {
                 contentType
             );
         } catch (IOException e) {
-            throw new StorageException("Video yüklenemedi: " + e.getMessage());
+            throw new StorageException("The video could not be uploaded: " + e.getMessage());
         }
 
         MediaAsset asset = MediaAsset.builder()
@@ -110,7 +124,7 @@ public class MediaService {
             new VideoProcessingRequested(asset.getId())
         );
         log.info(
-            "Video kaydı oluşturuldu commit sonra eklenecek {}",
+            "Video record created; processing starts after commit: {}",
             asset.getId()
         );
 
@@ -126,18 +140,18 @@ public class MediaService {
     ) {
         requireCourseEditor(courseId, ownerId);
         if (file.isEmpty()) throw new UnsupportedMediaException(
-            "Dosya boş olamaz"
+            "The file must not be empty"
         );
 
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             throw new UnsupportedMediaException(
-                "Sadece resim dosyaları kabul edilir: " + contentType
+                "Only image files are accepted: " + contentType
             );
         }
         if (file.getSize() > MAX_IMAGE_SIZE) {
             throw new UnsupportedMediaException(
-                "Resim boyutu 10MB sınırını aşıyor"
+                "The image exceeds the 10 MB size limit"
             );
         }
 
@@ -169,7 +183,7 @@ public class MediaService {
                     java.nio.charset.StandardCharsets.US_ASCII
                 ).equals("WEBP");
             if (!png && !jpeg && !webp) throw new UnsupportedMediaException(
-                "Yalnızca geçerli JPEG, PNG ve WebP görselleri kabul edilir"
+                "Only valid JPEG, PNG and WebP images are accepted"
             );
             contentType = png
                 ? "image/png"
@@ -177,7 +191,7 @@ public class MediaService {
                   ? "image/jpeg"
                   : "image/webp";
         } catch (IOException e) {
-            throw new StorageException("Görsel okunamadı");
+            throw new StorageException("The image could not be read");
         }
         UUID mediaId = UUID.randomUUID();
         String key =
@@ -192,7 +206,7 @@ public class MediaService {
                 contentType
             );
         } catch (IOException e) {
-            throw new StorageException("Resim yüklenemedi: " + e.getMessage());
+            throw new StorageException("The image could not be uploaded: " + e.getMessage());
         }
 
         MediaAsset asset = MediaAsset.builder()
@@ -242,7 +256,7 @@ public class MediaService {
             )
         ) {
             throw new UnauthorizedMediaAccessException(
-                "Yalnızca kendi videonuzu derse ekleyebilirsiniz"
+                "You can only attach your own video to this lesson"
             );
         }
         if (
@@ -251,7 +265,7 @@ public class MediaService {
         ) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "İşlenemeyen dosya derse eklenemez; videoyu yeniden yükleyin"
+                "Failed media cannot be attached; upload the video again"
             );
         }
         if (
@@ -259,7 +273,7 @@ public class MediaService {
         ) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Video başka bir kursa bağlı; bu kurs için yeniden yükleyin"
+                "The video belongs to another course; upload it again for this course"
             );
         }
         asset.setCourseId(courseId);
@@ -293,8 +307,26 @@ public class MediaService {
         if (
             course != null && !courses.canEdit(course, user)
         ) throw new UnauthorizedMediaAccessException(
-            "Bu kursa içerik ekleme yetkiniz yok"
+            "You do not have permission to add content to this course"
         );
+    }
+
+    public org.springframework.data.domain.Page<MediaAssetResponse> searchLibrary(UUID course, UUID user,
+        AssetType type, MediaStatus status, String query, org.springframework.data.domain.Pageable pageable) {
+        requireCourseEditor(course, user);
+        if (query.length() > 200) throw new IllegalArgumentException("Search text must be at most 200 characters");
+        return mediaAssetRepository.searchLibrary(course, user, type, status, query.trim(), pageable).map(this::toResponse);
+    }
+
+    public record Cover(String contentType, InputStream stream) {}
+
+    public Cover getPublicCover(UUID id,UUID courseHint) {
+        var asset = findById(id);
+        UUID course=asset.getCourseId()==null?courseHint:asset.getCourseId();
+        if (asset.getType() != AssetType.IMAGE || asset.getStatus() != MediaStatus.READY ||
+            course == null || !courses.isPublishedCover(course,id,asset.getCourseId()==null?asset.getOwnerId():null))
+            throw new MediaNotFoundException("Course cover not found");
+        return new Cover(asset.getContentType(), storageService.download(imagesBucket, asset.getRawStorageKey()));
     }
 
     @Transactional
@@ -309,14 +341,17 @@ public class MediaService {
             !"ADMIN".equalsIgnoreCase(requesterRole)
         ) {
             throw new UnauthorizedMediaAccessException(
-                "Bu medyayı silme yetkiniz yok"
+                "You do not have permission to delete this media"
             );
         }
 
         if (asset.getLessonId() != null) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Derse bağlı medya silinemez; mevcut öğrencilerin erişimi korunur"
+            "Media attached to a lesson cannot be deleted; existing learner access is preserved"
         );
+        if (asset.getType() == AssetType.IMAGE && asset.getCourseId() != null &&
+            courses.isPublishedCover(asset.getCourseId(), mediaId)) throw new ResponseStatusException(
+                HttpStatus.CONFLICT, "Replace the published course cover before deleting this image");
         storageService.delete(
             asset.getType() == AssetType.IMAGE ? imagesBucket : rawBucket,
             asset.getRawStorageKey()
@@ -350,7 +385,7 @@ public class MediaService {
             asset.getHlsMasterKey() == null
         ) {
             throw new MediaNotFoundException(
-                "Video henüz hazır değil veya bulunamadı"
+                "The video is not ready or was not found"
             );
         }
 
@@ -362,7 +397,7 @@ public class MediaService {
         ) {
             return new String(in.readAllBytes());
         } catch (IOException e) {
-            throw new StorageException("Manifest okunamadı: " + e.getMessage());
+            throw new StorageException("The manifest could not be read: " + e.getMessage());
         }
     }
 
@@ -375,15 +410,29 @@ public class MediaService {
         MediaAsset asset = findById(mediaId);
         checkAccess(asset, requesterId, requesterRole);
 
-        if (asset.getHlsMasterKey() == null) {
-            throw new MediaNotFoundException("Video henüz hazır değil");
+        if (asset.getStatus() != MediaStatus.READY || asset.getType() != AssetType.VIDEO || asset.getHlsMasterKey() == null) {
+            throw new MediaNotFoundException("The video is not ready yet");
         }
+        if (!segmentName.matches("(?:master[0-9]+|quality-[0-9]+-[0-9]+)\\.ts"))
+            throw new MediaNotFoundException("Invalid video segment");
 
         String hlsPrefix = asset
             .getHlsMasterKey()
             .substring(0, asset.getHlsMasterKey().lastIndexOf('/') + 1);
 
         return storageService.download(hlsBucket, hlsPrefix + segmentName);
+    }
+
+    public String getVariantContent(UUID mediaId, String name, UUID requester, String role) {
+        if (!name.matches("quality-[0-9]+\\.m3u8")) throw new MediaNotFoundException("Invalid video quality");
+        var asset = findById(mediaId);
+        checkAccess(asset, requester, role);
+        if (asset.getStatus() != MediaStatus.READY || asset.getHlsMasterKey() == null)
+            throw new MediaNotFoundException("Video is not ready");
+        String prefix = asset.getHlsMasterKey().substring(0, asset.getHlsMasterKey().lastIndexOf('/')+1);
+        try (var stream=storageService.download(hlsBucket,prefix+name)) {
+            return new String(stream.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException ex) { throw new StorageException("Could not read video quality"); }
     }
 
     // ── Yardımcılar ──
@@ -398,7 +447,7 @@ public class MediaService {
 
         if (asset.getCourseId() == null) {
             throw new UnauthorizedMediaAccessException(
-                "Bu içeriğe erişim yetkiniz yok"
+                "You do not have permission to access this content"
             );
         }
 
@@ -412,7 +461,7 @@ public class MediaService {
             courses.preview(asset.getCourseId(), asset.getId())
         ) return;
         if (requesterId == null) throw new UnauthorizedMediaAccessException(
-            "Bu videoyu izlemek için kursa kayıt olun"
+            "Enroll in this course to watch this video"
         );
         boolean enrolled = Boolean.TRUE.equals(
             enrollmentClient
@@ -422,9 +471,11 @@ public class MediaService {
 
         if (!enrolled) {
             throw new UnauthorizedMediaAccessException(
-                "Bu içeriği görüntülemek için kursa kayıtlı olmalısınız"
+                "You must be enrolled to view this content"
             );
         }
+        if(asset.getType()==AssetType.VIDEO&&!courses.canLearn(asset.getCourseId(),asset.getId(),requesterId))
+            throw new UnauthorizedMediaAccessException("Complete prerequisite lessons or wait for the release date");
     }
 
     private MediaAssetResponse toResponse(MediaAsset asset) {
@@ -435,6 +486,7 @@ public class MediaService {
                 "/api/v1/media/" + asset.getId() + "/manifest.m3u8"
             );
         } else if (asset.getStatus() == MediaStatus.READY) {
+            response.setPublicUrl("/api/v1/media/" + asset.getId() + "/cover");
             response.setStreamUrl(
                 storageService.presignedGetUrl(
                     imagesBucket,
@@ -461,7 +513,7 @@ public class MediaService {
         return mediaAssetRepository
             .findById(id)
             .orElseThrow(() ->
-                new MediaNotFoundException("Medya bulunamadı: " + id)
+                new MediaNotFoundException("Media not found: " + id)
             );
     }
 

@@ -48,7 +48,7 @@ public class CourseTeamService {
             !user.isAdmin() && !course.getInstructorId().equals(user.id())
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Ekibi yalnızca kurs sahibi yönetebilir"
+            "Only the course owner can manage the team"
         );
         return course;
     }
@@ -78,7 +78,7 @@ public class CourseTeamService {
         );
         if (
             target.id().equals(c.getInstructorId())
-        ) throw new IllegalArgumentException("Kurs sahibi zaten ekipte");
+        ) throw new IllegalArgumentException("The course owner is already on the team");
         var count = jdbc.queryForObject(
             "select count(*) from course_collaborators where course_id=?",
             Integer.class,
@@ -86,7 +86,7 @@ public class CourseTeamService {
         );
         if (count != null && count >= 20) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Bir kursta en fazla 20 ortak eğitmen olabilir"
+            "A course can have up to 20 co-instructors"
         );
         jdbc.update(
             "insert into course_collaborators(course_id,user_id,display_name,status,invited_by) values(?,?,?,'INVITED',?) on conflict(course_id,user_id) do nothing",
@@ -122,7 +122,7 @@ public class CourseTeamService {
               );
         if (changed != 1) throw new ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "Bekleyen davet bulunamadı"
+            "Pending invitation not found"
         );
     }
 

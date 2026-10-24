@@ -39,16 +39,17 @@ public class ProgressService {
         UUID studentId
     ) {
         Enrollment enrollment = requireActiveEnrollment(enrollmentId, studentId);
+        courseCatalogService.requireLessonAccess(enrollment.getCourseId(), lessonId, studentId);
         var course = courseCatalogService.requireCourse(enrollment.getCourseId());
         var lesson = requireLesson(course, request.sectionId(), lessonId);
         int duration = lesson.durationSeconds() == null ? 0 : lesson.durationSeconds();
         if (!"VIDEO".equals(lesson.type()) || duration <= 0) throw new IllegalArgumentException(
-            "Video ve geçerli ders süresi gerekli"
+            "A video lesson with a valid duration is required"
         );
         double position = request.positionSeconds();
         if (
             !Double.isFinite(position) || position < 0 || position > duration + 1
-        ) throw new IllegalArgumentException("Video konumu ders süresinin dışında");
+        ) throw new IllegalArgumentException("The playback position exceeds the lesson duration");
         position = Math.min(position, duration);
         var progress = getOrCreateProgress(enrollment, lessonId, request.sectionId(), duration);
         LocalDateTime now = LocalDateTime.now(clock);
@@ -125,6 +126,7 @@ public class ProgressService {
         UUID studentId
     ) {
         Enrollment enrollment = requireActiveEnrollment(enrollmentId, studentId);
+        courseCatalogService.requireLessonAccess(enrollment.getCourseId(), lessonId, studentId);
 
         CourseSummaryResponse course = courseCatalogService.requireCourse(enrollment.getCourseId());
 
@@ -144,11 +146,11 @@ public class ProgressService {
         int watched = request.getWatchedSeconds() == null ? previous : request.getWatchedSeconds();
 
         if (watched < previous) {
-            throw new IllegalArgumentException("İzleme süresi geriye alınamaz");
+            throw new IllegalArgumentException("Watched time cannot be reduced");
         }
 
         if (actualDuration > 0 && watched > actualDuration) {
-            throw new IllegalArgumentException("İzleme süresi ders süresini aşamaz");
+            throw new IllegalArgumentException("Watched time cannot exceed the lesson duration");
         }
 
         progress.setWatchedSeconds(watched);
@@ -167,7 +169,7 @@ public class ProgressService {
             // Bu bilinçli bir ürün kuralıdır, izleme kanıtı değildir.
             if (!"ARTICLE".equals(lesson.type())) {
                 throw new IllegalArgumentException(
-                    "Bu ders türünün tamamlanması " + "güvenilir servis tarafından doğrulanmalı"
+                    "Completion of this lesson type " + "must be verified by a trusted service"
                 );
             }
 
@@ -191,6 +193,7 @@ public class ProgressService {
         UUID studentId
     ) {
         Enrollment enrollment = requireActiveEnrollment(enrollmentId, studentId);
+        courseCatalogService.requireLessonAccess(enrollment.getCourseId(), lessonId, studentId);
 
         CourseSummaryResponse course = courseCatalogService.requireCourse(enrollment.getCourseId());
 
@@ -215,17 +218,17 @@ public class ProgressService {
     private Enrollment requireActiveEnrollment(UUID enrollmentId, UUID studentId) {
         Enrollment enrollment = enrollmentRepository
             .findByIdForUpdate(enrollmentId)
-            .orElseThrow(() -> new EnrollmentNotFoundException("Kayıt bulunamadı"));
+            .orElseThrow(() -> new EnrollmentNotFoundException("Enrollment not found"));
 
         if (!enrollment.getStudentId().equals(studentId)) {
-            throw new EnrollmentNotFoundException("Kayıt bulunamadı");
+            throw new EnrollmentNotFoundException("Enrollment not found");
         }
 
         if (
             enrollment.getStatus() != EnrollmentStatus.ACTIVE &&
             enrollment.getStatus() != EnrollmentStatus.COMPLETED
         ) {
-            throw new IllegalArgumentException("Kayıt aktif değil");
+            throw new IllegalArgumentException("The enrollment is not active");
         }
 
         return enrollment;
@@ -239,7 +242,7 @@ public class ProgressService {
         CourseSummaryResponse.Lesson lesson = course.findLesson(sectionId, lessonId);
 
         if (lesson == null) {
-            throw new IllegalArgumentException("Ders belirtilen kursa ve bölüme ait değil");
+            throw new IllegalArgumentException("The lesson does not belong to this course and section");
         }
 
         return lesson;
@@ -288,7 +291,7 @@ public class ProgressService {
         var lessonIds = course.lessonIds();
 
         if (lessonIds.isEmpty()) {
-            throw new IllegalStateException("Kursun ders listesi boş");
+            throw new IllegalStateException("The course has no lessons");
         }
 
         long completed = progressRepository.countByEnrollmentIdAndStatusAndLessonIdIn(
@@ -327,10 +330,10 @@ public class ProgressService {
     public List<ProgressResponse> getEnrollmentProgress(UUID enrollmentId, UUID studentId) {
         Enrollment enrollment = enrollmentRepository
             .findById(enrollmentId)
-            .orElseThrow(() -> new EnrollmentNotFoundException("Kayıt bulunamadı"));
+            .orElseThrow(() -> new EnrollmentNotFoundException("Enrollment not found"));
 
         if (!enrollment.getStudentId().equals(studentId)) {
-            throw new EnrollmentNotFoundException("Kayıt bulunamadı");
+            throw new EnrollmentNotFoundException("Enrollment not found");
         }
 
         return progressRepository

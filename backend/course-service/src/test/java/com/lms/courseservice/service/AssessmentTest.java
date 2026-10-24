@@ -21,6 +21,7 @@ class AssessmentTest {
     final EnrollmentClient enrollments = mock(EnrollmentClient.class);
     final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     final ObjectMapper json = new ObjectMapper();
+    final AssignmentPolicyService policies=mock(AssignmentPolicyService.class);
     final AssessmentService service = new AssessmentService(
         lessons,
         access,
@@ -28,7 +29,7 @@ class AssessmentTest {
         jdbc,
         json,
         mock(PlatformEvents.class),
-        mock(com.lms.courseservice.client.ContentClient.class)
+        mock(com.lms.courseservice.client.ContentClient.class),policies
     );
     final UUID courseId = UUID.randomUUID(),
         lessonId = UUID.randomUUID(),
@@ -40,6 +41,7 @@ class AssessmentTest {
     final Lesson lesson = Lesson.builder().id(lessonId).section(section).type(LessonType.QUIZ).build();
 
     AssessmentTest() {
+        when(policies.get(any())).thenReturn(new AssignmentPolicyService.Policy(0,null,true,List.of()));
         when(lessons.findById(lessonId)).thenReturn(Optional.of(lesson));
         var quiz = new AssessmentService.Quiz(
             70,

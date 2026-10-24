@@ -40,7 +40,7 @@ public class CertificateService {
                 .findByIdForUpdate(enrollmentId)
                 .orElseThrow(() ->
                         new EnrollmentNotFoundException(
-                                "Kayıt bulunamadı"
+                                "Enrollment not found"
                         )
                 );
 
@@ -87,7 +87,7 @@ public class CertificateService {
 
         if (pdf.length == 0) {
             throw new IllegalStateException(
-                    "Boş sertifika üretildi"
+                    "An empty certificate was generated"
             );
         }
 
@@ -124,13 +124,13 @@ public class CertificateService {
                 .findByEnrollmentId(enrollmentId)
                 .orElseThrow(() ->
                         new EnrollmentNotFoundException(
-                                "Sertifika bulunamadı"
+                                "Certificate not found"
                         )
                 );
 
         if (!certificate.getStudentId().equals(studentId)) {
             throw new EnrollmentNotFoundException(
-                    "Sertifika bulunamadı"
+                    "Certificate not found"
             );
         }
 
@@ -138,7 +138,7 @@ public class CertificateService {
                 != EnrollmentStatus.COMPLETED) {
 
             throw new EnrollmentNotFoundException(
-                    "Sertifika geçerli değil"
+                    "The certificate is not valid"
             );
         }
 
@@ -153,7 +153,7 @@ public class CertificateService {
                 .findByVerificationCode(code)
                 .orElseThrow(() ->
                         new EnrollmentNotFoundException(
-                                "Geçersiz doğrulama kodu"
+                                "Invalid verification code"
                         )
                 );
 
@@ -161,7 +161,7 @@ public class CertificateService {
                 != EnrollmentStatus.COMPLETED) {
 
             throw new EnrollmentNotFoundException(
-                    "Sertifika geçerli değil"
+                    "The certificate is not valid"
             );
         }
 
@@ -211,7 +211,7 @@ public class CertificateService {
                 || result.data().lastName() == null) {
 
             throw new IllegalStateException(
-                    "Öğrenci adı alınamadı"
+                    "The learner name could not be retrieved"
             );
         }
 
@@ -251,7 +251,7 @@ public class CertificateService {
                             ? ""
                             : certificate.getIssuedAt().format(
                             DateTimeFormatter.ofPattern(
-                                    "dd MMMM yyyy"
+                                    "dd MMMM yyyy", java.util.Locale.ENGLISH
                             )
                     )
             );
@@ -267,6 +267,10 @@ public class CertificateService {
             PdfRendererBuilder builder =
                     new PdfRendererBuilder();
 
+            builder.useFont(() -> CertificateService.class.getResourceAsStream("/fonts/DejaVuSans.ttf"),
+                    "LMS Sans", 400, com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle.NORMAL, true);
+            builder.useFont(() -> CertificateService.class.getResourceAsStream("/fonts/DejaVuSans-Bold.ttf"),
+                    "LMS Sans", 700, com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle.NORMAL, true);
             builder.withHtmlContent(html, null);
             builder.toStream(output);
             builder.run();
@@ -275,7 +279,7 @@ public class CertificateService {
 
         } catch (Exception e) {
             throw new IllegalStateException(
-                    "Sertifika PDF oluşturulamadı",
+                    "The certificate PDF could not be generated",
                     e
             );
         }

@@ -29,21 +29,15 @@ public class MediaController {
     > getOwnMedia(
         Authentication authentication,
         @RequestParam(required = false) UUID courseId,
+        @RequestParam(required = false) com.lms.contentservice.domain.enums.AssetType type,
+        @RequestParam(required = false) com.lms.contentservice.domain.enums.MediaStatus status,
+        @RequestParam(defaultValue = "") String query,
         org.springframework.data.domain.Pageable pageable
     ) {
         return ResponseEntity.ok(
             ApiResponse.success(
-                courseId == null
-                    ? mediaService.getOwnMedia(
-                          requester(authentication),
-                          pageable
-                      )
-                    : mediaService.getCourseLibrary(
-                          courseId,
-                          requester(authentication),
-                          pageable
-                      ),
-                "Başarılı"
+                mediaService.searchLibrary(courseId, requester(authentication), type, status, query, pageable),
+                "Successful"
             )
         );
     }
@@ -67,7 +61,7 @@ public class MediaController {
                     lessonId,
                     requester(authentication)
                 ),
-                "Video yüklendi, işleniyor"
+                "Video uploaded and processing"
             )
         );
     }
@@ -91,7 +85,7 @@ public class MediaController {
                     lessonId,
                     requester(authentication)
                 ),
-                "Resim yüklendi"
+                "Image uploaded"
             )
         );
     }
@@ -108,7 +102,7 @@ public class MediaController {
                     requester(authentication),
                     role(authentication)
                 ),
-                "Başarılı"
+                "Successful"
             )
         );
     }
@@ -123,10 +117,19 @@ public class MediaController {
             requester(authentication),
             role(authentication)
         );
-        return ResponseEntity.ok(ApiResponse.success(null, "Medya silindi"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Media deleted"));
     }
 
     // ── HLS streaming uçları ──
+
+    @GetMapping("/{id}/cover")
+    public ResponseEntity<InputStreamResource> cover(@PathVariable UUID id,@RequestParam(required=false) UUID courseId) {
+        var cover = mediaService.getPublicCover(id,courseId);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(cover.contentType()))
+            .header("X-Content-Type-Options", "nosniff")
+            .cacheControl(org.springframework.http.CacheControl.noCache())
+            .body(new InputStreamResource(cover.stream()));
+    }
 
     @GetMapping(
         value = "/{id}/manifest.m3u8",
@@ -160,6 +163,12 @@ public class MediaController {
         return ResponseEntity.ok()
             .contentType(MediaType.valueOf("video/mp2t"))
             .body(new InputStreamResource(stream));
+    }
+
+    @GetMapping(value="/{id}/{name:quality-[0-9]+\\.m3u8}", produces="application/vnd.apple.mpegurl")
+    public ResponseEntity<String> variant(@PathVariable UUID id,@PathVariable String name,Authentication authentication) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+            .body(mediaService.getVariantContent(id,name,requester(authentication),role(authentication)));
     }
 
     private UUID requester(Authentication authentication) {

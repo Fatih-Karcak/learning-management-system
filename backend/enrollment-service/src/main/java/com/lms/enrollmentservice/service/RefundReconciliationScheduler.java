@@ -37,7 +37,7 @@ public class RefundReconciliationScheduler {
             } catch (Exception e) {
 
                 log.error(
-                        "İade mutabakatı başarısız: {}",
+                        "Refund reconciliation failed: {}",
                         refund.getPaymentId(),
                         e
                 );

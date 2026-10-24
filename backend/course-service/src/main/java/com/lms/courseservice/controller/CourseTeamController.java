@@ -23,7 +23,7 @@ public class CourseTeamController {
         @PathVariable UUID id,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.get(id, user), "Kurs ekibi");
+        return ApiResponse.success(service.get(id, user), "Course team");
     }
 
     @PostMapping("/{id}/team")
@@ -34,7 +34,7 @@ public class CourseTeamController {
     ) {
         return ApiResponse.success(
             service.invite(id, input, user),
-            "Davet gönderildi"
+            "Invitation sent"
         );
     }
 
@@ -42,7 +42,7 @@ public class CourseTeamController {
     public ApiResponse<?> invitations(
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.invitations(user), "Kurs davetleri");
+        return ApiResponse.success(service.invitations(user), "Course invitations");
     }
 
     @PostMapping("/{id}/team/reply")
@@ -52,7 +52,7 @@ public class CourseTeamController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         service.reply(id, input, user);
-        return ApiResponse.success(null, "Davet yanıtlandı");
+        return ApiResponse.success(null, "Invitation answered");
     }
 
     @DeleteMapping("/{id}/team/{member}")
@@ -62,6 +62,6 @@ public class CourseTeamController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         service.remove(id, member, user);
-        return ApiResponse.success(null, "Ekip üyeliği kaldırıldı");
+        return ApiResponse.success(null, "Team membership removed");
     }
 }

@@ -24,6 +24,7 @@ public class AdminScopeService {
 
     public static boolean allows(String scope, String path, String method) {
         if ("FULL".equals(scope)) return true;
+        if(path.contains("/learning-rules") || (path.startsWith("/api/v1/courses/paths")&&!"GET".equals(method))) return false;
         if (
             path.startsWith("/api/v1/auth/") ||
             path.equals("/api/v1/users/me") ||
@@ -63,13 +64,13 @@ public class AdminScopeService {
         );
         if (!"FULL".equals(scope(actor))) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Tam yönetici yetkisi gerekli"
+            "Full administrator access is required"
         );
         if (
             target.equals(actor) ||
             !Set.of("FULL", "MODERATION", "SUPPORT").contains(scope)
         ) throw new IllegalArgumentException(
-            "Kendi yetkinizi değiştiremezsiniz veya kapsam geçersiz"
+            "You cannot change your own scope, or the selected scope is invalid"
         );
         if (
             jdbc.update(
@@ -77,7 +78,7 @@ public class AdminScopeService {
                 scope,
                 target
             ) != 1
-        ) throw new IllegalArgumentException("Hedef kullanıcı yönetici olmalı");
+        ) throw new IllegalArgumentException("The target user must be an administrator");
         jdbc.update(
             "update user_sessions set revoked=true where user_id=?",
             target

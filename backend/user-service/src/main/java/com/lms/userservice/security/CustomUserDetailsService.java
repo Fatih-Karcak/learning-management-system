@@ -21,10 +21,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
         User user = userRepository.findById(UUID.fromString(userId))
-                .orElseThrow(() -> new UsernameNotFoundException("Kullanıcı bulunamadı: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
 
         if (user.getStatus() == UserStatus.INACTIVE || user.getStatus() == UserStatus.BANNED) {
-            throw new DisabledException("Hesap aktif değil");
+            throw new DisabledException("The account is not active");
         }
 
         return new org.springframework.security.core.userdetails.User(

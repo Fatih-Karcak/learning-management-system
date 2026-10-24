@@ -13,7 +13,7 @@ public class CreateLessonRequest {
     @NotNull
     private UUID sectionId;
 
-    @NotBlank(message = "Ders başlığı boş olamaz")
+    @NotBlank(message = "Lesson title is required")
     private String title;
 
     private String content;

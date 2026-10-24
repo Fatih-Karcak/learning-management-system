@@ -47,19 +47,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.<Map<String, String>>builder()
                         .success(false)
-                        .message("Validasyon hatası")
+                        .message("Validation error")
                         .data(errors)
                         .build());
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(Exception ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Erişim yetkiniz yok"));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Access denied"));
     }
 
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(Exception ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Kimlik doğrulama gerekli"));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Authentication required"));
     }
 
     @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
             org.springframework.web.bind.MissingServletRequestParameterException.class,
             org.springframework.web.bind.MissingRequestHeaderException.class})
     public ResponseEntity<ApiResponse<Void>> handleInvalidRequest(Exception ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("İstek alanları geçersiz veya eksik"));
+        return ResponseEntity.badRequest().body(ApiResponse.error("Request fields are invalid or missing"));
     }
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
@@ -79,7 +79,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
         log.error("Beklenmeyen hata: ", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Sunucu hatası oluştu"));
+                .body(ApiResponse.error("A server error occurred"));
     }
     // user-service/exception/GlobalExceptionHandler.java — eklenen metod
     @ExceptionHandler(IllegalArgumentException.class)

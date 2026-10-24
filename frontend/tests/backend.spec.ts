@@ -11,57 +11,59 @@ test('real backend: register instructor, add lesson and submit for administrator
   const email = `frontend-e2e-${suffix}@example.test`;
   const title = `Frontend doğrulama kursu ${suffix}`;
   await page.goto('/register');
-  await page.getByLabel('Ad', { exact: true }).fill('Tarayıcı');
-  await page.getByLabel('Soyad', { exact: true }).fill('Kontrolü');
-  await page.getByLabel('E-posta adresi').fill(email);
-  await page.getByLabel('Şifre', { exact: true }).fill(`Local-${suffix}-Test!`);
-  await page.getByLabel('Nasıl katılmak istersin?').selectOption('INSTRUCTOR');
-  await page.getByRole('button', { name: 'Hesabımı oluştur' }).click();
-  await expect(page.getByRole('heading', { name: /Merhaba, Tarayıcı/ })).toBeVisible();
+  await page.getByLabel('First name', { exact: true }).fill('Tarayıcı');
+  await page.getByLabel('Last name', { exact: true }).fill('Kontrolü');
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill(`Local-${suffix}-Test!`);
+  await page.getByLabel('How would you like to join?').selectOption('INSTRUCTOR');
+  await page.getByRole('button', { name: 'Create my account' }).click();
+  await expect(page.getByRole('heading', { name: /Hello, Tarayıcı/ })).toBeVisible();
   await page
-    .getByRole('navigation', { name: 'Eğitmen menüsü' })
-    .getByRole('link', { name: 'Kurslarım', exact: true })
+    .getByRole('navigation', { name: 'Instructor navigation' })
+    .getByRole('link', { name: 'My courses', exact: true })
     .click();
-  await page.getByRole('link', { name: 'Yeni kurs oluştur' }).click();
-  await page.getByLabel('Kurs başlığı').fill(title);
+  await page.getByRole('link', { name: 'Create a new course' }).click();
+  await page.getByLabel('Course title').fill(title);
   await page
-    .getByLabel('Kısa açıklama', { exact: true })
+    .getByLabel('Short description', { exact: true })
     .fill('Gerçek backend ile uçtan uca tarayıcı doğrulaması.');
   await page
-    .getByLabel('Kurs açıklaması', { exact: true })
+    .getByLabel('Course description', { exact: true })
     .fill(
       '## Öğrenme yolculuğu\nBu kurs arayüz ve backend bağlantısını doğrulamak için oluşturuldu.',
     );
-  await page.getByLabel('Kategori', { exact: true }).selectOption({ index: 1 });
-  await page.getByLabel('Fiyat (₺)', { exact: true }).fill('250');
-  await page.getByRole('button', { name: 'Taslağı oluştur' }).click();
+  await page.getByLabel('Category', { exact: true }).selectOption({ index: 1 });
+  await page.getByLabel('Price (TRY)', { exact: true }).fill('250');
+  await page.getByRole('button', { name: 'Create draft' }).click();
   await expect(page).toHaveURL(/\/instructor\/[a-f0-9-]+$/);
-  await page.getByLabel('Ön koşullar — her satıra bir madde').fill('Ön koşul yok');
-  await page.getByLabel('Kazanımlar — her satıra bir madde').fill('İlk yazılı dersi tamamla');
-  await page.getByRole('button', { name: 'Bölüm ekle', exact: true }).click();
-  await page.getByLabel('Bölüm 1 başlığı').fill('Başlangıç');
-  await page.getByRole('button', { name: 'Ders ekle', exact: true }).click();
+  await page.getByLabel('Requirements — one per line').fill('Ön koşul yok');
+  await page.getByLabel('Learning outcomes — one per line').fill('İlk yazılı dersi tamamla');
+  await page.getByRole('button', { name: 'Add section', exact: true }).click();
+  await page.getByLabel('Section 1 title').fill('Beginner');
+  await page.getByRole('button', { name: 'Add lesson', exact: true }).click();
   await page
     .getByRole('dialog')
-    .getByLabel('Ders başlığı', { exact: true })
+    .getByLabel('Lesson title', { exact: true })
     .fill('İlk yazılı ders');
   await page
     .getByRole('dialog')
-    .getByLabel('Ders metni', { exact: true })
+    .getByLabel('Lesson text', { exact: true })
     .fill('Gerçek backend üzerinden kaydedilen ders içeriği.');
-  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
-  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'İncelemeye gönder', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Başvuruyu geri çek', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Finish editing' }).click();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Submit for review', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Submit for review', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Withdraw submission', exact: true }),
+  ).toBeVisible();
   await page
-    .getByRole('navigation', { name: 'Eğitmen menüsü' })
-    .getByRole('link', { name: 'Kurslarım', exact: true })
+    .getByRole('navigation', { name: 'Instructor navigation' })
+    .getByRole('link', { name: 'My courses', exact: true })
     .click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Çıkış yap' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
   await page.goto('/catalog');
-  await page.getByRole('textbox', { name: 'Kurs ara' }).fill(suffix);
-  await page.getByRole('button', { name: 'Ara', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search courses' }).fill(suffix);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
 });

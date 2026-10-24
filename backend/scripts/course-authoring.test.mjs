@@ -1,3 +1,4 @@
+import { decodeMailhogMessage } from './mailhog.mjs';
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -78,11 +79,7 @@ describe(
             !m.Content?.Headers?.To?.some((to) => to.includes(user.user.email))
           )
             continue;
-          const decoded = (m.Content.Body || "")
-            .replace(/=\r?\n/g, "")
-            .replace(/=([0-9A-F]{2})/gi, (_, hex) =>
-              String.fromCharCode(parseInt(hex, 16)),
-            );
+          const decoded = decodeMailhogMessage(m);
           const match = decoded.match(/verify-email\?token=([^"\s<]+)/);
           if (match)
             token = decodeURIComponent(match[1].replace(/&amp;.*/, ""));

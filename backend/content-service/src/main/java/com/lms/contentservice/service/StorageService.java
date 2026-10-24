@@ -48,10 +48,10 @@ public class StorageService {
             boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
                 minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-                log.info("Bucket oluşturuldu: {}", bucket);
+                log.info("Bucket created: {}", bucket);
             }
         } catch (Exception e) {
-            throw new StorageException("Bucket kontrol/oluşturma hatası: " + e.getMessage());
+            throw new StorageException("Bucket check or creation failed: " + e.getMessage());
         }
     }
 
@@ -66,7 +66,7 @@ public class StorageService {
                     .build()
             );
         } catch (Exception e) {
-            throw new StorageException("Dosya yüklenemedi: " + e.getMessage());
+            throw new StorageException("The file could not be uploaded: " + e.getMessage());
         }
     }
 
@@ -81,7 +81,7 @@ public class StorageService {
                     .build()
             );
         } catch (Exception e) {
-            throw new StorageException("Dosya yüklenemedi: " + e.getMessage());
+            throw new StorageException("The file could not be uploaded: " + e.getMessage());
         }
     }
 
@@ -89,7 +89,7 @@ public class StorageService {
         try {
             return minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build());
         } catch (Exception e) {
-            throw new StorageException("Dosya indirilemedi: " + e.getMessage());
+            throw new StorageException("Could not download the file: " + e.getMessage());
         }
     }
 
@@ -112,7 +112,7 @@ public class StorageService {
                     .build()
             );
         } catch (Exception e) {
-            throw new StorageException("URL üretilemedi: " + e.getMessage());
+            throw new StorageException("The URL could not be generated: " + e.getMessage());
         }
     }
 
@@ -120,8 +120,16 @@ public class StorageService {
         try {
             minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(key).build());
         } catch (Exception e) {
-            throw new StorageException("Dosya silinemedi: " + e.getMessage());
+            throw new StorageException("Could not delete the file: " + e.getMessage());
         }
+    }
+
+    public void compose(String bucket, String key, java.util.List<String> parts) {
+        try {
+            minioClient.composeObject(ComposeObjectArgs.builder().bucket(bucket).object(key)
+                .sources(parts.stream().map(part -> ComposeSource.builder().bucket(bucket).object(part).build()).toList())
+                .headers(java.util.Map.of("Content-Type", "application/octet-stream")).build());
+        } catch (Exception e) { throw new StorageException("Could not assemble the uploaded video"); }
     }
 
     public void deletePrefix(String bucket, String prefix) {
@@ -136,12 +144,12 @@ public class StorageService {
             for (var result : minioClient.removeObjects(
                 RemoveObjectsArgs.builder().bucket(bucket).objects(objects).build()
             )) {
-                throw new StorageException("HLS dosyası silinemedi: " + result.get().message());
+                throw new StorageException("The HLS file could not be deleted: " + result.get().message());
             }
         } catch (StorageException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new StorageException("HLS dosyaları silinemedi: " + ex.getMessage());
+            throw new StorageException("The HLS files could not be deleted: " + ex.getMessage());
         }
     }
 }

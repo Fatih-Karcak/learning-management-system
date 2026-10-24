@@ -21,6 +21,7 @@ public class CourseAccessPolicy {
 
     private final EnrollmentClient enrollmentClient;
     private final CourseAuthoringAccess authors;
+    private final LearningPolicyService learning;
 
     public void requireVisible(Course course, AuthenticatedUser viewer) {
         if (
@@ -28,7 +29,7 @@ public class CourseAccessPolicy {
             !isOwnerOrAdmin(course, viewer) &&
             !(viewer != null && isEnrolled(course.getId(), viewer.id()))
         ) {
-            throw new CourseNotFoundException("Kurs bulunamadı");
+            throw new CourseNotFoundException("Course not found");
         }
     }
 
@@ -42,9 +43,15 @@ public class CourseAccessPolicy {
     public void requireEnrolled(UUID courseId, UUID studentId) {
         if (!isEnrolled(courseId, studentId)) {
             throw new UnauthorizedException(
-                "Bu işlem için kursa kayıtlı olmalısınız"
+                "You must be enrolled in this course to perform this action"
             );
         }
+    }
+
+    public void requireLessonAccess(Course course,UUID lesson,AuthenticatedUser user) {
+        if(isOwnerOrAdmin(course,user)) return;
+        String reason=learning.lockReason(course,lesson,user.id());
+        if(reason!=null) throw new UnauthorizedException(reason);
     }
 
     private boolean isEnrolled(UUID courseId, UUID studentId) {
@@ -56,14 +63,14 @@ public class CourseAccessPolicy {
             if (result == null || !result.success() || result.data() == null) {
                 throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "Kayıt bilgisi doğrulanamadı"
+                    "Enrollment details could not be verified"
                 );
             }
             return result.data();
         } catch (RestClientException ex) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "Kayıt servisine ulaşılamadı",
+                "The enrollment service could not be reached",
                 ex
             );
         }
@@ -88,6 +95,17 @@ public class CourseAccessPolicy {
                 lesson.setContent(null);
                 lesson.setVideoUrl(null);
             }
+        }
+    }
+
+    public void filterCourseLessons(Course course,List<LessonResponse> lessons,boolean fullAccess,AuthenticatedUser viewer) {
+        filterLessons(lessons,fullAccess);
+        if(!fullAccess||viewer==null||isOwnerOrAdmin(course,viewer)||lessons==null) return;
+        var locks=learning.lockReasons(course,viewer.id());
+        for(var lesson:lessons) {
+            String reason=locks.get(lesson.getId());
+            lesson.setLocked(reason!=null);lesson.setLockReason(reason);
+            if(reason!=null) { lesson.setContent(null);lesson.setVideoUrl(null); }
         }
     }
 }

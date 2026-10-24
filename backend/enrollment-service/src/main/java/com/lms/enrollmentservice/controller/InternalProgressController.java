@@ -37,7 +37,7 @@ public class InternalProgressController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         result,
-                        "Ders tamamlandı"
+                        "Lesson completed"
                 )
         );
     }

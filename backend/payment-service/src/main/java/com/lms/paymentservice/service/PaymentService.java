@@ -47,7 +47,7 @@ public class PaymentService {
 
         if (paymentRepository.existsByStudentIdAndCourseIdAndStatus(
                 studentId, request.getCourseId(), PaymentStatus.COMPLETED)) {
-            throw new PaymentFailedException("Bu kursa zaten ödeme yapılmış");
+            throw new PaymentFailedException("This course has already been paid for");
         }
 
         // ── ADIM 1: SIRALI ──
@@ -58,19 +58,19 @@ public class PaymentService {
         try {
             result = courseClient.getCoursePrice(request.getCourseId());
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException ex) {
-            if (ex.getStatusCode().value() == 404) throw new PaymentNotFoundException("Kurs bulunamadı");
+            if (ex.getStatusCode().value() == 404) throw new PaymentNotFoundException("Course not found");
             throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Kurs servisine ulaşılamadı", ex);
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "The course service could not be reached", ex);
         }
         if (result == null || !result.success() || result.data() == null
                 || !request.getCourseId().equals(result.data().id())
                 || !"PUBLISHED".equals(result.data().status()) || result.data().price() == null) {
-            throw new PaymentFailedException("Satın alınabilir kurs bilgisi bulunamadı");
+            throw new PaymentFailedException("No purchasable course details were found");
         }
         CoursePriceResponse course = result.data();
         BigDecimal amount = course.effectivePrice();
         if (amount.signum() < 0 || amount.compareTo(course.price()) > 0) {
-            throw new PaymentFailedException("Kurs fiyatı geçersiz");
+            throw new PaymentFailedException("Invalid course price");
         }
 
         // ── ADIM 2: GERÇEK PARALEL İŞ ──
@@ -94,17 +94,17 @@ public class PaymentService {
             velocityCheck = velocityTask.get();
 
         } catch (StructuredTaskScope.FailedException e) {
-            throw new PaymentFailedException("Fraud kontrolü başarısız: " + e.getCause().getMessage());
+            throw new PaymentFailedException("Fraud screening failed: " + e.getCause().getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new PaymentFailedException("Ödeme işlemi kesintiye uğradı");
+            throw new PaymentFailedException("Payment processing was interrupted");
         }
         FraudResult fraudResult = FraudResult.combine(amountCheck, velocityCheck);
 
         if (!fraudResult.passed()) {
             log.warn("Fraud tespiti - StudentId: {}, Risk: {}, Sebep: {}",
                     studentId, fraudResult.riskScore(), fraudResult.reason());
-            throw new PaymentFailedException("Ödeme güvenlik kontrolünden geçemedi");
+            throw new PaymentFailedException("Payment did not pass the security checks");
         }
 
         // ── ADIM 3: Stripe + DB kaydı (öncekiyle aynı) ──
@@ -124,7 +124,7 @@ public class PaymentService {
                 .build();
 
         payment = paymentRepository.save(payment);
-        log.info("PaymentIntent oluşturuldu: {}", payment.getId());
+        log.info("PaymentIntent created: {}", payment.getId());
 
         return PaymentIntentResponse.builder()
                 .paymentId(payment.getId())
@@ -142,7 +142,7 @@ public class PaymentService {
         Payment payment = paymentRepository
                 .findByStripePaymentIntentIdForUpdate(stripeIntentId)
                 .orElseThrow(() -> new PaymentNotFoundException(
-                        "Ödeme bulunamadı: " + stripeIntentId));
+                        "Payment not found: " + stripeIntentId));
 
         if (payment.getStatus() != PaymentStatus.PENDING
                 && payment.getStatus() != PaymentStatus.PROCESSING
@@ -181,7 +181,7 @@ public class PaymentService {
                         payment.getAmount()
                 ));
 
-        log.info("Ödeme tamamlandı: {} - Tutar: {} TRY",
+        log.info("Payment completed: {} - Amount: {} TRY",
                 payment.getId(), payment.getAmount());
     }
 
@@ -194,17 +194,17 @@ public class PaymentService {
                     payment.setStatus(PaymentStatus.FAILED);
                     payment.setFailureReason(failureReason);
                     paymentRepository.save(payment);
-                    log.warn("Ödeme başarısız: {} - {}", payment.getId(), failureReason);
+                    log.warn("Payment failed: {} - {}", payment.getId(), failureReason);
                 });
     }
 
     public PaymentResponse getPayment(UUID paymentId, UUID studentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new PaymentNotFoundException(
-                        "Ödeme bulunamadı: " + paymentId));
+                        "Payment not found: " + paymentId));
 
         if (!payment.getStudentId().equals(studentId)) {
-            throw new PaymentNotFoundException("Bu ödemeye erişim yetkiniz yok");
+            throw new PaymentNotFoundException("You do not have access to this payment");
         }
 
         return paymentMapper.toResponse(payment);
@@ -221,7 +221,7 @@ public class PaymentService {
             PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                     .setAmount(amount.multiply(BigDecimal.valueOf(100)).longValue())
                     .setCurrency("try")
-                    .setDescription("LMS Kurs Satın Alma: " + courseTitle)
+                    .setDescription("LMS course purchase: " + courseTitle)
                     .putMetadata("studentId", studentId.toString())
                     .setAutomaticPaymentMethods(
                             PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
@@ -232,8 +232,8 @@ public class PaymentService {
             return PaymentIntent.create(params);
 
         } catch (StripeException e) {
-            log.error("Stripe hatası: {}", e.getMessage());
-            throw new PaymentFailedException("Stripe bağlantı hatası: " + e.getMessage());
+            log.error("Stripe error: {}", e.getMessage());
+            throw new PaymentFailedException("Stripe connection error: " + e.getMessage());
         }
     }
 }

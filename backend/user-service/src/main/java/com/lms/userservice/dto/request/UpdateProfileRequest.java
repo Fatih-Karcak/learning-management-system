@@ -10,7 +10,7 @@ public class UpdateProfileRequest {
     private String phoneNumber;
     private String avatarUrl;
 
-    @Size(min = 8, message = "Şifre en az 8 karakter olmalı")
+    @Size(min = 12, max = 72, message = "Password must contain 12–72 characters")
     private String newPassword;
     private String currentPassword;
 }

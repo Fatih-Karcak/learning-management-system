@@ -53,7 +53,7 @@ export default function RichTextEditor({
       : before + selected + after;
     const next = content.slice(0, start) + inserted + content.slice(end);
     if (next.length > maxLength) {
-      setError('Metin uzunluk sınırını aşıyor.');
+      setError('The text exceeds the character limit.');
       return;
     }
     update(next);
@@ -64,17 +64,17 @@ export default function RichTextEditor({
     });
   }
   const tools = [
-    ['Kalın', '**', '**'],
-    ['İtalik', '*', '*'],
-    ['Başlık', '## ', ''],
-    ['Madde işaretli liste', '- ', ''],
-    ['Numaralı liste', '1. ', ''],
-    ['Alıntı', '> ', ''],
-    ['Kod bloğu', '\n```\n', '\n```\n'],
+    ['Bold', '**', '**'],
+    ['Italic', '*', '*'],
+    ['Heading', '## ', ''],
+    ['Bulleted list', '- ', ''],
+    ['Numbered list', '1. ', ''],
+    ['Quote', '> ', ''],
+    ['Code block', '\n```\n', '\n```\n'],
   ];
   return (
     <div className="rich-editor">
-      <div role="toolbar" aria-label="Metin biçimlendirme" className="form-actions rich-toolbar">
+      <div role="toolbar" aria-label="Text formatting" className="form-actions rich-toolbar">
         {tools.map(([label, before, after]) => (
           <button
             key={label}
@@ -87,7 +87,7 @@ export default function RichTextEditor({
                 before,
                 after,
                 'metin',
-                ['Başlık', 'Madde işaretli liste', 'Numaralı liste', 'Alıntı'].includes(label),
+                ['Heading', 'Bulleted list', 'Numbered list', 'Quote'].includes(label),
               )
             }
           >
@@ -100,7 +100,7 @@ export default function RichTextEditor({
           disabled={disabled}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            const url = window.prompt('HTTPS bağlantısı', 'https://');
+            const url = window.prompt('HTTPS link', 'https://');
             if (!url) return;
             try {
               const parsed = new URL(url);
@@ -111,17 +111,13 @@ export default function RichTextEditor({
                 /[\s<>]/.test(url)
               )
                 throw new Error();
-              format(
-                '[',
-                `](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`,
-                'bağlantı metni',
-              );
+              format('[', `](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`, 'link text');
             } catch {
-              setError('Geçerli bir HTTPS bağlantısı yazın.');
+              setError('Enter a valid HTTPS link.');
             }
           }}
         >
-          Bağlantı
+          Link
         </button>
         <button
           type="button"
@@ -129,7 +125,7 @@ export default function RichTextEditor({
           aria-pressed={preview}
           onClick={() => setPreview(!preview)}
         >
-          Metni ön izle
+          Preview text
         </button>
       </div>
       <textarea
@@ -150,8 +146,8 @@ export default function RichTextEditor({
         </p>
       )}
       {preview && (
-        <div className="rich-preview markdown" role="region" aria-label="Biçimlendirilmiş metin">
-          <ReactMarkdown skipHtml>{content || 'Ön izlemek için metin yazın.'}</ReactMarkdown>
+        <div className="rich-preview markdown" role="region" aria-label="Formatted text">
+          <ReactMarkdown skipHtml>{content || 'Enter text to preview it.'}</ReactMarkdown>
         </div>
       )}
     </div>

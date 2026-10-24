@@ -32,7 +32,7 @@ public class PaymentController {
             Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
                 paymentService.createPaymentIntent(request, UUID.fromString(authentication.getName())),
-                "PaymentIntent oluşturuldu"));
+                "PaymentIntent created"));
     }
 
     @GetMapping("/{id}")
@@ -40,7 +40,7 @@ public class PaymentController {
             @PathVariable UUID id,
             Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.getPayment(id, UUID.fromString(authentication.getName())), "Başarılı"));
+                paymentService.getPayment(id, UUID.fromString(authentication.getName())), "Successful"));
     }
 
     @GetMapping("/my")
@@ -48,7 +48,7 @@ public class PaymentController {
             Authentication authentication,
             Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
-                paymentService.getStudentPayments(UUID.fromString(authentication.getName()), pageable), "Başarılı"));
+                paymentService.getStudentPayments(UUID.fromString(authentication.getName()), pageable), "Successful"));
     }
 
     @PostMapping("/refund")
@@ -57,6 +57,6 @@ public class PaymentController {
             Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
                 refundService.createRefund(request, UUID.fromString(authentication.getName())),
-                "İade talebiniz alındı"));
+                "Your refund request has been received"));
     }
 }

@@ -37,17 +37,17 @@ export default function VideoPlayer({
         if (m.url.startsWith('/api/v1/media/resources/')) blob = await fetchResource(m.url);
         else {
           const response = await fetch(safeUrl(m.url) || '', { credentials: 'omit' });
-          if (!response.ok) throw new Error('Altyazı yüklenemedi');
+          if (!response.ok) throw new Error('Subtitles could not be loaded');
           blob = await response.blob();
         }
-        if (blob.size > 1024 * 1024) throw new Error('Altyazı çok büyük');
+        if (blob.size > 1024 * 1024) throw new Error('The subtitle file is too large');
         const url = URL.createObjectURL(new Blob([blob], { type: 'text/vtt' }));
         urls.push(url);
         if (!live) {
           URL.revokeObjectURL(url);
           return null;
         }
-        return { src: url, label: m.title, language: m.language || 'tr' };
+        return { src: url, label: m.title, language: m.language || 'en' };
       }),
     )
       .then((items) => {
@@ -64,6 +64,9 @@ export default function VideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [captionKey]);
   const [error, setError] = useState<Error | null>(null);
+  const engine = useRef<Hls | undefined>(undefined);
+  const [qualities, setQualities] = useState<{ height: number; index: number }[]>([]);
+  const [quality, setQuality] = useState(-1);
   const [attempt, setAttempt] = useState(0);
   const url = src.startsWith('/api/') ? apiUrl(src) : safeUrl(src);
   const absolute = url ? new URL(url, window.location.origin) : undefined;
@@ -100,10 +103,13 @@ export default function VideoPlayer({
     const video = ref.current;
     if (!video) return;
     setError(null);
+    setQualities([]);
+    setQuality(-1);
+    engine.current = undefined;
     if (!ready) return;
     const url = src.startsWith('/api/') ? apiUrl(src) : safeUrl(src);
     if (!url) {
-      setError(new Error('Geçerli bir video adresi bulunamadı.'));
+      setError(new Error('A valid video URL was not found.'));
       return;
     }
     const absolute = new URL(url, window.location.origin);
@@ -128,7 +134,7 @@ export default function VideoPlayer({
       ) {
         setError(
           new Error(
-            'Bu tarayıcı H.264 video biçimini desteklemiyor. Güncel Chrome veya Edge ile deneyin.',
+            'Your browser does not support H.264 video. Try an up-to-date Chrome or Edge browser.',
           ),
         );
         video.removeEventListener('loadedmetadata', restore);
@@ -147,6 +153,11 @@ export default function VideoPlayer({
               xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           },
         });
+        engine.current = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setQualities(hls!.levels.map((level, index) => ({ height: level.height, index })));
+          setQuality(-1);
+        });
         hls.loadSource(url);
         hls.attachMedia(video);
         hls.on(Hls.Events.ERROR, (_, data) => {
@@ -158,10 +169,12 @@ export default function VideoPlayer({
                   hls?.startLoad();
                 } else {
                   window.dispatchEvent(new Event('lms:unauthorized'));
-                  setError(new Error('Video oturumunuz sona erdi.'));
+                  setError(new Error('Your video session has expired. Sign in again.'));
                 }
               })
-              .catch(() => setError(new Error('Oturum yenilenemedi. Bağlantınızı kontrol edin.')))
+              .catch(() =>
+                setError(new Error('Your session could not be refreshed. Check your connection.')),
+              )
               .finally(() => {
                 refreshing = false;
               });
@@ -171,10 +184,10 @@ export default function VideoPlayer({
             setError(
               new Error(
                 data.response?.code === 403
-                  ? 'Bu videoyu izlemek için ilgili kursa kayıtlı olmalısınız.'
+                  ? 'Enroll in this course to watch this video.'
                   : data.response?.code === 401
-                    ? 'Video oturumunuz sona erdi. Yeniden giriş yapın.'
-                    : 'Video yüklenemedi. Tekrar deneyin; sorun sürerse eğitmene bildirin.',
+                    ? 'Your video session has expired. Sign in again.'
+                    : 'The video could not be loaded. Try again or contact your instructor.',
               ),
             );
         });
@@ -183,11 +196,12 @@ export default function VideoPlayer({
       else
         setError(
           new Error(
-            'Bu tarayıcı korumalı video akışını desteklemiyor. Güncel Chrome, Firefox veya Edge kullanın.',
+            'Your browser does not support protected video playback. Use an up-to-date Chrome, Firefox or Edge browser.',
           ),
         );
     } else video.src = url;
     return () => {
+      engine.current = undefined;
       hls?.destroy();
       video.removeEventListener('loadedmetadata', restore);
       video.pause();
@@ -199,15 +213,36 @@ export default function VideoPlayer({
   }, [src, ready, attempt]);
   const failure =
     mediaId && media.data?.status === 'FAILED'
-      ? new Error('Video işlenemedi. Eğitmenin videoyu yeniden yüklemesi gerekiyor.')
+      ? new Error('The video could not be processed. Ask your instructor to upload it again.')
       : null;
   const visibleError = (mediaId ? media.error : null) || failure || error;
   return (
     <div className="video-player">
+      {qualities.length > 1 && (
+        <label>
+          Video quality
+          <select
+            aria-label="Video quality"
+            value={quality}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              setQuality(next);
+              if (engine.current) engine.current.currentLevel = next;
+            }}
+          >
+            <option value={-1}>Auto</option>
+            {qualities.map((level) => (
+              <option key={level.index} value={level.index}>
+                {level.height}p
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {waiting &&
         (media.data?.status === 'PROCESSING' ? (
           <p role="status" className="notice">
-            Video hazırlanıyor. İşleme tamamlandığında burada izleyebilirsiniz.
+            Your video is being processed. It will appear here when it is ready.
           </p>
         ) : (
           <Loading />
@@ -224,7 +259,7 @@ export default function VideoPlayer({
       )}
       {captionError && (
         <p role="status" className="notice warning">
-          Altyazı yüklenemedi. Ders kaynaklarını kontrol edin.
+          Subtitles could not be loaded. Check the lesson resources.
         </p>
       )}
       <video
@@ -255,7 +290,11 @@ export default function VideoPlayer({
             report(video, true);
         }}
         onError={() =>
-          setError(new Error('Video oynatılamadı. Dosya adresini ve erişim iznini kontrol edin.'))
+          setError(
+            new Error(
+              'The video could not be played. Check the file URL and your access permissions.',
+            ),
+          )
         }
       >
         {tracks.map((t, i) => (

@@ -29,4 +29,9 @@ public interface EnrollmentClient {
     Result check(@PathVariable UUID courseId, @RequestParam UUID studentId);
 
     record Result(boolean success, Boolean data) {}
+
+    @GetExchange("/api/v1/internal/enrollments/course/{courseId}/learning")
+    SnapshotResult learning(@PathVariable UUID courseId,@RequestParam UUID studentId);
+    record Snapshot(boolean enrolled,boolean completed,java.time.Instant enrolledAt,java.util.Set<UUID> completedLessons) {}
+    record SnapshotResult(boolean success, Snapshot data) {}
 }

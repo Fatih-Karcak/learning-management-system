@@ -60,7 +60,7 @@ class ProgressServiceTest {
                         courseId,
                         "Java",
                         null,
-                        "Eğitmen",
+                        "Instructor",
                         null,
                         "PUBLISHED",
                         List.of(

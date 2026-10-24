@@ -33,31 +33,31 @@ export function CourseInvitations() {
   if (!query.data?.length) return null;
   return (
     <section className="panel">
-      <h2>Kurs ekip davetleri</h2>
+      <h2>Course team invitations</h2>
       <p>
-        Taslakları birlikte hazırlayabilirsiniz. Öğrenci yönetimi ve yayın başvurusu kurs sahibinde
-        kalır.
+        Prepare drafts together. Enrollment management and publication submissions remain with the
+        course owner.
       </p>
       {reply.error && <ErrorBox error={reply.error} />}
       {query.data.map((invitation) => (
         <div className="authoring-row" key={invitation.course_id}>
           <div>
             <strong>{invitation.title}</strong>
-            <p>{invitation.instructor_name} sizi ortak düzenlemeye davet etti.</p>
+            <p>{invitation.instructor_name} invited you to collaborate.</p>
           </div>
           <button
             className="button primary small"
             disabled={reply.isPending}
             onClick={() => reply.mutate({ course: invitation.course_id, accept: true })}
           >
-            Daveti kabul et
+            Accept invitation
           </button>
           <button
             className="button secondary small"
             disabled={reply.isPending}
             onClick={() => reply.mutate({ course: invitation.course_id, accept: false })}
           >
-            Daveti reddet
+            Decline invitation
           </button>
         </div>
       ))}
@@ -94,19 +94,18 @@ export function CourseTeam({ courseId }: { courseId: string }) {
   const team = query.data!;
   return (
     <section className="panel">
-      <h2>Kurs ekibi</h2>
+      <h2>Course team</h2>
       <p>
-        <strong>Kurs sahibi:</strong> {team.ownerName}
+        <strong>Course owner:</strong> {team.ownerName}
       </p>
       <p>
-        Ortak eğitmenler kurs metnini, dersleri, test sorularını ve kaynakları taslakta düzenler.
-        Yayın başvurusu, öğrenci verileri ve ekip yönetimi kurs sahibinde kalır. Davet kabul
-        edilmeden erişim verilmez.
+        Co-instructors can edit draft text, lessons, questions and resources. The owner manages
+        publication, learner data and team access. Access starts after an invitation is accepted.
       </p>
       {invite.error && <ErrorBox error={invite.error} />}
       {remove.error && <ErrorBox error={remove.error} />}
       {invite.isSuccess && (
-        <Success>Davet kaydedildi. Eğitmen kendi stüdyosundan kabul edebilir.</Success>
+        <Success>Invitation saved. The instructor can accept it from their studio.</Success>
       )}
       {team.canManage && (
         <form
@@ -117,8 +116,8 @@ export function CourseTeam({ courseId }: { courseId: string }) {
           }}
         >
           <Field
-            label="Eğitmenin kayıtlı e-posta adresi"
-            hint="E-posta adresini doğrulamış bir eğitmen hesabı kullanın."
+            label="Instructor's registered email address"
+            hint="Choose an instructor with a verified email address."
           >
             <input
               type="email"
@@ -128,14 +127,14 @@ export function CourseTeam({ courseId }: { courseId: string }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
-          <Submit busy={invite.isPending}>Eğitmen davet et</Submit>
+          <Submit busy={invite.isPending}>Invite instructor</Submit>
         </form>
       )}
-      {team.members.length === 0 && <p className="muted">Henüz ortak eğitmen yok.</p>}
+      {team.members.length === 0 && <p className="muted">No co-instructors yet.</p>}
       {team.members.map((m) => (
         <div className="authoring-row" key={m.user_id}>
           <span>
-            {m.display_name} · {m.status === 'ACCEPTED' ? 'Ortak eğitmen' : 'Kabul bekleniyor'}
+            {m.display_name} · {m.status === 'ACCEPTED' ? 'Co-instructor' : 'Awaiting acceptance'}
           </span>
           {(team.canManage || m.user_id === session?.user.id) && (
             <button
@@ -145,14 +144,14 @@ export function CourseTeam({ courseId }: { courseId: string }) {
                 if (
                   window.confirm(
                     m.user_id === session?.user.id
-                      ? 'Kurs ekibinden ayrılmak istiyor musunuz?'
-                      : 'Bu eğitmenin kurs erişimi kaldırılsın mı?',
+                      ? 'Leave this course team?'
+                      : "Remove this instructor's course access?",
                   )
                 )
                   remove.mutate(m.user_id);
               }}
             >
-              {m.user_id === session?.user.id ? 'Ekipten ayrıl' : 'Erişimi kaldır'}
+              {m.user_id === session?.user.id ? 'Leave team' : 'Remove access'}
             </button>
           )}
         </div>
@@ -200,14 +199,13 @@ export function TemplateLauncher() {
   return (
     <>
       <button className="button secondary" onClick={() => setOpen(true)}>
-        Şablondan kurs oluştur
+        Create course from template
       </button>
       {open && (
-        <Modal title="Şablondan kurs oluştur" onClose={() => setOpen(false)}>
+        <Modal title="Create course from template" onClose={() => setOpen(false)}>
           <p>
-            Metinler, ders yapısı ve test soruları yeni kimliklerle kopyalanır. Öğrenciler,
-            ilerlemeler ve dosyalar taşınmaz. Videoları ve korunan kaynakları yeni kursa yeniden
-            yükleyin.
+            Text, lesson structure and questions are copied with new identifiers. Learners, progress
+            and files are not copied. Upload videos and protected resources to the new course.
           </p>
           {query.error && <ErrorBox error={query.error} />}{' '}
           {categories.error && <ErrorBox error={categories.error} />}{' '}
@@ -219,20 +217,20 @@ export function TemplateLauncher() {
             query.data &&
             categories.data && (
               <form onSubmit={submit} className="workspace-fields">
-                <Field label="Kurs şablonu">
+                <Field label="Course template">
                   <select name="template" required>
                     {query.data.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
-                        {t.builtIn ? ' · Hazır şablon' : ' · Kişisel şablon'}
+                        {t.builtIn ? ' · Built-in template' : ' · Personal template'}
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Yeni kursun başlığı">
+                <Field label="New course title">
                   <input name="title" required minLength={10} maxLength={200} />
                 </Field>
-                <Field label="Yeni kursun kategorisi">
+                <Field label="New course category">
                   <select name="categoryId" required>
                     {categories.data.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -241,13 +239,13 @@ export function TemplateLauncher() {
                     ))}
                   </select>
                 </Field>
-                <Submit busy={create.isPending}>Taslağı oluştur</Submit>
+                <Submit busy={create.isPending}>Create draft</Submit>
               </form>
             )
           )}
           {!!query.data?.some((t) => !t.builtIn) && (
             <div>
-              <h3>Kişisel şablonlarım</h3>
+              <h3>My personal templates</h3>
               {query.data
                 .filter((t) => !t.builtIn)
                 .map((t) => (
@@ -258,12 +256,14 @@ export function TemplateLauncher() {
                       disabled={remove.isPending}
                       onClick={() => {
                         if (
-                          window.confirm('Kişisel şablon silinsin mi? Mevcut kurslar etkilenmez.')
+                          window.confirm(
+                            'Delete this personal template? Existing courses will not be affected.',
+                          )
                         )
                           remove.mutate(t.id);
                       }}
                     >
-                      Şablonu sil
+                      Delete template
                     </button>
                   </div>
                 ))}

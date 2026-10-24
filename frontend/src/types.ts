@@ -35,6 +35,8 @@ export interface Page<T> {
 export type Level = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'ALL_LEVELS';
 export type LessonType = 'VIDEO' | 'ARTICLE' | 'QUIZ' | 'ASSIGNMENT';
 export interface Lesson {
+  locked?: boolean;
+  lockReason?: string;
   id: string;
   title: string;
   content?: string;
@@ -168,6 +170,9 @@ export interface Media {
 }
 
 export interface QuizQuestion {
+  questionType?: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
+  correctOptions?: number[];
+  weight?: number;
   id: string;
   prompt: string;
   options: string[];
@@ -192,6 +197,9 @@ export interface QuizAttempt {
   feedback?: { questionId: string; correct: boolean; explanation?: string }[];
 }
 export interface AssignmentSubmission {
+  late?: boolean;
+  criterionScores?: Record<string, number>;
+  rubric?: AssignmentPolicy['rubric'];
   id: string;
   studentId: string;
   studentName: string;
@@ -251,6 +259,14 @@ export interface Workspace {
     categoryId: number;
     quizzes: Record<string, Quiz>;
     materials: Record<string, Material[]>;
+    assignments?: Record<string, AssignmentPolicy>;
   };
   checklist: string[];
+}
+
+export interface AssignmentPolicy {
+  revision: number;
+  dueAt?: string;
+  allowLate: boolean;
+  rubric: { id: string; label: string; maxPoints: number }[];
 }

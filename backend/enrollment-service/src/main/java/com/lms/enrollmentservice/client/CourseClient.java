@@ -10,6 +10,9 @@ import java.util.UUID;
 
 @HttpExchange(url = "/api/v1/internal/courses")
 public interface CourseClient {
+    @GetExchange("/{id}/lessons/{lesson}/access")
+    Access access(@PathVariable UUID id,@PathVariable UUID lesson,@org.springframework.web.bind.annotation.RequestParam UUID studentId);
+    record Access(boolean success,Boolean data) {}
 
     @GetExchange("/{id}")
     CourseEnvelope getCourseById(

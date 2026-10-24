@@ -39,7 +39,7 @@ public class AccountToolsController {
 
     @GetMapping("/me/preferences")
     public ApiResponse<?> preferences(Authentication a) {
-        return ApiResponse.success(tools.preferences(id(a)), "Tercihler");
+        return ApiResponse.success(tools.preferences(id(a)), "Preferences");
     }
 
     @PutMapping("/me/preferences")
@@ -47,48 +47,48 @@ public class AccountToolsController {
         Authentication a,
         @Valid @RequestBody AccountToolsService.Preferences p
     ) {
-        return ApiResponse.success(tools.savePreferences(id(a), p), "Kaydedildi");
+        return ApiResponse.success(tools.savePreferences(id(a), p), "Saved");
     }
 
     @GetMapping("/me/sessions")
     public ApiResponse<?> sessions(Authentication a) {
-        return ApiResponse.success(sessions.list(id(a)), "Oturumlar");
+        return ApiResponse.success(sessions.list(id(a)), "Sessions");
     }
 
     @DeleteMapping("/me/sessions/{session}")
     public ApiResponse<?> revoke(Authentication a, @PathVariable UUID session) {
         sessions.revoke(id(a), session);
-        return ApiResponse.success(null, "Oturum kapatıldı");
+        return ApiResponse.success(null, "Session ended");
     }
 
     @DeleteMapping("/me/sessions")
     public ApiResponse<?> revokeAll(Authentication a) {
         sessions.revokeAll(id(a));
-        return ApiResponse.success(null, "Oturumlar kapatıldı");
+        return ApiResponse.success(null, "Sessions ended");
     }
 
     @GetMapping("/me/mfa")
     public ApiResponse<?> mfa(Authentication a) {
-        return ApiResponse.success(Map.of("enabled", mfa.enabled(id(a))), "Doğrulama");
+        return ApiResponse.success(Map.of("enabled", mfa.enabled(id(a))), "Verification");
     }
 
     @PostMapping("/me/mfa/setup")
     public ApiResponse<?> setup(Authentication a, @Valid @RequestBody Password p) {
         toolsCheckPassword(a, p.password());
-        return ApiResponse.success(mfa.setup(id(a), users.getUserById(id(a)).getEmail()), "Kurulum");
+        return ApiResponse.success(mfa.setup(id(a), users.getUserById(id(a)).getEmail()), "Setup");
     }
 
     @PostMapping("/me/mfa/confirm")
     public ApiResponse<?> confirm(Authentication a, @Valid @RequestBody Otp p) {
         mfa.verify(id(a), p.code(), true);
-        return ApiResponse.success(null, "Doğrulama açıldı");
+        return ApiResponse.success(null, "Verification enabled");
     }
 
     @DeleteMapping("/me/mfa")
     public ApiResponse<?> disable(Authentication a, @Valid @RequestBody Otp p) {
         mfa.disable(id(a), p.code());
         sessions.revokeAll(id(a));
-        return ApiResponse.success(null, "Doğrulama kapatıldı; tekrar giriş yapın");
+        return ApiResponse.success(null, "Verification disabled; sign in again");
     }
 
     private final com.lms.userservice.repository.UserRepository repository;
@@ -97,33 +97,33 @@ public class AccountToolsController {
     private void toolsCheckPassword(Authentication a, String raw) {
         if (
             !encoder.matches(raw, repository.findById(id(a)).orElseThrow().getPassword())
-        ) throw new IllegalArgumentException("Parola yanlış");
+        ) throw new IllegalArgumentException("Incorrect password");
     }
 
     @GetMapping("/me/export")
     public ApiResponse<?> export(Authentication a) {
-        return ApiResponse.success(tools.export(id(a)), "Kişisel veriler");
+        return ApiResponse.success(tools.export(id(a)), "Personal data");
     }
 
     @PostMapping("/me/erasure")
     public ApiResponse<?> erase(Authentication a, @Valid @RequestBody Password p) {
         tools.requestErasure(id(a), p.password());
-        return ApiResponse.success(null, "Hesap kapatıldı; silme talebi incelemeye alındı");
+        return ApiResponse.success(null, "Account closed; the erasure request is awaiting review");
     }
 
     @GetMapping("/me/tickets")
     public ApiResponse<?> tickets(Authentication a) {
-        return ApiResponse.success(tools.tickets(id(a), false), "Destek");
+        return ApiResponse.success(tools.tickets(id(a), false), "Support");
     }
 
     @PostMapping("/me/tickets")
     public ApiResponse<?> create(Authentication a, @Valid @RequestBody AccountToolsService.Ticket t) {
-        return ApiResponse.success(tools.create(id(a), t), "Talep açıldı");
+        return ApiResponse.success(tools.create(id(a), t), "Ticket created");
     }
 
     @GetMapping("/me/tickets/{ticket}/replies")
     public ApiResponse<?> replies(Authentication a, @PathVariable UUID ticket) {
-        return ApiResponse.success(tools.replies(ticket, id(a), admin(a)), "Yanıtlar");
+        return ApiResponse.success(tools.replies(ticket, id(a), admin(a)), "Replies");
     }
 
     @PostMapping("/me/tickets/{ticket}/replies")
@@ -133,19 +133,19 @@ public class AccountToolsController {
         @Valid @RequestBody AccountToolsService.Reply r
     ) {
         tools.reply(ticket, id(a), admin(a), r);
-        return ApiResponse.success(null, "Yanıt kaydedildi");
+        return ApiResponse.success(null, "Reply saved");
     }
 
     @GetMapping("/admin/tickets")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<?> ticketsAdmin(Authentication a) {
-        return ApiResponse.success(tools.tickets(id(a), true), "Destek kuyruğu");
+        return ApiResponse.success(tools.tickets(id(a), true), "Support queue");
     }
 
     @GetMapping("/admin/privacy")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<?> privacy(Authentication a) {
-        return ApiResponse.success(tools.privacyRequests(id(a), true), "Veri talepleri");
+        return ApiResponse.success(tools.privacyRequests(id(a), true), "Data requests");
     }
 
     @PostMapping("/admin/privacy/{request}/review")
@@ -156,6 +156,6 @@ public class AccountToolsController {
         @Valid @RequestBody Reason r
     ) {
         tools.resolvePrivacy(request, id(a), r.reason());
-        return ApiResponse.success(null, "İnceleme kaydedildi");
+        return ApiResponse.success(null, "Review recorded");
     }
 }

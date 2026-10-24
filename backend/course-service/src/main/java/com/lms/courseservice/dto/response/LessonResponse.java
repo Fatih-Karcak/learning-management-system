@@ -15,4 +15,6 @@ public class LessonResponse {
     private LessonType type;
     private Integer orderIndex;
     private boolean previewAllowed;
+    private boolean locked;
+    private String lockReason;
 }

@@ -31,14 +31,27 @@ public class AssessmentService {
     private final ObjectMapper json;
     private final PlatformEvents events;
     private final com.lms.courseservice.client.ContentClient contentClient;
+    private final AssignmentPolicyService assignmentPolicies;
 
     public record Question(
         UUID id,
         @NotBlank @Size(max = 2000) String prompt,
         @NotNull @Size(min = 2, max = 8) List<@NotBlank @Size(max = 1000) String> options,
         @Min(0) int correctOption,
-        @Size(max = 4000) String explanation
-    ) {}
+        @Size(max = 4000) String explanation,
+        @Pattern(regexp="SINGLE_CHOICE|MULTIPLE_CHOICE") String questionType,
+        @Size(min=1,max=8) Set<@Min(0) Integer> correctOptions,
+        @Min(1) @Max(100) Integer weight
+    ) {
+        public Question {
+            questionType=questionType==null?"SINGLE_CHOICE":questionType;
+            correctOptions=correctOptions==null?Set.of(correctOption):Set.copyOf(correctOptions);
+            weight=weight==null?1:weight;
+        }
+        public Question(UUID id,String prompt,List<String> options,int correctOption,String explanation) {
+            this(id,prompt,options,correctOption,explanation,"SINGLE_CHOICE",Set.of(correctOption),1);
+        }
+    }
 
     public record Quiz(
         @Min(1) @Max(100) int passingScore,
@@ -57,7 +70,7 @@ public class AssessmentService {
         }
     }
 
-    public record PublicQuestion(UUID id, String prompt, List<String> options) {}
+    public record PublicQuestion(UUID id, String prompt, List<String> options,String questionType,int weight) {}
 
     public record PublicQuiz(
         int passingScore,
@@ -74,7 +87,10 @@ public class AssessmentService {
 
     public record QuestionFeedback(UUID questionId, boolean correct, String explanation) {}
 
-    public record Answer(@NotNull UUID questionId, @Min(0) int option) {}
+    public record Answer(@NotNull UUID questionId, @Min(0) Integer option,@Size(min=1,max=8) List<@Min(0) Integer> options) {
+        public Answer { options=options==null?(option==null?List.of():List.of(option)):List.copyOf(options); }
+        public Answer(UUID questionId,int option) { this(questionId,option,List.of(option)); }
+    }
 
     public record AttemptInput(
         @NotNull UUID enrollmentId,
@@ -110,8 +126,12 @@ public class AssessmentService {
     public record Grade(
         @NotNull GradeStatus status,
         @Min(0) @Max(100) Integer score,
-        @Size(max = 10000) String feedback
-    ) {}
+        @Size(max = 10000) String feedback,
+        @Size(max=20) Map<UUID,@Min(0) Integer> criterionScores
+    ) {
+        public Grade { criterionScores=criterionScores==null?Map.of():Map.copyOf(criterionScores); }
+        public Grade(GradeStatus status,Integer score,String feedback) {this(status,score,feedback,Map.of());}
+    }
 
     public record Submission(
         UUID id,
@@ -124,7 +144,10 @@ public class AssessmentService {
         Integer score,
         String feedback,
         LocalDateTime submittedAt,
-        LocalDateTime gradedAt
+        LocalDateTime gradedAt,
+        boolean late,
+        Map<UUID,Integer> criterionScores,
+        List<AssignmentPolicyService.Criterion> rubric
     ) {}
 
     private Lesson require(
@@ -136,16 +159,16 @@ public class AssessmentService {
     ) {
         var lesson = lessons
             .findById(lessonId)
-            .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Lesson not found"));
         var actual = lesson.getSection().getCourse();
         if (!actual.getId().equals(course) || lesson.getType() != type) throw new IllegalArgumentException(
-            "Ders kursa veya istenen türe ait değil"
+            "The lesson does not belong to this course or lesson type"
         );
         if (owner) {
             if (
                 !actual.getInstructorId().equals(user.id()) && !user.isAdmin()
-            ) throw new UnauthorizedException("Bu dersin eğitmeni değilsiniz");
-        } else access.requireEnrolled(course, user.id());
+            ) throw new UnauthorizedException("You are not the instructor of this lesson");
+        } else { access.requireEnrolled(course, user.id()); access.requireLessonAccess(actual,lessonId,user); }
         return lesson;
     }
 
@@ -157,7 +180,7 @@ public class AssessmentService {
         );
         if (values.isEmpty()) throw new ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "Test henüz hazırlanmadı"
+            "The quiz has not been prepared yet"
         );
         return json.readValue(values.getFirst(), Quiz.class);
     }
@@ -179,11 +202,12 @@ public class AssessmentService {
             .stream()
             .map(q -> {
                 if (q.correctOption() >= q.options().size()) throw new IllegalArgumentException(
-                    "Doğru yanıt seçenekler arasında değil"
+                    "The correct answer is not one of the available options"
                 );
                 UUID id = q.id() == null ? UUID.randomUUID() : q.id();
-                if (!ids.add(id)) throw new IllegalArgumentException("Yinelenen soru kimliği");
-                return new Question(id, q.prompt().trim(), q.options(), q.correctOption(), q.explanation());
+                if (!ids.add(id)) throw new IllegalArgumentException("Duplicate question identifier");
+                validateQuestion(q);
+                return new Question(id, q.prompt().trim(), q.options(), q.correctOption(), q.explanation(),q.questionType(),q.correctOptions(),q.weight());
             })
             .toList();
         Quiz quiz = new Quiz(
@@ -196,7 +220,7 @@ public class AssessmentService {
         );
         if (
             quiz.questionCount() != null && quiz.questionCount() > normalized.size()
-        ) throw new IllegalArgumentException("Seçilen soru sayısı bankayı aşıyor");
+        ) throw new IllegalArgumentException("The selected question count exceeds the question bank");
         jdbc.update(
             "insert into lesson_quizzes(lesson_id,definition) values(?,?) on conflict(lesson_id) do update set definition=excluded.definition,updated_at=now()",
             lesson,
@@ -231,7 +255,7 @@ public class AssessmentService {
             quiz
                 .questions()
                 .stream()
-                .map(q -> new PublicQuestion(q.id(), q.prompt(), q.options()))
+                .map(q -> new PublicQuestion(q.id(), q.prompt(), q.options(),q.questionType(),q.weight()))
                 .toList(),
             quiz.maxAttempts(),
             quiz.timeLimitSeconds(),
@@ -273,7 +297,7 @@ public class AssessmentService {
             );
             if (used >= definition.maxAttempts()) throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Deneme hakkınız doldu"
+                "You have used all available attempts"
             );
         }
         var selected = new ArrayList<>(definition.questions());
@@ -319,16 +343,16 @@ public class AssessmentService {
                 user.id(),
                 input.enrollmentId()
             );
-            if (rows.isEmpty()) throw new UnauthorizedException("Test oturumu size ait değil");
+            if (rows.isEmpty()) throw new UnauthorizedException("This quiz session does not belong to you");
             var row = rows.getFirst();
             if (Boolean.TRUE.equals(row.get("submitted"))) throw new IllegalStateException(
-                "Test oturumu zaten gönderildi"
+                "This quiz session has already been submitted"
             );
             if (
                 ((java.sql.Timestamp) row.get("expires_at"))
                     .toLocalDateTime()
                     .isBefore(LocalDateTime.now(java.time.Clock.systemUTC()))
-            ) throw new IllegalStateException("Test süresi doldu");
+            ) throw new IllegalStateException("The quiz has expired");
             quiz = json.readValue((String) row.get("definition"), Quiz.class);
         } else {
             quiz = definition(lessonId);
@@ -337,28 +361,31 @@ public class AssessmentService {
                 quiz.timeLimitSeconds() != null ||
                 quiz.questionCount() != null ||
                 quiz.randomize()
-            ) throw new IllegalArgumentException("Önce testi başlatın");
+            ) throw new IllegalArgumentException("Start the quiz first");
         }
         if (input.answers().size() != quiz.questions().size()) throw new IllegalArgumentException(
-            "Tüm soruları yanıtlayın"
+            "Answer every question"
         );
-        Map<UUID, Integer> answers = new HashMap<>();
+        Map<UUID, Set<Integer>> answers = new HashMap<>();
         for (Answer answer : input.answers())
-            if (answers.put(answer.questionId(), answer.option()) != null) throw new IllegalArgumentException(
-                "Yinelenen yanıt"
+            if (new HashSet<>(answer.options()).size()!=answer.options().size() || answers.put(answer.questionId(), Set.copyOf(answer.options())) != null) throw new IllegalArgumentException(
+                "Duplicate answer"
             );
         var feedback = new ArrayList<QuestionFeedback>();
         int correct = 0;
+        int correctWeight=0,totalWeight=0;
         for (var question : quiz.questions()) {
-            Integer answer = answers.get(question.id());
+            Set<Integer> answer = answers.get(question.id());
             if (
-                answer == null || answer < 0 || answer >= question.options().size()
-            ) throw new IllegalArgumentException("Yanıtlar test sorularıyla uyuşmuyor");
-            boolean ok = answer == question.correctOption();
+                answer == null || answer.isEmpty() || answer.stream().anyMatch(option->option<0||option>=question.options().size())
+                || ("SINGLE_CHOICE".equals(question.questionType())&&answer.size()!=1)
+            ) throw new IllegalArgumentException("Answers do not match the quiz questions");
+            boolean ok = answer.equals(question.correctOptions());
             if (ok) correct++;
+            totalWeight+=question.weight();if(ok) correctWeight+=question.weight();
             feedback.add(new QuestionFeedback(question.id(), ok, question.explanation()));
         }
-        double score = Math.round((correct * 1000.0) / quiz.questions().size()) / 10.0;
+        double score = Math.round((correctWeight * 1000.0) / totalWeight) / 10.0;
         boolean passed = score >= quiz.passingScore();
         if (passed) complete(input.enrollmentId(), lesson, user.id());
         UUID id = UUID.randomUUID();
@@ -403,15 +430,22 @@ public class AssessmentService {
             );
             if (result == null || !result.success()) throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "Ders tamamlanması kaydedilemedi"
+                "Lesson completion could not be saved"
             );
         } catch (RestClientException ex) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "İlerleme servisine ulaşılamadı; tekrar deneyin",
+                "The progress service could not be reached; try again",
                 ex
             );
         }
+    }
+
+    public static void validateQuestion(Question question) {
+        if(question.correctOptions().isEmpty()||question.correctOptions().stream().anyMatch(i->i<0||i>=question.options().size())||
+            ("SINGLE_CHOICE".equals(question.questionType())&&question.correctOptions().size()!=1)||
+            (!Set.of("SINGLE_CHOICE","MULTIPLE_CHOICE").contains(question.questionType())))
+            throw new IllegalArgumentException("Correct answers must match the question type and available options");
     }
 
     private void verifyEnrollment(UUID enrollment, UUID course, UUID student) {
@@ -419,15 +453,15 @@ public class AssessmentService {
             var result = enrollments.verify(enrollment, course, student);
             if (result == null || !result.success()) throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "Kayıt doğrulanamadı"
+                "Enrollment could not be verified"
             );
             if (!Boolean.TRUE.equals(result.data())) throw new UnauthorizedException(
-                "Kayıt bu öğrenciye ve kursa ait değil"
+                "The enrollment does not belong to this learner and course"
             );
         } catch (RestClientException ex) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "Kayıt servisine ulaşılamadı",
+                "The enrollment service could not be reached",
                 ex
             );
         }
@@ -456,7 +490,10 @@ public class AssessmentService {
             r.getObject("score", Integer.class),
             r.getString("feedback"),
             r.getTimestamp("submitted_at").toLocalDateTime(),
-            graded == null ? null : graded.toLocalDateTime()
+            graded == null ? null : graded.toLocalDateTime(),
+            r.getBoolean("late"),
+            r.getString("rubric_scores")==null?Map.of():json.readValue(r.getString("rubric_scores"),new tools.jackson.core.type.TypeReference<Map<UUID,Integer>>() {}),
+            r.getString("rubric_snapshot")==null?List.of():json.readValue(r.getString("rubric_snapshot"),new tools.jackson.core.type.TypeReference<List<AssignmentPolicyService.Criterion>>() {})
         );
     }
 
@@ -478,6 +515,8 @@ public class AssessmentService {
     @Transactional
     public Submission submit(UUID course, UUID lesson, SubmissionInput input, AuthenticatedUser user) {
         require(course, lesson, LessonType.ASSIGNMENT, user, false);
+        var submittedPolicy=assignmentPolicies.get(lesson);
+        boolean late=AssignmentPolicyService.requireSubmission(submittedPolicy);
         verifyEnrollment(input.enrollmentId(), course, user.id());
         if (
             input.attachmentUrl() != null &&
@@ -493,16 +532,16 @@ public class AssessmentService {
                 !user.id().equals(resource.data().ownerId()) ||
                 !course.equals(resource.data().courseId()) ||
                 !"ASSIGNMENT".equals(resource.data().purpose())
-            ) throw new UnauthorizedException("Ödev dosyası size ve kursa ait değil");
+            ) throw new UnauthorizedException("The assignment file does not belong to you and this course");
         } else if (input.attachmentUrl() != null && !input.attachmentUrl().isBlank()) {
             var uri = java.net.URI.create(input.attachmentUrl());
             if (
                 uri.getHost() == null ||
                 !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
-            ) throw new IllegalArgumentException("Ek bağlantısı http veya https olmalı");
+            ) throw new IllegalArgumentException("Attachment URLs must use HTTP or HTTPS");
         }
         jdbc.update(
-            "insert into assignment_revisions(id,submission_id,content,attachment_url,status,score,feedback) select gen_random_uuid(),id,content,attachment_url,status,score,feedback from assignment_submissions where lesson_id=? and student_id=?",
+            "insert into assignment_revisions(id,submission_id,content,attachment_url,status,score,feedback,rubric_scores,rubric_snapshot) select gen_random_uuid(),id,content,attachment_url,status,score,feedback,rubric_scores,rubric_snapshot from assignment_submissions where lesson_id=? and student_id=?",
             lesson,
             user.id()
         );
@@ -517,7 +556,8 @@ public class AssessmentService {
             input.content().trim(),
             input.attachmentUrl()
         );
-        if (changed == 0) throw new IllegalStateException("Onaylanmış ödev tekrar gönderilemez");
+        if (changed == 0) throw new IllegalStateException("An accepted assignment cannot be resubmitted");
+        jdbc.update("update assignment_submissions set late=?,rubric_scores='{}',rubric_snapshot=? where lesson_id=? and student_id=?",late,json.writeValueAsString(submittedPolicy.rubric()),lesson,user.id());
         return mine(course, lesson, user);
     }
 
@@ -525,9 +565,9 @@ public class AssessmentService {
     public List<Map<String, Object>> assignmentHistory(UUID course, UUID lesson, AuthenticatedUser user) {
         var actual = lessons
             .findById(lesson)
-            .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Lesson not found"));
         if (!actual.getSection().getCourse().getId().equals(course)) throw new IllegalArgumentException(
-            "Ders kursa ait değil"
+            "The lesson does not belong to this course"
         );
         boolean owner = actual.getSection().getCourse().getInstructorId().equals(user.id()) || user.isAdmin();
         if (!owner) access.requireEnrolled(course, user.id());
@@ -582,14 +622,17 @@ public class AssessmentService {
             )
             .stream()
             .findFirst()
-            .orElseThrow(() -> new CourseNotFoundException("Ödev bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Assignment not found"));
+        var rubric=submission.rubric();
+        Integer score=rubric.isEmpty()?grade.score():
+            (grade.status()==GradeStatus.CHANGES_REQUESTED&&grade.criterionScores().isEmpty()?null:AssignmentPolicyService.score(rubric,grade.criterionScores()));
         if (
             "ACCEPTED".equals(submission.status()) && grade.status() != GradeStatus.ACCEPTED
-        ) throw new IllegalStateException("Tamamlanmış ödevin kabulü geri alınamaz");
+        ) throw new IllegalStateException("Acceptance of a completed assignment cannot be revoked");
         if (
             grade.status() == GradeStatus.CHANGES_REQUESTED &&
             (grade.feedback() == null || grade.feedback().isBlank())
-        ) throw new IllegalArgumentException("Düzeltme için geri bildirim gerekli");
+        ) throw new IllegalArgumentException("Feedback is required when requesting changes");
         if (grade.status() == GradeStatus.ACCEPTED) complete(
             submission.enrollmentId(),
             lesson,
@@ -598,16 +641,17 @@ public class AssessmentService {
         jdbc.update(
             "update assignment_submissions set status=?,score=?,feedback=?,graded_at=now() where id=?",
             grade.status().name(),
-            grade.score(),
+            score,
             grade.feedback(),
             submissionId
         );
+        jdbc.update("update assignment_submissions set rubric_scores=?,rubric_snapshot=? where id=?",json.writeValueAsString(grade.criterionScores()),json.writeValueAsString(rubric),submissionId);
         events.enqueue(
             new com.lms.courseservice.event.PlatformNotice(
                 UUID.randomUUID(),
                 submission.studentId(),
                 course,
-                "Ödeviniz değerlendirildi",
+                "Your assignment has been reviewed",
                 grade.feedback() == null ? grade.status().name() : grade.feedback(),
                 "/courses/" + course,
                 "ASSIGNMENT_GRADED",
@@ -619,5 +663,18 @@ public class AssessmentService {
             this::submission,
             submissionId
         );
+    }
+
+    public AssignmentPolicyService.Policy assignmentPolicy(UUID course,UUID lesson,AuthenticatedUser user) {
+        var value=lessons.findById(lesson).orElseThrow(()->new CourseNotFoundException("Lesson not found"));
+        boolean owner=user.isAdmin()||value.getSection().getCourse().getInstructorId().equals(user.id());
+        require(course,lesson,LessonType.ASSIGNMENT,user,owner);
+        return assignmentPolicies.get(lesson);
+    }
+
+    @Transactional
+    public AssignmentPolicyService.Policy saveAssignmentPolicy(UUID course,UUID lesson,AssignmentPolicyService.Policy input,AuthenticatedUser user) {
+        CourseWorkspaceService.requireDirectEditable(require(course,lesson,LessonType.ASSIGNMENT,user,true).getSection().getCourse());
+        return assignmentPolicies.save(lesson,input);
     }
 }

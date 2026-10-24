@@ -52,7 +52,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
             } catch (Exception e) {
-                log.error("Authentication hatası: {}", e.getMessage());
+                log.error("Authentication error: {}", e.getMessage());
             }
         }
 

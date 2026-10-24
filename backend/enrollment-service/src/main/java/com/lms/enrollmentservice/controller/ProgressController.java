@@ -25,7 +25,7 @@ public class ProgressController {
     @PostMapping("/{enrollmentId}/lesson/{lessonId}/playback")
     public ApiResponse<ProgressResponse> playback(@PathVariable UUID enrollmentId,@PathVariable UUID lessonId,
             @Valid @RequestBody ProgressService.PlaybackRequest request,Authentication auth) {
-        return ApiResponse.success(progressService.recordPlayback(enrollmentId,lessonId,request,UUID.fromString(auth.getName())),"İzleme kaydedildi");
+        return ApiResponse.success(progressService.recordPlayback(enrollmentId,lessonId,request,UUID.fromString(auth.getName())),"Playback saved");
     }
 
     @PutMapping("/{enrollmentId}/lesson/{lessonId}")
@@ -50,7 +50,7 @@ public class ProgressController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         result,
-                        "İlerleme güncellendi"
+                        "Progress updated"
                 )
         );
     }
@@ -69,7 +69,7 @@ public class ProgressController {
                         progressService.getEnrollmentProgress(
                                 enrollmentId, studentId
                         ),
-                        "Başarılı"
+                        "Successful"
                 )
         );
     }

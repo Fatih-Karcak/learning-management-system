@@ -37,10 +37,13 @@ export async function authenticatedFetch(
 
 export async function fetchResource(path: string): Promise<Blob> {
   if (!/^\/api\/v1\/media\/resources\/[0-9a-f-]{36}$/i.test(path))
-    throw new ApiError('Dosya adresi geçersiz.', 400);
+    throw new ApiError('The file URL is invalid.', 400);
   const response = await authenticatedFetch(path);
   if (!response.ok)
-    throw new ApiError('Dosya indirilemedi. Erişim iznini kontrol edin.', response.status);
+    throw new ApiError(
+      'The file could not be downloaded. Check your access permissions.',
+      response.status,
+    );
   return response.blob();
 }
 export function setAccessToken(value: string | null) {
@@ -73,14 +76,14 @@ export function safeUrl(value?: string | null): string | undefined {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (options.body && !(options.body instanceof FormData))
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type'))
     headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
     response = await authenticatedFetch(path, { ...options, headers });
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    throw new ApiError('Sunucuya ulaşılamıyor. Bağlantınızı kontrol edip tekrar deneyin.', 0);
+    throw new ApiError('The server could not be reached. Check your connection and try again.', 0);
   }
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success === false) {
@@ -88,59 +91,64 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       payload?.message ||
       (
         {
-          401: 'Oturumunuz sona ermiş olabilir. Lütfen yeniden giriş yapın.',
-          403: 'Bu işlem için yetkiniz bulunmuyor.',
-          404: 'Aradığınız kayıt bulunamadı.',
-          413: 'Dosya boyutu izin verilen sınırı aşıyor.',
-          429: 'Çok fazla istek gönderdiniz. Lütfen biraz bekleyin.',
-          502: 'İlgili hizmete şu anda ulaşılamıyor.',
-          503: 'Hizmet geçici olarak kullanılamıyor.',
+          401: 'Your session may have expired. Please sign in again.',
+          403: 'You do not have permission to perform this action.',
+          404: 'The requested record was not found.',
+          413: 'The file exceeds the size limit.',
+          429: 'Too many requests. Please wait and try again.',
+          502: 'This service is currently unreachable.',
+          503: 'The service is temporarily unavailable.',
         } as Record<number, string>
       )[response.status] ||
-      'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
+      'The action could not be completed. Please try again.';
     throw new ApiError(message, response.status);
   }
   return payload?.data as T;
 }
 export const body = (data: unknown) => JSON.stringify(data);
 export const money = (value: number, currency = 'TRY') =>
-  new Intl.NumberFormat('tr-TR', { style: 'currency', currency, maximumFractionDigits: 2 }).format(
+  new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 }).format(
     value || 0,
   );
 export const date = (value: string) =>
-  new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(new Date(value));
+  new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(value));
 export const levels = {
-  BEGINNER: 'Başlangıç',
-  INTERMEDIATE: 'Orta seviye',
-  ADVANCED: 'İleri seviye',
-  ALL_LEVELS: 'Tüm seviyeler',
+  BEGINNER: 'Beginner',
+  INTERMEDIATE: 'Intermediate',
+  ADVANCED: 'Advanced',
+  ALL_LEVELS: 'All levels',
 };
-export const lessonTypes = { VIDEO: 'Video', ARTICLE: 'Okuma', QUIZ: 'Test', ASSIGNMENT: 'Ödev' };
+export const lessonTypes = {
+  VIDEO: 'Video',
+  ARTICLE: 'Article',
+  QUIZ: 'Test',
+  ASSIGNMENT: 'Assignment',
+};
 export const statusLabels: Record<string, string> = {
-  PARTIALLY_REFUNDED: 'Kısmen iade edildi',
-  ACTIVE: 'Aktif',
-  COMPLETED: 'Tamamlandı',
-  REFUNDED: 'İade edildi',
-  CANCELLED: 'İptal edildi',
-  PENDING: 'Bekliyor',
-  SUCCESS: 'Başarılı',
-  SUCCEEDED: 'Başarılı',
-  FAILED: 'Başarısız',
-  PROCESSING: 'İşleniyor',
-  READY: 'Hazır',
-  DRAFT: 'Taslak',
-  PUBLISHED: 'Yayında',
-  PENDING_REVIEW: 'İncelemede',
-  ARCHIVED: 'Arşivlendi',
-  SENT: 'Gönderildi',
-  IN_PROGRESS: 'Devam ediyor',
-  NOT_STARTED: 'Başlanmadı',
-  APPROVED: 'Onaylandı',
-  REJECTED: 'Reddedildi',
-  SUBMITTED: 'Değerlendirme bekliyor',
-  ACCEPTED: 'Kabul edildi',
-  CHANGES_REQUESTED: 'Düzeltme istendi',
-  BANNED: 'Yasaklandı',
-  INACTIVE: 'Pasif',
-  PENDING_VERIFICATION: 'E-posta bekleniyor',
+  PARTIALLY_REFUNDED: 'Partially refunded',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  REFUNDED: 'Refunded',
+  CANCELLED: 'Cancelled',
+  PENDING: 'Pending',
+  SUCCESS: 'Successful',
+  SUCCEEDED: 'Successful',
+  FAILED: 'Failed',
+  PROCESSING: 'Processing',
+  READY: 'Ready',
+  DRAFT: 'Draft',
+  PUBLISHED: 'Published',
+  PENDING_REVIEW: 'Under review',
+  ARCHIVED: 'Archived',
+  SENT: 'Sent',
+  IN_PROGRESS: 'In progress',
+  NOT_STARTED: 'Not started',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  SUBMITTED: 'Awaiting review',
+  ACCEPTED: 'Accepted',
+  CHANGES_REQUESTED: 'Changes requested',
+  BANNED: 'Banned',
+  INACTIVE: 'Inactive',
+  PENDING_VERIFICATION: 'Awaiting email verification',
 };

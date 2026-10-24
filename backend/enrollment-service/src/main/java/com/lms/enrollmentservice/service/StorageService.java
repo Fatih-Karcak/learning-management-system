@@ -28,7 +28,7 @@ public class StorageService {
 
     public void upload(String key, byte[] data, String contentType) {
         if (data == null || data.length == 0) {
-            throw new IllegalArgumentException("Boş dosya yüklenemez");
+            throw new IllegalArgumentException("Cannot upload an empty file");
         }
 
         try (ByteArrayInputStream input = new ByteArrayInputStream(data)) {
@@ -47,7 +47,7 @@ public class StorageService {
                     .build()
             );
         } catch (Exception e) {
-            throw new StorageException("MinIO dosya yükleme başarısız: " + e.getMessage());
+            throw new StorageException("MinIO upload failed: " + e.getMessage());
         }
     }
 
@@ -70,7 +70,7 @@ public class StorageService {
                     .build()
             );
         } catch (Exception e) {
-            throw new StorageException("MinIO indirme bağlantısı oluşturulamadı");
+            throw new StorageException("The MinIO download URL could not be generated");
         }
     }
 }

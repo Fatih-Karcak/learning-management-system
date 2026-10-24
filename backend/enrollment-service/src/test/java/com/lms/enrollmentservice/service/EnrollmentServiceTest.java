@@ -56,7 +56,7 @@ class EnrollmentServiceTest {
                 courseId,
                 "Java Kursu",
                 null,
-                "Eğitmen",
+                "Instructor",
                 BigDecimal.valueOf(500)
         );
     }

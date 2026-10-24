@@ -152,10 +152,10 @@ public class AccountToolsService {
     public void requestErasure(UUID user, String password) {
         var u = users.findById(user).orElseThrow();
         if (u.getRole() == UserRole.ADMIN) throw new IllegalStateException(
-            "Önce yönetici rolünüzü başka bir yönetici değiştirmeli"
+            "Another administrator must change your administrator role first"
         );
         if (!passwords.matches(password, u.getPassword())) throw new IllegalArgumentException(
-            "Parola yanlış"
+            "Incorrect password"
         );
         jdbc.queryForList("select id from users where id=? for update", user);
         if (
@@ -179,10 +179,10 @@ public class AccountToolsService {
     @Transactional
     public void resolvePrivacy(UUID id, UUID actor, String reason) {
         if (reason == null || reason.isBlank() || reason.length() > 2000) throw new IllegalArgumentException(
-            "Gerekçe gerekli"
+            "A reason is required"
         );
         var r = jdbc.queryForMap("select * from privacy_requests where id=? for update", id);
-        if (!"OPEN".equals(r.get("status"))) throw new IllegalStateException("Talep zaten işlendi");
+        if (!"OPEN".equals(r.get("status"))) throw new IllegalStateException("This request has already been processed");
         jdbc.update(
             "update privacy_requests set status='REVIEWED',reason=?,resolved_at=now() where id=?",
             reason,

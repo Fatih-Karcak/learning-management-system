@@ -25,12 +25,12 @@ public class VideoOperationsController {
 
     @GetMapping
     public ApiResponse<?> failed(Authentication a) {
-        return ApiResponse.success(service.failed(UUID.fromString(a.getName()), admin(a)), "Video işlemleri");
+        return ApiResponse.success(service.failed(UUID.fromString(a.getName()), admin(a)), "Video operations");
     }
 
     @PostMapping("/{id}/retry")
     public ApiResponse<?> retry(@PathVariable UUID id, Authentication a) {
         service.retry(id, UUID.fromString(a.getName()), admin(a));
-        return ApiResponse.success(null, "İşleme kuyruğuna alındı");
+        return ApiResponse.success(null, "Queued for processing");
     }
 }

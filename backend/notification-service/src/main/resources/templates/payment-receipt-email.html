@@ -3,12 +3,12 @@
 <head><meta charset="UTF-8"/></head>
 <body style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px;">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;">
-    <h1 style="color:#0f172a;">Ödeme Makbuzu 🧾</h1>
-    <p>Merhaba <span th:text="${studentName}">Öğrenci</span>,</p>
+    <h1 style="color:#0f172a;">Payment receipt 🧾</h1>
+    <p>Hello <span th:text="${studentName}">Learner</span>,</p>
     <table style="width:100%;border-collapse:collapse;margin-top:16px;">
-        <tr><td style="padding:8px 0;color:#64748b;">Kurs</td><td th:text="${courseTitle}" style="text-align:right;font-weight:bold;">Kurs Adı</td></tr>
-        <tr><td style="padding:8px 0;color:#64748b;">Eğitmen</td><td th:text="${instructorName}" style="text-align:right;">Eğitmen</td></tr>
-        <tr><td style="padding:8px 0;color:#64748b;">Tutar</td><td style="text-align:right;font-weight:bold;"><span th:text="${amount}">0</span> TRY</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;">Course</td><td th:text="${courseTitle}" style="text-align:right;font-weight:bold;">Course title</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;">Instructor</td><td th:text="${instructorName}" style="text-align:right;">Instructor</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;">Amount</td><td style="text-align:right;font-weight:bold;"><span th:text="${amount}">0</span> TRY</td></tr>
     </table>
 </div>
 </body>

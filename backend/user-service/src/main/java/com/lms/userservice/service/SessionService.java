@@ -54,7 +54,7 @@ public class SessionService {
 
     @Transactional(noRollbackFor = BadCredentialsException.class)
     public Issued rotate(String raw) {
-        if (raw == null || raw.length() > 256) throw new BadCredentialsException("Oturum geçersiz");
+        if (raw == null || raw.length() > 256) throw new BadCredentialsException("Invalid session");
         String h = hash(raw);
         var rows = jdbc.queryForList(
             "select id,user_id,expires_at,revoked from user_sessions where refresh_hash=? for update",
@@ -65,7 +65,7 @@ public class SessionService {
                 "update user_sessions set revoked=true where id in(select session_id from used_refresh_tokens where token_hash=?)",
                 h
             );
-            throw new BadCredentialsException("Oturum geçersiz veya daha önce yenilendi");
+            throw new BadCredentialsException("The session is invalid or has already been refreshed");
         }
         var r = rows.getFirst();
         if (
@@ -73,7 +73,7 @@ public class SessionService {
             ((java.sql.Timestamp) r.get("expires_at"))
                 .toLocalDateTime()
                 .isBefore(LocalDateTime.now(java.time.Clock.systemUTC()))
-        ) throw new BadCredentialsException("Oturum sona erdi");
+        ) throw new BadCredentialsException("Session expired");
         var id = (UUID) r.get("id");
         String next = random();
         jdbc.update("insert into used_refresh_tokens(token_hash,session_id) values(?,?)", h, id);

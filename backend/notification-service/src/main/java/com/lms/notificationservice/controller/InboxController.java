@@ -21,25 +21,25 @@ public class InboxController {
 
     @GetMapping("/inbox")
     public ApiResponse<?> inbox(Authentication a) {
-        return ApiResponse.success(service.inbox(id(a)), "Gelen kutusu");
+        return ApiResponse.success(service.inbox(id(a)), "Inbox");
     }
 
     @PutMapping("/inbox/{notice}/read")
     public ApiResponse<?> read(Authentication a, @PathVariable UUID notice) {
         service.read(id(a), notice);
-        return ApiResponse.success(null, "Okundu");
+        return ApiResponse.success(null, "Marked as read");
     }
 
     @GetMapping("/admin/failures")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<?> failures() {
-        return ApiResponse.success(service.failures(), "Bildirim hataları");
+        return ApiResponse.success(service.failures(), "Notification failures");
     }
 
     @PostMapping("/admin/{notice}/retry")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<?> retry(@PathVariable UUID notice) {
         service.retry(notice);
-        return ApiResponse.success(null, "Yeniden denenecek");
+        return ApiResponse.success(null, "Queued for retry");
     }
 }

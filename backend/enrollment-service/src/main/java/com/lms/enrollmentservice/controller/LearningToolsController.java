@@ -24,35 +24,35 @@ public class LearningToolsController {
 
     @GetMapping("/learning/dashboard")
     public ApiResponse<?> dashboard(Authentication a) {
-        return ApiResponse.success(service.dashboard(id(a)), "Çalışma alanı");
+        return ApiResponse.success(service.dashboard(id(a)), "Workspace");
     }
 
     @GetMapping("/learning/export")
     public ApiResponse<?> export(Authentication a) {
-        return ApiResponse.success(service.export(id(a)), "Kişisel öğrenme verileri");
+        return ApiResponse.success(service.export(id(a)), "Personal learning data");
     }
 
     @PostMapping("/learning/tasks")
     public ApiResponse<?> task(Authentication a, @Valid @RequestBody LearningToolsService.Task t) {
         service.createTask(id(a), t);
-        return ApiResponse.success(null, "Plan eklendi");
+        return ApiResponse.success(null, "Task added");
     }
 
     @PutMapping("/learning/tasks/{task}")
     public ApiResponse<?> task(Authentication a, @PathVariable UUID task, @RequestBody Done d) {
         service.task(id(a), task, d.done());
-        return ApiResponse.success(null, "Plan güncellendi");
+        return ApiResponse.success(null, "Plan updated");
     }
 
     @DeleteMapping("/learning/tasks/{task}")
     public ApiResponse<?> deleteTask(Authentication a, @PathVariable UUID task) {
         service.deleteTask(id(a), task);
-        return ApiResponse.success(null, "Plan silindi");
+        return ApiResponse.success(null, "Task deleted");
     }
 
     @GetMapping("/{enrollment}/bookmarks")
     public ApiResponse<?> bookmarks(Authentication a, @PathVariable UUID enrollment) {
-        return ApiResponse.success(service.bookmarks(enrollment, id(a)), "Yer imleri");
+        return ApiResponse.success(service.bookmarks(enrollment, id(a)), "Bookmarks");
     }
 
     @PostMapping("/{enrollment}/bookmarks")
@@ -62,7 +62,7 @@ public class LearningToolsController {
         @Valid @RequestBody LearningToolsService.Bookmark b
     ) {
         service.bookmark(enrollment, id(a), b);
-        return ApiResponse.success(null, "Yer imi eklendi");
+        return ApiResponse.success(null, "Bookmark added");
     }
 
     @DeleteMapping("/{enrollment}/bookmarks/{bookmark}")
@@ -72,7 +72,7 @@ public class LearningToolsController {
         @PathVariable UUID bookmark
     ) {
         service.deleteBookmark(enrollment, id(a), bookmark);
-        return ApiResponse.success(null, "Yer imi silindi");
+        return ApiResponse.success(null, "Bookmark deleted");
     }
 
     @GetMapping("/courses/{course}/analytics")
@@ -87,7 +87,7 @@ public class LearningToolsController {
                     .stream()
                     .anyMatch(r -> r.getAuthority().equals("ROLE_ADMIN"))
             ),
-            "Öğrenme raporu"
+            "Learning report"
         );
     }
 }

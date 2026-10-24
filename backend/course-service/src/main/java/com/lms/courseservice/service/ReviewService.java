@@ -33,11 +33,11 @@ public class ReviewService {
                                        String studentAvatarUrl) {
         accessPolicy.requireEnrolled(courseId, studentId);
         if (reviewRepository.existsByCourseIdAndStudentId(courseId, studentId)) {
-            throw new IllegalStateException("Bu kursa zaten yorum yaptınız");
+            throw new IllegalStateException("You have already reviewed this course");
         }
 
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new CourseNotFoundException("Kurs bulunamadı"));
+                .orElseThrow(() -> new CourseNotFoundException("Course not found"));
 
         Review review = Review.builder()
                 .course(course)
@@ -64,7 +64,7 @@ public class ReviewService {
     @Transactional
     public void deleteReview(UUID reviewId, UUID studentId) {
         Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new CourseNotFoundException("Yorum bulunamadı"));
+                .orElseThrow(() -> new CourseNotFoundException("Review not found"));
 
         if (!review.getStudentId().equals(studentId)) {
             throw new IllegalStateException("Bu yorumu silme yetkiniz yok");

@@ -49,8 +49,8 @@ public class AccountRecoveryService {
                 UUID.randomUUID(),
                 u.getId(),
                 null,
-                verification ? "E-posta adresinizi doğrulayın" : "Parolanızı sıfırlayın",
-                verification ? "Bağlantı 24 saat geçerlidir." : "Bağlantı 30 dakika geçerlidir.",
+                verification ? "Verify your email address" : "Reset your password",
+                verification ? "This link is valid for 24 hours." : "This link is valid for 30 minutes.",
                 verification ? "/verify-email" : "/reset-password",
                 "SECURITY",
                 token
@@ -62,7 +62,7 @@ public class AccountRecoveryService {
     public void reset(String token, String password) {
         var u = users
             .findByPasswordResetToken(SessionService.hash(token))
-            .orElseThrow(() -> new IllegalArgumentException("Bağlantı geçersiz veya kullanılmış"));
+            .orElseThrow(() -> new IllegalArgumentException("The link is invalid or has already been used"));
         jdbc.queryForList("select id from users where id=? for update", u.getId());
         var current = jdbc.queryForMap(
             "select password_reset_token,password_reset_token_expiry from users where id=?",
@@ -74,7 +74,7 @@ public class AccountRecoveryService {
             ((java.sql.Timestamp) current.get("password_reset_token_expiry"))
                 .toLocalDateTime()
                 .isBefore(LocalDateTime.now(java.time.Clock.systemUTC()))
-        ) throw new IllegalArgumentException("Bağlantının süresi doldu veya kullanılmış");
+        ) throw new IllegalArgumentException("The link has expired or has already been used");
         u.setPassword(encoder.encode(password));
         u.setPasswordResetToken(null);
         u.setPasswordResetTokenExpiry(null);

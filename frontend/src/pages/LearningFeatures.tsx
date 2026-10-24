@@ -12,6 +12,7 @@ import type {
   LessonNote,
   Page,
   RosterRow,
+  AssignmentPolicy,
 } from '../types';
 import { Badge, Empty, ErrorBox, Field, Loading, Pagination, Submit, Success } from '../ui';
 
@@ -28,7 +29,8 @@ export function QuizLesson({
 }) {
   const path = `/courses/${courseId}/lessons/${lessonId}/quiz`;
   const client = useQueryClient();
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const { session } = useAuth();
+  const [answers, setAnswers] = useState<Record<string, number[]>>({});
   const [active, setActive] = useState<{ id: string; expiresAt: string; quiz: Quiz }>();
   const [now, setNow] = useState(Date.now());
   const quiz = useQuery({ queryKey: ['quiz', lessonId], queryFn: () => api<Quiz>(path) });
@@ -44,7 +46,17 @@ export function QuizLesson({
       }),
     onSuccess: (value) => {
       setActive(value);
-      setAnswers({});
+      try {
+        setAnswers(
+          JSON.parse(
+            sessionStorage.getItem(
+              `lms.quiz.${session?.user.id}.${enrollmentId}.${lessonId}.${value.id}`,
+            ) || '{}',
+          ),
+        );
+      } catch {
+        setAnswers({});
+      }
       setNow(Date.now());
       submit.reset();
     },
@@ -55,6 +67,15 @@ export function QuizLesson({
     return () => clearInterval(timer);
   }, [active]);
   const actual = active?.quiz || quiz.data;
+  const answerKey = `lms.quiz.${session?.user.id}.${enrollmentId}.${lessonId}.${active?.id || 'open'}`;
+  useEffect(() => {
+    if (!Object.keys(answers).length) return;
+    try {
+      sessionStorage.setItem(answerKey, JSON.stringify(answers));
+    } catch {
+      /* Submission remains available when browser storage is full. */
+    }
+  }, [answers, answerKey]);
   const managed = !!(
     quiz.data?.maxAttempts ||
     quiz.data?.timeLimitSeconds ||
@@ -72,10 +93,15 @@ export function QuizLesson({
         body: body({
           enrollmentId,
           sessionId: active?.id,
-          answers: actual!.questions.map((q) => ({ questionId: q.id, option: answers[q.id] })),
+          answers: actual!.questions.map((q) => ({
+            questionId: q.id,
+            option: answers[q.id]?.[0],
+            options: answers[q.id],
+          })),
         }),
       }),
     onSuccess: (result) => {
+      sessionStorage.removeItem(answerKey);
       void client.invalidateQueries({ queryKey: ['quiz-attempts', lessonId] });
       if (result.passed) onCompleted();
     },
@@ -84,11 +110,11 @@ export function QuizLesson({
   if (quiz.error) return <ErrorBox error={quiz.error} retry={() => void quiz.refetch()} />;
   return (
     <section className="feature-section">
-      <h3>Ders testi</h3>
+      <h3>Lesson quiz</h3>
       <p>
-        Geçme puanı: %{actual!.passingScore}.
-        {quiz.data?.maxAttempts ? ` Deneme sınırı: ${quiz.data.maxAttempts}.` : ''}
-        {quiz.data?.timeLimitSeconds ? ` Süre: ${quiz.data.timeLimitSeconds} saniye.` : ''}
+        Passing score: {actual!.passingScore}%.
+        {quiz.data?.maxAttempts ? ` Attempt limit: ${quiz.data.maxAttempts}.` : ''}
+        {quiz.data?.timeLimitSeconds ? ` Time limit: ${quiz.data.timeLimitSeconds} saniye.` : ''}
       </p>
       {managed && !active ? (
         <button
@@ -96,7 +122,7 @@ export function QuizLesson({
           disabled={start.isPending}
           onClick={() => start.mutate()}
         >
-          Testi başlat / devam et
+          Start / resume quiz
         </button>
       ) : (
         <form
@@ -106,7 +132,7 @@ export function QuizLesson({
           }}
         >
           {active && quiz.data?.timeLimitSeconds && (
-            <p role="timer">Kalan süre: {remaining} saniye</p>
+            <p role="timer">Time remaining: {remaining} seconds</p>
           )}
           <fieldset
             disabled={expired || submit.isSuccess || submit.isPending}
@@ -120,29 +146,41 @@ export function QuizLesson({
                 {q.options.map((option, index) => (
                   <label className="checkbox-field" key={index}>
                     <input
-                      type="radio"
+                      type={q.questionType === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
                       name={q.id}
-                      required
-                      checked={answers[q.id] === index}
-                      onChange={() => setAnswers({ ...answers, [q.id]: index })}
+                      required={q.questionType !== 'MULTIPLE_CHOICE'}
+                      checked={answers[q.id]?.includes(index) || false}
+                      onChange={(event) =>
+                        setAnswers({
+                          ...answers,
+                          [q.id]:
+                            q.questionType === 'MULTIPLE_CHOICE'
+                              ? event.target.checked
+                                ? [...(answers[q.id] || []), index]
+                                : (answers[q.id] || []).filter((value) => value !== index)
+                              : [index],
+                        })
+                      }
                     />
                     {option}
                   </label>
                 ))}
               </fieldset>
             ))}
-            <Submit busy={submit.isPending}>Testi gönder</Submit>
+            <Submit busy={submit.isPending}>Submit quiz</Submit>
           </fieldset>
           {submit.error && <ErrorBox error={submit.error} />}{' '}
           {submit.data && (
             <div className={`notice ${submit.data.passed ? 'success' : 'warning'}`} role="status">
-              Puanın: %{submit.data.score}.{' '}
-              {submit.data.passed ? 'Testi geçtin; ders tamamlandı.' : 'Geçme puanına ulaşamadın.'}
+              Your score: {submit.data.score}%.{' '}
+              {submit.data.passed
+                ? 'You passed the quiz and completed the lesson.'
+                : 'You have not reached the passing score.'}
               <ul>
                 {submit.data.feedback?.map((f) => (
                   <li key={f.questionId}>
                     {actual!.questions.find((q) => q.id === f.questionId)?.prompt}:{' '}
-                    {f.correct ? 'Doğru' : 'Tekrar çalış'}
+                    {f.correct ? 'Correct' : 'Review this topic'}
                     {f.explanation ? ` — ${f.explanation}` : ''}
                   </li>
                 ))}
@@ -151,14 +189,18 @@ export function QuizLesson({
           )}
           {(submit.isSuccess || expired) && (
             <>
-              <p>{expired ? 'Test süresi doldu. Yeni deneme kalan haklarından düşer.' : ''}</p>
+              <p>
+                {expired
+                  ? 'The quiz has expired. A new attempt uses one of your remaining attempts.'
+                  : ''}
+              </p>
               <button
                 type="button"
                 className="button secondary"
                 disabled={start.isPending}
                 onClick={() => (managed ? start.mutate() : (submit.reset(), setAnswers({})))}
               >
-                Yeniden dene
+                Try again
               </button>
             </>
           )}
@@ -168,11 +210,11 @@ export function QuizLesson({
       {attempts.error && <ErrorBox error={attempts.error} />}{' '}
       {!!attempts.data?.length && (
         <details>
-          <summary>Önceki denemeler ({attempts.data.length})</summary>
+          <summary>Previous attempts ({attempts.data.length})</summary>
           <ul>
             {attempts.data.map((a) => (
               <li key={a.id}>
-                %{a.score} · {a.passed ? 'Geçti' : 'Tekrar dene'}
+                {a.score}% · {a.passed ? 'Passed' : 'Try again'}
               </li>
             ))}
           </ul>
@@ -225,15 +267,16 @@ export function AssignmentLesson({
   const s = submission.data;
   return (
     <section className="feature-section">
-      <h3>Ödev teslimi</h3>
+      <h3>Assignment submission</h3>
+      <AssignmentInformation courseId={courseId} lessonId={lessonId} />
       {!!history.data?.length && (
         <details>
-          <summary>Teslim geçmişi ({history.data.length})</summary>
+          <summary>Submission history ({history.data.length})</summary>
           {history.data.map((h) => (
             <article className="notice" key={h.id}>
               <small>{date(h.created_at)}</small>
               <p className="pre-wrap">{h.content}</p>
-              {h.feedback && <p>Eğitmen: {h.feedback}</p>}
+              {h.feedback && <p>Instructor: {h.feedback}</p>}
             </article>
           ))}
         </details>
@@ -241,17 +284,17 @@ export function AssignmentLesson({
       {s && (
         <>
           <Badge value={s.status} />
-          {s.score != null && <p>Puan: {s.score}/100</p>}
+          {s.score != null && <p>Score: {s.score}/100</p>}
           {s.feedback && (
             <div className="notice">
-              <b>Eğitmen geri bildirimi</b>
+              <b>Instructor feedback</b>
               <p>{s.feedback}</p>
             </div>
           )}
         </>
       )}
       {s?.status === 'ACCEPTED' ? (
-        <Success>Ödevin kabul edildi. Ders tamamlandı.</Success>
+        <Success>Your assignment has been accepted. The lesson is complete.</Success>
       ) : (
         <form
           key={s?.submittedAt || 'new'}
@@ -266,7 +309,7 @@ export function AssignmentLesson({
             });
           }}
         >
-          <Field label="Ödev yanıtın">
+          <Field label="Your assignment response">
             <textarea
               name="content"
               rows={6}
@@ -278,7 +321,7 @@ export function AssignmentLesson({
           {s?.attachmentUrl?.startsWith('/api/v1/media/resources/') && (
             <ProtectedDownload url={s.attachmentUrl} />
           )}
-          <Field label="Ödev dosyası (PDF veya TXT, en fazla 25 MB)">
+          <Field label="Assignment file (PDF or TXT, up to 25 MB)">
             <input
               type="file"
               accept=".pdf,.txt"
@@ -308,12 +351,12 @@ export function AssignmentLesson({
           </Field>
           {attachment && (
             <p className="notice success">
-              Dosya yüklendi. Ödevi gönderdiğinde teslimine eklenecek.
+              File uploaded. It will be attached when you submit the assignment.
             </p>
           )}
           {!!uploadError && <ErrorBox error={uploadError} />}{' '}
-          {uploading && <p role="status">Dosya yükleniyor…</p>}
-          <Field label="Çalışma bağlantısı (isteğe bağlı)">
+          {uploading && <p role="status">Uploading file…</p>}
+          <Field label="Work URL (optional)">
             <input
               name="attachmentUrl"
               type="url"
@@ -324,11 +367,58 @@ export function AssignmentLesson({
           </Field>
           {send.error && <ErrorBox error={send.error} />}
           <Submit busy={send.isPending || uploading}>
-            {s ? 'Ödevi güncelle' : 'Ödevi gönder'}
+            {s ? 'Update assignment' : 'Submit assignment'}
           </Submit>
         </form>
       )}
     </section>
+  );
+}
+
+function AssignmentInformation({ courseId, lessonId }: { courseId: string; lessonId: string }) {
+  const path = `/courses/${courseId}/lessons/${lessonId}/assignment`;
+  const policy = useQuery({
+    queryKey: ['assignment-policy', lessonId],
+    queryFn: () => api<AssignmentPolicy>(`${path}/policy`),
+  });
+  const submission = useQuery({
+    queryKey: ['assignment', lessonId],
+    queryFn: () => api<AssignmentSubmission | null>(`${path}/my`),
+  });
+  return (
+    <>
+      {policy.data?.dueAt && (
+        <p>
+          Submission deadline: {date(policy.data.dueAt)} ·{' '}
+          {policy.data.allowLate ? 'Late submissions are accepted' : 'Late submissions are closed'}
+        </p>
+      )}
+      {!!policy.data?.rubric.length && (
+        <details>
+          <summary>Grading rubric</summary>
+          <ul>
+            {policy.data.rubric.map((criterion) => (
+              <li key={criterion.id}>
+                {criterion.label}: {criterion.maxPoints} points
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {submission.data?.late && (
+        <p className="notice warning">This work was submitted after the deadline.</p>
+      )}
+      {!!submission.data?.rubric?.length && (
+        <ul>
+          {submission.data.rubric.map((criterion) => (
+            <li key={criterion.id}>
+              {criterion.label}: {submission.data!.criterionScores?.[criterion.id] ?? '—'} /{' '}
+              {criterion.maxPoints}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -349,6 +439,7 @@ export function AssignmentGrading({ courseId, lessonId }: { courseId: string; le
       status: string;
       score: number | null;
       feedback: string;
+      criterionScores: Record<string, number>;
     }) => api(`${path}/${id}`, { method: 'PUT', body: body(data) }),
     onSuccess: () => void client.invalidateQueries({ queryKey: ['assignment-grading', lessonId] }),
   });
@@ -370,7 +461,7 @@ export function AssignmentGrading({ courseId, lessonId }: { courseId: string; le
             ) : (
               safeUrl(s.attachmentUrl) && (
                 <a href={safeUrl(s.attachmentUrl)} target="_blank" rel="noreferrer">
-                  Çalışmayı aç
+                  Open submitted work
                 </a>
               )
             )}
@@ -383,32 +474,61 @@ export function AssignmentGrading({ courseId, lessonId }: { courseId: string; le
                   status: String(f.get('status')),
                   score: f.get('score') ? Number(f.get('score')) : null,
                   feedback: String(f.get('feedback') || ''),
+                  criterionScores: Object.fromEntries(
+                    (s.rubric || [])
+                      .filter((c) => f.get(`criterion-${c.id}`) !== '')
+                      .map((c) => [c.id, Number(f.get(`criterion-${c.id}`))]),
+                  ),
                 });
               }}
             >
-              <Field label={`${s.studentName}, değerlendirme`}>
+              <Field label={`${s.studentName}, assessment`}>
                 <select
                   name="status"
                   defaultValue={s.status === 'CHANGES_REQUESTED' ? 'CHANGES_REQUESTED' : 'ACCEPTED'}
                 >
-                  <option value="ACCEPTED">Kabul et ve dersi tamamla</option>
+                  <option value="ACCEPTED">Accept and complete lesson</option>
                   <option value="CHANGES_REQUESTED" disabled={s.status === 'ACCEPTED'}>
-                    Düzeltme iste
+                    Request changes
                   </option>
                 </select>
               </Field>
-              <Field label={`${s.studentName}, puan`}>
-                <input name="score" type="number" min={0} max={100} defaultValue={s.score} />
+              {s.rubric?.map((criterion) => (
+                <Field
+                  key={criterion.id}
+                  label={`${s.studentName}: ${criterion.label} (max ${criterion.maxPoints})`}
+                >
+                  <input
+                    name={`criterion-${criterion.id}`}
+                    type="number"
+                    min={0}
+                    max={criterion.maxPoints}
+                    defaultValue={s.criterionScores?.[criterion.id]}
+                  />
+                </Field>
+              ))}
+              <Field label={`${s.studentName}, score`}>
+                <input
+                  name="score"
+                  type="number"
+                  min={0}
+                  max={100}
+                  defaultValue={s.score}
+                  disabled={!!s.rubric?.length}
+                />
               </Field>
-              <Field label={`${s.studentName}, geri bildirim`}>
+              <Field label={`${s.studentName}, feedback`}>
                 <textarea name="feedback" maxLength={10000} defaultValue={s.feedback} />
               </Field>
-              <Submit busy={grade.isPending}>Değerlendirmeyi kaydet</Submit>
+              <Submit busy={grade.isPending}>Save assessment</Submit>
             </form>
           </article>
         ))
       ) : (
-        <Empty title="Henüz ödev teslim edilmedi" text="Öğrencilerin çalışmaları burada görünür." />
+        <Empty
+          title="No assignments have been submitted yet"
+          text="Learner submissions will appear here."
+        />
       )}
       <Pagination page={page} pages={submissions.data?.totalPages || 0} onChange={setPage} />
     </>
@@ -457,9 +577,9 @@ export function LessonNotes({
   });
   return (
     <section className="feature-section">
-      <h3>Kişisel ders notlarım</h3>
+      <h3>My private lesson notes</h3>
       <p className="muted">
-        Notlarını yalnızca sen görebilirsin. Yeni not konumu: {Math.floor(position / 60)}:
+        Only you can see your notes. New note position: {Math.floor(position / 60)}:
         {String(Math.floor(position) % 60).padStart(2, '0')}
       </p>
       <form
@@ -469,7 +589,7 @@ export function LessonNotes({
           save.mutate(String(new FormData(e.currentTarget).get('content')));
         }}
       >
-        <Field label="Ders notun">
+        <Field label="Your lesson note">
           <textarea
             name="content"
             required
@@ -478,10 +598,10 @@ export function LessonNotes({
             defaultValue={editing?.content}
           />
         </Field>
-        <Submit busy={save.isPending}>{editing ? 'Notu güncelle' : 'Not ekle'}</Submit>
+        <Submit busy={save.isPending}>{editing ? 'Update note' : 'Add note'}</Submit>
         {editing && (
           <button type="button" className="text-button" onClick={() => setEditing(undefined)}>
-            Vazgeç
+            Cancel
           </button>
         )}
       </form>
@@ -501,14 +621,14 @@ export function LessonNotes({
             <p>{note.content}</p>
             <div className="form-actions">
               <button className="text-button" onClick={() => setEditing(note)}>
-                Notu düzenle
+                Edit note
               </button>
               <button
                 className="text-button danger"
                 disabled={remove.isPending}
                 onClick={() => remove.mutate(note.id)}
               >
-                Notu sil
+                Delete note
               </button>
             </div>
           </article>
@@ -578,9 +698,9 @@ export function CourseDiscussion({
   });
   return (
     <section className="feature-section">
-      <h3>Soru-cevap</h3>
+      <h3>Questions and answers</h3>
       <div className="form-grid">
-        <Field label="Sorularda ara">
+        <Field label="Search questions">
           <input
             value={query}
             onChange={(e) => {
@@ -598,7 +718,7 @@ export function CourseDiscussion({
               setPage(0);
             }}
           />
-          Yalnızca yanıtsız sorular
+          Unanswered questions only
         </label>
       </div>
       {questions.isPending ? (
@@ -614,8 +734,8 @@ export function CourseDiscussion({
           >
             <strong>{question.title}</strong>
             <span>
-              {question.authorName} · {question.replyCount} yanıt{' '}
-              {question.acceptedReplyId ? '· Çözüldü' : ''}
+              {question.authorName} · {question.replyCount} replies{' '}
+              {question.acceptedReplyId ? '· Resolved' : ''}
             </span>
           </button>
         ))
@@ -633,7 +753,7 @@ export function CourseDiscussion({
             replies.data?.map((r) => (
               <div className="note-item" key={r.id}>
                 <b>
-                  {r.authorName} {r.instructor ? '· Eğitmen' : ''}
+                  {r.authorName} {r.instructor ? '· Instructor' : ''}
                 </b>
                 <p>{r.content}</p>
                 {open.acceptedReplyId === r.id ? (
@@ -643,7 +763,7 @@ export function CourseDiscussion({
                     session?.user.id === instructorId ||
                     session?.user.role === 'ADMIN') && (
                     <button className="text-button" onClick={() => accept.mutate(r.id)}>
-                      Yanıtı kabul et
+                      Accept answer
                     </button>
                   )
                 )}
@@ -657,10 +777,10 @@ export function CourseDiscussion({
               reply.mutate(String(new FormData(e.currentTarget).get('content')));
             }}
           >
-            <Field label="Yanıtın">
+            <Field label="Your reply">
               <textarea name="content" required maxLength={10000} />
             </Field>
-            <Submit busy={reply.isPending}>Yanıt gönder</Submit>
+            <Submit busy={reply.isPending}>Send reply</Submit>
           </form>
           {(session?.user.id === open.authorId ||
             session?.user.id === instructorId ||
@@ -669,10 +789,10 @@ export function CourseDiscussion({
               className="text-button danger"
               disabled={remove.isPending}
               onClick={() => {
-                if (window.confirm('Soru ve yanıtları silinsin mi?')) remove.mutate(open.id);
+                if (window.confirm('Delete this question and its replies?')) remove.mutate(open.id);
               }}
             >
-              Soruyu sil
+              Delete question
             </button>
           )}
         </article>
@@ -681,7 +801,7 @@ export function CourseDiscussion({
         <ErrorBox error={error} key={i} />
       ))}
       <details>
-        <summary>Yeni soru sor</summary>
+        <summary>Ask a question</summary>
         <form
           key={String(ask.isSuccess)}
           onSubmit={(e) => {
@@ -694,13 +814,13 @@ export function CourseDiscussion({
             });
           }}
         >
-          <Field label="Soru başlığı">
+          <Field label="Question title">
             <input name="title" required maxLength={200} />
           </Field>
-          <Field label="Sorunun ayrıntısı">
+          <Field label="Question details">
             <textarea name="content" required maxLength={10000} rows={4} />
           </Field>
-          <Submit busy={ask.isPending}>Soruyu gönder</Submit>
+          <Submit busy={ask.isPending}>Submit question</Submit>
         </form>
       </details>
     </section>
@@ -723,7 +843,7 @@ export function CourseStudents({ courseId }: { courseId: string }) {
   });
   return (
     <section className="panel">
-      <h2>Öğrenciler ve ilerleme</h2>
+      <h2>Learners and progress</h2>
       {revoke.error && <ErrorBox error={revoke.error} />}{' '}
       {students.isPending ? (
         <Loading />
@@ -731,16 +851,16 @@ export function CourseStudents({ courseId }: { courseId: string }) {
         <ErrorBox error={students.error} />
       ) : (
         <>
-          <p>{students.data?.totalElements || 0} kayıt</p>
+          <p>{students.data?.totalElements || 0} enrollments</p>
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Öğrenci</th>
-                  <th>Durum</th>
-                  <th>İlerleme</th>
-                  <th>Son erişim</th>
-                  {session?.user.role === 'ADMIN' && <th>İşlem</th>}
+                  <th>Learner</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Last activity</th>
+                  {session?.user.role === 'ADMIN' && <th>Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -757,22 +877,22 @@ export function CourseStudents({ courseId }: { courseId: string }) {
                       <progress value={e.progressPercentage || 0} max={100} />
                       <span>
                         {' '}
-                        %{Math.round(e.progressPercentage || 0)} · {e.completedLessons}/
-                        {e.totalLessons} ders
+                        {Math.round(e.progressPercentage || 0)}% · {e.completedLessons}/
+                        {e.totalLessons} lessons
                       </span>
                     </td>
-                    <td>{e.lastAccessedAt ? date(e.lastAccessedAt) : 'Henüz başlamadı'}</td>
+                    <td>{e.lastAccessedAt ? date(e.lastAccessedAt) : 'Not started yet'}</td>
                     {session?.user.role === 'ADMIN' && (
                       <td>
                         <button
                           className="text-button danger"
                           disabled={revoke.isPending || !['ACTIVE', 'COMPLETED'].includes(e.status)}
                           onClick={() => {
-                            const reason = window.prompt('Kayıt iptal gerekçesi');
+                            const reason = window.prompt('Reason for revoking enrollment');
                             if (reason?.trim()) revoke.mutate({ id: e.id, reason });
                           }}
                         >
-                          Kaydı iptal et
+                          Revoke enrollment
                         </button>
                       </td>
                     )}
@@ -799,7 +919,7 @@ function ProtectedDownload({ url }: { url: string }) {
             const blob = await fetchResource(url);
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'odev-dosyasi';
+            link.download = 'assignment-file';
             link.click();
             setTimeout(() => URL.revokeObjectURL(link.href), 10000);
           } catch (e) {
@@ -807,7 +927,7 @@ function ProtectedDownload({ url }: { url: string }) {
           }
         }}
       >
-        Ödev dosyasını indir
+        Download assignment file
       </button>
       {!!error && <ErrorBox error={error} />}
     </>

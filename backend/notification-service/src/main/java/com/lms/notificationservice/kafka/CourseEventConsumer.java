@@ -15,7 +15,7 @@ public class CourseEventConsumer {
 
     @KafkaListener(topics = "course-published",groupId = "notification-service",containerFactory = "coursePublishedContainerFactory")
     public void handleCoursePublished(CoursePublishedEvent event) {
-        log.info("Kurs yayınlama eventi alındı: {}", event.courseId());
+        log.info("Course publication event received: {}", event.courseId());
         notificationService.sendCoursePublishedEmail(event);
     }
 

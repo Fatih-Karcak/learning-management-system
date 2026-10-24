@@ -31,6 +31,6 @@ public class NotificationController {
         Page<NotificationLogResponse> result = notificationService
                 .getMyNotifications(UUID.fromString(authentication.getName()), pageable)
                 .map(mapper::toResponse);
-        return ResponseEntity.ok(ApiResponse.success(result, "Başarılı"));
+        return ResponseEntity.ok(ApiResponse.success(result, "Successful"));
     }
 }

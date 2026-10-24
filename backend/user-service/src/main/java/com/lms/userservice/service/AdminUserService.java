@@ -42,19 +42,19 @@ public class AdminUserService {
         users.lockActiveAdmins();
         var acting = users
             .findById(actor)
-            .orElseThrow(() -> new UserNotFoundException("Yönetici bulunamadı"));
+            .orElseThrow(() -> new UserNotFoundException("Administrator not found"));
         if (
             acting.getRole() != UserRole.ADMIN ||
             acting.getStatus() != UserStatus.ACTIVE ||
             !"FULL".equals(acting.getAdminScope())
         ) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Yönetici hesabı aktif değil");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The administrator account is not active");
         }
         if (id.equals(actor)) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Kendi yönetici yetkinizi veya durumunuzu değiştiremezsiniz"
+            "You cannot change your own administrator role or status"
         );
-        var user = users.findById(id).orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı"));
+        var user = users.findById(id).orElseThrow(() -> new UserNotFoundException("No users found"));
         Long full = jdbc.queryForObject(
             "select count(*) from users where role='ADMIN' and status='ACTIVE' and admin_scope='FULL'",
             Long.class
@@ -65,7 +65,7 @@ public class AdminUserService {
             full != null &&
             full <= 1 &&
             (request.role() != UserRole.ADMIN || request.status() != UserStatus.ACTIVE)
-        ) throw new IllegalStateException("Son tam yetkili yönetici kaldırılamaz");
+        ) throw new IllegalStateException("The last full administrator cannot be removed");
         user.setRole(request.role());
         user.setStatus(request.status());
         users.save(user);

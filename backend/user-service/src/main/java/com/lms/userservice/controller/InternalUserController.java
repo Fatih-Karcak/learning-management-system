@@ -22,6 +22,14 @@ public class InternalUserController {
 
     public record Instructor(UUID id, String displayName) {}
 
+    @GetMapping("/by-email")
+    public ApiResponse<UserResponse> byEmail(@org.springframework.web.bind.annotation.RequestParam String email) {
+        var user=users.findByEmail(email.trim().toLowerCase(java.util.Locale.ROOT))
+            .filter(value->value.getStatus()==com.lms.userservice.domain.enums.UserStatus.ACTIVE&&value.isEmailVerified())
+            .orElseThrow(()->new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"Active verified user not found"));
+        return ApiResponse.success(userService.getUserById(user.getId()),"User");
+    }
+
     @GetMapping("/instructor")
     public ApiResponse<Instructor> instructor(
         @org.springframework.web.bind.annotation.RequestParam String email
@@ -38,7 +46,7 @@ public class InternalUserController {
             .orElseThrow(() ->
                 new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.NOT_FOUND,
-                    "Aktif eğitmen bulunamadı"
+                    "Active instructor not found"
                 )
             );
         return ApiResponse.success(
@@ -46,7 +54,7 @@ public class InternalUserController {
                 user.getId(),
                 user.getFirstName() + " " + user.getLastName()
             ),
-            "Eğitmen"
+            "Instructor"
         );
     }
 
@@ -62,7 +70,7 @@ public class InternalUserController {
                 path,
                 method
             ),
-            "Yetki"
+            "Authorization"
         );
     }
 
@@ -70,7 +78,7 @@ public class InternalUserController {
 
     @GetMapping("/{id}/preferences")
     public ApiResponse<?> preferences(@PathVariable UUID id) {
-        return ApiResponse.success(tools.preferences(id), "Tercihler");
+        return ApiResponse.success(tools.preferences(id), "Preferences");
     }
 
     private final com.lms.userservice.service.SessionService sessions;
@@ -80,7 +88,7 @@ public class InternalUserController {
         @PathVariable UUID id,
         @PathVariable UUID sessionId
     ) {
-        return ApiResponse.success(sessions.active(id, sessionId), "Başarılı");
+        return ApiResponse.success(sessions.active(id, sessionId), "Successful");
     }
 
     @GetMapping("/{id}")
@@ -88,7 +96,7 @@ public class InternalUserController {
         @PathVariable UUID id
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(userService.getUserById(id), "Başarılı")
+            ApiResponse.success(userService.getUserById(id), "Successful")
         );
     }
 }

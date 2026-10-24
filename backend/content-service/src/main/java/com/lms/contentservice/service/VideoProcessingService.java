@@ -49,7 +49,7 @@ public class VideoProcessingService {
             if (lease == null) return;
             MediaAsset asset = mediaAssetRepository
                 .findById(mediaId)
-                .orElseThrow(() -> new MediaNotFoundException("Medya bulunamadı: " + mediaId));
+                .orElseThrow(() -> new MediaNotFoundException("Media not found: " + mediaId));
 
             if (asset.getStatus() != MediaStatus.PROCESSING) return;
             tempDir = Files.createTempDirectory("lms-video-" + mediaId);
@@ -90,62 +90,29 @@ public class VideoProcessingService {
             String thumbKey = "thumbnails/" + mediaId + ".jpg";
             storageService.uploadLocalFile(imagesBucket, thumbKey, thumbFile, "image/jpeg");
 
-            // 4) HLS segmentlerine böl
+            // Produce a capped adaptive ladder without upscaling small sources.
             Path hlsDir = Files.createDirectory(tempDir.resolve("hls"));
-            Path playlist = hlsDir.resolve("master.m3u8");
-            // Copying source codecs can mark MPEG-4/HEVC videos READY although browsers cannot decode them.
-            runProcess(
-                List.of(
-                    ffmpeg,
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-y",
-                    "-i",
-                    inputFile.toString(),
-                    "-map",
-                    "0:v:0",
-                    "-map",
-                    "0:a:0?",
-                    "-c:v",
-                    "libx264",
-                    "-preset",
-                    "veryfast",
-                    "-crf",
-                    "23",
-                    "-threads",
-                    "2",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-vf",
-                    "scale=ceil(iw/2)*2:ceil(ih/2)*2",
-                    "-force_key_frames",
-                    "expr:gte(t,n_forced*6)",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "128k",
-                    "-ac",
-                    "2",
-                    "-ar",
-                    "48000",
-                    "-sn",
-                    "-dn",
-                    "-start_number",
-                    "0",
-                    "-hls_time",
-                    "6",
-                    "-hls_playlist_type",
-                    "vod",
-                    "-hls_flags",
-                    "independent_segments",
-                    "-hls_list_size",
-                    "0",
-                    "-f",
-                    "hls",
-                    playlist.toString()
-                )
-            );
+            int sourceHeight = probeDimensions(inputFile)[1];
+            if (sourceHeight <= 360) {
+                encode(inputFile, hlsDir.resolve("master.m3u8"), 0, hlsDir.resolve("master%d.ts"));
+            } else {
+                var heights = new java.util.ArrayList<Integer>();
+                heights.add(360);
+                if (sourceHeight >= 720) heights.add(720);
+                if (sourceHeight >= 1080) heights.add(1080);
+                if (sourceHeight < 720) heights.add(sourceHeight / 2 * 2);
+                StringBuilder master = new StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-INDEPENDENT-SEGMENTS\n");
+                for (int height : heights.stream().distinct().toList()) {
+                    String name = "quality-" + height;
+                    encode(inputFile, hlsDir.resolve(name+".m3u8"), height, hlsDir.resolve(name+"-%05d.ts"));
+                    int[] dimensions = probeDimensions(hlsDir.resolve(name+"-00000.ts"));
+                    int bandwidth = height <= 360 ? 1000000 : height <= 720 ? 3000000 : 5500000;
+                    master.append("#EXT-X-STREAM-INF:BANDWIDTH=").append(bandwidth)
+                        .append(",RESOLUTION=").append(dimensions[0]).append('x').append(dimensions[1]).append('\n')
+                        .append(name).append(".m3u8\n");
+                }
+                Files.writeString(hlsDir.resolve("master.m3u8"), master.toString());
+            }
 
             // 5) Üretilen .ts + .m3u8 dosyalarını MinIO'ya yükle
             String hlsPrefix = "hls/" + mediaId + "/";
@@ -167,11 +134,11 @@ public class VideoProcessingService {
                 thumbKey
             );
 
-            log.info("Video işleme tamamlandı: {}", mediaId);
+            log.info("Video processing completed: {}", mediaId);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            log.error("Video işleme hatası - mediaId: {}, hata: {}", mediaId, e.getMessage(), e);
-            String reason = e.getMessage() == null ? "Video işlenemedi" : e.getMessage();
+            log.error("Video processing failed - mediaId: {}, error: {}", mediaId, e.getMessage(), e);
+            String reason = e.getMessage() == null ? "Video processing failed" : e.getMessage();
             mediaAssetRepository.failProcessing(
                 mediaId,
                 MediaStatus.FAILED,
@@ -185,40 +152,48 @@ public class VideoProcessingService {
         }
     }
 
-    private int probeDurationSeconds(Path inputFile) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(
-            ffprobe,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "csv=p=0",
-            inputFile.toString()
-        )
-            .redirectErrorStream(true)
-            .start();
+    private void encode(Path input, Path playlist, int height, Path segmentPattern) throws IOException, InterruptedException {
+        runProcess(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", input.toString(),
+            "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "23", "-maxrate", height <= 360 ? "900k" : height <= 720 ? "2800k" : "5200k",
+            "-bufsize", height <= 360 ? "1800k" : height <= 720 ? "5600k" : "10400k",
+            "-threads", "2", "-pix_fmt", "yuv420p", "-vf",
+            height == 0 ? "scale=ceil(iw/2)*2:ceil(ih/2)*2,setsar=1" : "scale=-2:"+height+",setsar=1",
+            "-force_key_frames", "expr:gte(t,n_forced*6)", "-c:a", "aac", "-b:a", "128k",
+            "-ac", "2", "-ar", "48000", "-sn", "-dn", "-start_number", "0", "-hls_time", "6",
+            "-hls_playlist_type", "vod", "-hls_flags", "independent_segments", "-hls_list_size", "0",
+            "-hls_segment_filename", segmentPattern.toString(), "-f", "hls", playlist.toString()));
+    }
 
-        String output;
-        try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            output = reader.readLine();
-            reader.lines().forEach(l -> {
-                /* kalan çıktı tüketiliyor, process kilitlenmesin */
-            });
-        }
-        if (process.waitFor() != 0) throw new StorageException(
-            "Video bilgileri okunamadı; dosyayı kontrol edin"
-        );
-
+    private String probe(Path input, String entries, String format, boolean videoOnly) throws IOException, InterruptedException {
+        var command = new java.util.ArrayList<>(List.of(ffprobe,"-v","error"));
+        if (videoOnly) command.addAll(List.of("-select_streams","v:0"));
+        command.addAll(List.of("-show_entries",entries,"-of",format,input.toString()));
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        var output = new java.io.ByteArrayOutputStream();
+        Thread reader = Thread.ofVirtual().start(() -> {
+            try (var stream=process.getInputStream()) { stream.transferTo(output); } catch (IOException ignored) {}
+        });
         try {
-            double seconds = Double.parseDouble(output.trim());
-            if (!Double.isFinite(seconds) || seconds <= 0 || seconds > Integer.MAX_VALUE) {
-                throw new NumberFormatException();
-            }
-            return (int) Math.ceil(seconds);
-        } catch (Exception e) {
-            throw new StorageException("Video süresi okunamadı; dosyayı kontrol edin");
-        }
+            if (!process.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) throw new StorageException("Video probe timed out");
+            reader.join(2000);
+            if (process.exitValue()!=0) throw new StorageException("Video details could not be read; check the file");
+            return output.toString(java.nio.charset.StandardCharsets.UTF_8).trim();
+        } finally { if(process.isAlive()) process.destroyForcibly(); reader.interrupt(); }
+    }
+
+    private int[] probeDimensions(Path input) throws IOException, InterruptedException {
+        String[] values=probe(input,"stream=width,height","csv=s=x:p=0",true).split("[x\\r\\n]+");
+        try { return new int[]{Integer.parseInt(values[0]),Integer.parseInt(values[1])}; }
+        catch (RuntimeException ex) { throw new StorageException("Video dimensions could not be read"); }
+    }
+
+    private int probeDurationSeconds(Path input) throws IOException, InterruptedException {
+        try {
+            double seconds=Double.parseDouble(probe(input,"format=duration","csv=p=0",false));
+            if (!Double.isFinite(seconds)||seconds<=0||seconds>Integer.MAX_VALUE) throw new NumberFormatException();
+            return (int)Math.ceil(seconds);
+        } catch (NumberFormatException ex) { throw new StorageException("Video duration could not be read"); }
     }
 
     private void runProcess(List<String> command) throws IOException, InterruptedException {
@@ -227,7 +202,7 @@ public class VideoProcessingService {
             process = new ProcessBuilder(command).redirectErrorStream(true).start();
         } catch (IOException ex) {
             throw new StorageException(
-                "FFmpeg başlatılamadı. FFmpeg kurulumunu ve VIDEO_FFMPEG yolunu kontrol edin"
+                "FFmpeg could not start. Check its installation and the VIDEO_FFMPEG path"
             );
         }
 
@@ -246,11 +221,11 @@ public class VideoProcessingService {
         try {
             if (!process.waitFor(30, java.util.concurrent.TimeUnit.MINUTES)) {
                 process.destroyForcibly();
-                throw new StorageException("Video işleme 30 dakika sınırını aştı");
+                throw new StorageException("Video processing exceeded the 30-minute limit");
             }
             reader.join(5000);
             if (process.exitValue() != 0) throw new StorageException(
-                "Video dönüştürülemedi (exit=" + process.exitValue() + "): " + diagnostics
+                "Video conversion failed (exit=" + process.exitValue() + "): " + diagnostics
             );
         } finally {
             if (process.isAlive()) process.destroyForcibly();
@@ -272,7 +247,7 @@ public class VideoProcessingService {
                 } catch (IOException ignored) {}
             });
         } catch (IOException e) {
-            log.warn("Geçici dizin temizlenemedi: {}", dir);
+            log.warn("The temporary directory could not be cleaned: {}", dir);
         }
     }
 }

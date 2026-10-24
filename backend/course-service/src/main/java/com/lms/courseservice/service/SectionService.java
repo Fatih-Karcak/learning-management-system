@@ -32,10 +32,10 @@ public class SectionService {
     public SectionResponse createSection(CreateSectionRequest request, UUID instructorId) {
         Course course = courseRepository
             .findById(request.getCourseId())
-            .orElseThrow(() -> new CourseNotFoundException("Kurs bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Course not found"));
 
         if (!course.getInstructorId().equals(instructorId)) {
-            throw new UnauthorizedException("Bu kursa bölüm ekleme yetkiniz yok");
+            throw new UnauthorizedException("You do not have permission to add sections to this course");
         }
 
         CourseWorkspaceService.requireDirectEditable(course);
@@ -55,14 +55,14 @@ public class SectionService {
     public List<SectionResponse> getSectionsByCourse(UUID courseId, AuthenticatedUser viewer) {
         Course course = courseRepository
             .findById(courseId)
-            .orElseThrow(() -> new CourseNotFoundException("Kurs bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Course not found"));
         accessPolicy.requireVisible(course, viewer);
         boolean fullAccess = accessPolicy.canReadContent(course, viewer);
         return sectionRepository
             .findByCourseIdOrderByOrderIndexAsc(courseId)
             .stream()
             .map(courseMapper::toSectionResponse)
-            .peek(section -> accessPolicy.filterLessons(section.getLessons(), fullAccess))
+            .peek(section -> accessPolicy.filterCourseLessons(course, section.getLessons(), fullAccess, viewer))
             .toList();
     }
 
@@ -70,10 +70,10 @@ public class SectionService {
     public void deleteSection(UUID sectionId, UUID instructorId) {
         Section section = sectionRepository
             .findById(sectionId)
-            .orElseThrow(() -> new CourseNotFoundException("Bölüm bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Section not found"));
 
         if (!section.getCourse().getInstructorId().equals(instructorId)) {
-            throw new UnauthorizedException("Bu bölümü silme yetkiniz yok");
+            throw new UnauthorizedException("You do not have permission to delete this section");
         }
 
         if (
@@ -81,7 +81,7 @@ public class SectionService {
             lessonRepository.countBySectionCourseId(section.getCourse().getId()) <=
                 section.getLessons().size()
         ) {
-            throw new IllegalStateException("Yayımlanmış kursun tüm dersleri silinemez");
+            throw new IllegalStateException("You cannot delete every lesson in a published course");
         }
         CourseWorkspaceService.requireDirectEditable(section.getCourse());
         sectionRepository.delete(section);

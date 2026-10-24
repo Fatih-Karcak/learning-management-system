@@ -22,16 +22,16 @@ import CourseWorkspace from './Workspace';
 export function AdminNavigation() {
   const scope = useAuth().session?.user.adminScope || 'FULL';
   return (
-    <nav className="feature-tabs" aria-label="Yönetim menüsü">
+    <nav className="feature-tabs" aria-label="Administration navigation">
       {[
-        ['/admin', 'Genel durum'],
-        ['/admin/users', 'Kullanıcılar'],
-        ['/admin/courses', 'Kurs onayları'],
-        ['/admin/categories', 'Kategoriler'],
-        ['/admin/enrollments', 'Kayıtlar'],
-        ['/admin/audit', 'İşlem kayıtları'],
-        ['/admin/support', 'Destek ve şikâyetler'],
-        ['/admin/operations', 'İşletim ve veri talepleri'],
+        ['/admin', 'Overview'],
+        ['/admin/users', 'Users'],
+        ['/admin/courses', 'Course reviews'],
+        ['/admin/categories', 'Categories'],
+        ['/admin/enrollments', 'Enrollments'],
+        ['/admin/audit', 'Audit log'],
+        ['/admin/support', 'Support and reports'],
+        ['/admin/operations', 'Operations and data requests'],
       ]
         .filter(
           ([to]) =>
@@ -73,9 +73,9 @@ function FullAdminDashboard() {
   return (
     <>
       <PageTitle
-        eyebrow="PLATFORM YÖNETİMİ"
-        title="Yönetici paneli"
-        description="Kullanıcıları, kurs kalitesini ve öğrenme sonuçlarını yönet."
+        eyebrow="PLATFORM ADMINISTRATION"
+        title="Administration"
+        description="Manage users, course quality and learning outcomes."
       />
       <AdminNavigation />
       {data.isPending ? (
@@ -86,12 +86,12 @@ function FullAdminDashboard() {
         <>
           <div className="stats-grid">
             {[
-              ['Kullanıcılar', data.data!.users.total],
-              ['Eğitmenler', data.data!.users.instructors],
-              ['Onay bekleyen kurs', data.data!.courses.pending],
-              ['Yayındaki kurs', data.data!.courses.published],
-              ['Aktif kayıt', data.data!.enrollments.active],
-              ['Tamamlanan kayıt', data.data!.enrollments.completed],
+              ['Users', data.data!.users.total],
+              ['Instructors', data.data!.users.instructors],
+              ['Courses awaiting review', data.data!.courses.pending],
+              ['Published courses', data.data!.courses.published],
+              ['Active enrollments', data.data!.enrollments.active],
+              ['Completed enrollments', data.data!.enrollments.completed],
             ].map(([label, value]) => (
               <article className="panel" key={label}>
                 <span className="muted">{label}</span>
@@ -100,13 +100,13 @@ function FullAdminDashboard() {
             ))}
           </div>
           <section className="panel">
-            <h2>İnceleme akışı</h2>
+            <h2>Review workflow</h2>
             <p>
-              Eğitmen kursunu incelemeye gönderir. Yönetici onayladığında katalogda yayınlanır;
-              düzeltme istenirse gerekçe eğitmene görünür.
+              Instructors submit courses for review. Approved courses appear in the catalog;
+              requested changes include feedback for the instructor.
             </p>
             <Link className="button primary" to="/admin/courses?status=PENDING_REVIEW">
-              Kursları incele
+              Review courses
             </Link>
           </section>
         </>
@@ -142,11 +142,11 @@ export function AdminCourses() {
   });
   return (
     <>
-      <PageTitle eyebrow="YÖNETİCİ ALANI" title="Kurs incelemeleri" />
+      <PageTitle eyebrow="ADMINISTRATION" title="Course reviews" />
       <AdminNavigation />
       <WorkspaceQueue />
       <div className="form-grid">
-        <Field label="Kurs durumuna göre filtrele">
+        <Field label="Filter by course status">
           <select
             value={status}
             onChange={(e) => {
@@ -154,22 +154,22 @@ export function AdminCourses() {
               setPage(0);
             }}
           >
-            <option value="">Tüm durumlar</option>
+            <option value="">All statuses</option>
             {['PENDING_REVIEW', 'PUBLISHED', 'DRAFT', 'ARCHIVED'].map((s) => (
               <option key={s} value={s}>
                 {
                   {
-                    PENDING_REVIEW: 'Onay bekliyor',
-                    PUBLISHED: 'Yayında',
-                    DRAFT: 'Taslak',
-                    ARCHIVED: 'Arşivlendi',
+                    PENDING_REVIEW: 'Awaiting approval',
+                    PUBLISHED: 'Published',
+                    DRAFT: 'Draft',
+                    ARCHIVED: 'Archived',
                   }[s]
                 }
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Kurslarda ara">
+        <Field label="Search courses">
           <input
             value={query}
             onChange={(e) => {
@@ -198,7 +198,7 @@ export function AdminCourses() {
               {c.reviewFeedback && <p className="notice">{c.reviewFeedback}</p>}
               <div className="form-actions">
                 <Link className="button secondary" to={`/courses/${c.id}`}>
-                  İçeriği incele
+                  Review content
                 </Link>
                 {c.status === 'PENDING_REVIEW' && (
                   <>
@@ -209,7 +209,7 @@ export function AdminCourses() {
                         setSelected({ course: c, action: 'APPROVE' });
                       }}
                     >
-                      Onayla
+                      Approve
                     </button>
                     <button
                       className="button secondary"
@@ -218,7 +218,7 @@ export function AdminCourses() {
                         setSelected({ course: c, action: 'REJECT' });
                       }}
                     >
-                      Düzeltme iste
+                      Request changes
                     </button>
                   </>
                 )}
@@ -230,7 +230,7 @@ export function AdminCourses() {
                       setSelected({ course: c, action: 'ARCHIVE' });
                     }}
                   >
-                    Arşivle
+                    Archive
                   </button>
                 )}
               </div>
@@ -240,18 +240,18 @@ export function AdminCourses() {
         </>
       ) : (
         <Empty
-          title="Bu durumda kurs bulunmuyor"
-          text="Filtreyi değiştirerek diğer kursları inceleyebilirsin."
+          title="No courses with this status"
+          text="Change the filter to review other courses."
         />
       )}
       {selected && (
         <Modal
           title={
             selected.action === 'APPROVE'
-              ? 'Kursu onayla'
+              ? 'Approve course'
               : selected.action === 'REJECT'
-                ? 'Düzeltme iste'
-                : 'Kursu arşivle'
+                ? 'Request changes'
+                : 'Archive course'
           }
           onClose={() => setSelected(undefined)}
         >
@@ -262,11 +262,11 @@ export function AdminCourses() {
               decision.mutate(String(new FormData(e.currentTarget).get('reason') || ''));
             }}
           >
-            <Field label="Karar gerekçesi">
+            <Field label="Reason for decision">
               <textarea name="reason" required={selected.action !== 'APPROVE'} maxLength={2000} />
             </Field>
             {decision.error && <ErrorBox error={decision.error} />}
-            <Submit busy={decision.isPending}>Kararı kaydet</Submit>
+            <Submit busy={decision.isPending}>Save decision</Submit>
           </form>
         </Modal>
       )}
@@ -297,10 +297,10 @@ export function AdminCategories() {
   });
   return (
     <>
-      <PageTitle eyebrow="YÖNETİCİ ALANI" title="Kategori yönetimi" />
+      <PageTitle eyebrow="ADMINISTRATION" title="Category management" />
       <AdminNavigation />
       <section className="panel">
-        <h2>{editing ? 'Kategoriyi düzenle' : 'Kategori ekle'}</h2>
+        <h2>{editing ? 'Edit category' : 'Add category'}</h2>
         <form
           key={editing?.id || String(save.isSuccess)}
           onSubmit={(e) => {
@@ -308,17 +308,17 @@ export function AdminCategories() {
             save.mutate(Object.fromEntries(new FormData(e.currentTarget)));
           }}
         >
-          <Field label="Kategori adı">
+          <Field label="Category name">
             <input name="name" required maxLength={100} defaultValue={editing?.name} />
           </Field>
-          <Field label="Kategori açıklaması">
+          <Field label="Category description">
             <textarea name="description" maxLength={5000} defaultValue={editing?.description} />
           </Field>
           {save.error && <ErrorBox error={save.error} />}
-          <Submit busy={save.isPending}>Kategoriyi kaydet</Submit>
+          <Submit busy={save.isPending}>Save category</Submit>
           {editing && (
             <button type="button" className="text-button" onClick={() => setEditing(undefined)}>
-              Vazgeç
+              Cancel
             </button>
           )}
         </form>
@@ -341,17 +341,21 @@ export function AdminCategories() {
                   save.reset();
                 }}
               >
-                Kategoriyi düzenle
+                Edit category
               </button>
               <button
                 className="text-button danger"
                 disabled={remove.isPending}
                 onClick={() => {
-                  if (window.confirm('Kategori silinsin mi? Kurs içeren kategoriler silinemez.'))
+                  if (
+                    window.confirm(
+                      'Delete this category? Categories containing courses cannot be deleted.',
+                    )
+                  )
                     remove.mutate(c.id);
                 }}
               >
-                Kategoriyi sil
+                Delete category
               </button>
             </div>
           </article>
@@ -380,15 +384,15 @@ export function AdminEnrollments() {
   return (
     <>
       <PageTitle
-        eyebrow="YÖNETİCİ ALANI"
-        title="Kurs kayıtları"
-        description="Ödeme gerektirmeyen yönetici kayıtlarını ve öğrenci ilerlemesini yönet."
+        eyebrow="ADMINISTRATION"
+        title="Course enrollments"
+        description="Manage free administrative enrollments and learner progress."
       />
       <AdminNavigation />
       <section className="panel">
-        <Field label="Kayıtları görüntülenecek kurs">
+        <Field label="Select a course to view enrollments">
           <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-            <option value="">Kurs seçin</option>
+            <option value="">Select a course</option>
             {courses.data?.content.map((c) => (
               <option value={c.id} key={c.id}>
                 {c.title} · {c.status}
@@ -401,8 +405,8 @@ export function AdminEnrollments() {
       {courseId && (
         <>
           <section className="panel">
-            <h2>Öğrenciyi kursa ekle</h2>
-            <Field label="Öğrencilerde ara">
+            <h2>Add a learner to the course</h2>
+            <Field label="Search learners">
               <input value={search} onChange={(e) => setSearch(e.target.value)} />
             </Field>
             <form
@@ -411,9 +415,9 @@ export function AdminEnrollments() {
                 grant.mutate({ ...Object.fromEntries(new FormData(e.currentTarget)), courseId });
               }}
             >
-              <Field label="Kaydedilecek öğrenci">
+              <Field label="Learner to enroll">
                 <select name="studentId" required>
-                  <option value="">Öğrenci seçin</option>
+                  <option value="">Select a learner</option>
                   {users.data?.content.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.firstName} {u.lastName} · {u.email}
@@ -421,13 +425,13 @@ export function AdminEnrollments() {
                   ))}
                 </select>
               </Field>
-              <Field label="Kayıt gerekçesi">
+              <Field label="Reason for enrollment">
                 <textarea name="reason" required maxLength={1000} />
               </Field>
               {users.error && <ErrorBox error={users.error} />}{' '}
               {grant.error && <ErrorBox error={grant.error} />}{' '}
-              {grant.isSuccess && <Success>Öğrenci kursa kaydedildi.</Success>}
-              <Submit busy={grant.isPending}>Kursa kaydet</Submit>
+              {grant.isSuccess && <Success>The learner has been enrolled.</Success>}
+              <Submit busy={grant.isPending}>Enroll in course</Submit>
             </form>
           </section>
           <CourseStudents key={courseId} courseId={courseId} />
@@ -454,7 +458,7 @@ export function AdminAudit() {
   });
   return (
     <>
-      <PageTitle eyebrow="YÖNETİCİ ALANI" title="Yönetici işlem kayıtları" />
+      <PageTitle eyebrow="ADMINISTRATION" title="Administrator audit log" />
       <AdminNavigation />
       {audit.isPending ? (
         <Loading />
@@ -466,10 +470,10 @@ export function AdminAudit() {
             <table>
               <thead>
                 <tr>
-                  <th>Tarih</th>
-                  <th>İşlem</th>
-                  <th>Gerekçe</th>
-                  <th>Yönetici / kullanıcı</th>
+                  <th>Date</th>
+                  <th>Action</th>
+                  <th>Reason</th>
+                  <th>Administrator / User</th>
                 </tr>
               </thead>
               <tbody>
@@ -496,14 +500,14 @@ export function AdminAudit() {
               disabled={page === 0}
               onClick={() => setPage(page - 1)}
             >
-              Önceki
+              Previous
             </button>
             <button
               className="button secondary"
               disabled={(audit.data?.length || 0) < 25}
               onClick={() => setPage(page + 1)}
             >
-              Sonraki
+              Next
             </button>
           </div>
         </>
@@ -523,7 +527,7 @@ function WorkspaceQueue() {
   });
   return (
     <section className="panel">
-      <h2>Yayın taslakları</h2>
+      <h2>Publication drafts</h2>
       {q.isPending ? (
         <Loading />
       ) : q.error ? (
@@ -532,18 +536,18 @@ function WorkspaceQueue() {
         q.data.map((w) => (
           <article className="lesson-row" key={w.course_id}>
             <span>
-              {w.title} · {w.instructor_name} · Taslak {w.revision}
+              {w.title} · {w.instructor_name} · Draft {w.revision}
             </span>
             <button className="button secondary" onClick={() => setSelected(w.course_id)}>
-              Taslağı incele
+              Review draft
             </button>
           </article>
         ))
       ) : (
-        <p>İnceleme bekleyen yayın taslağı yok.</p>
+        <p>No publication drafts are awaiting review.</p>
       )}
       {selected && (
-        <Modal title="Yayın taslağı incelemesi" onClose={() => setSelected(undefined)}>
+        <Modal title="Publication draft review" onClose={() => setSelected(undefined)}>
           <CourseWorkspace courseId={selected} review />
         </Modal>
       )}

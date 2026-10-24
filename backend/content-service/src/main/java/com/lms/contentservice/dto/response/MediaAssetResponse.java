@@ -19,6 +19,7 @@ public class MediaAssetResponse {
     private Long sizeBytes;
     private Integer durationSeconds;
     private String streamUrl;
+    private String publicUrl;
     private String thumbnailUrl;
     private String failureReason;
     private LocalDateTime createdAt;

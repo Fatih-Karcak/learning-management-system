@@ -38,7 +38,7 @@ public class ResourceController {
     ) throws IOException {
         return ApiResponse.success(
             service.upload(file, courseId, purpose, UUID.fromString(a.getName()), role(a)),
-            "Dosya yüklendi"
+            "File uploaded"
         );
     }
 

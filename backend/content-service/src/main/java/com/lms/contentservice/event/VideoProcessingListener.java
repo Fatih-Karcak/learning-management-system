@@ -16,7 +16,7 @@ public class VideoProcessingListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(VideoProcessingRequested event) {
-        log.info("Medya kaydı commit edildi, video işleme başlatılıyor: {}", event.mediaId());
+        log.info("Media record committed; starting video processing: {}", event.mediaId());
 
         try {
             videoProcessingService.processVideoAsync(event.mediaId());

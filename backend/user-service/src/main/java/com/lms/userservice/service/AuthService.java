@@ -36,11 +36,11 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (request.getRole() == null || request.getRole() == UserRole.ADMIN) {
-            throw new IllegalArgumentException("Bu rol herkese açık kayıtta kullanılamaz");
+            throw new IllegalArgumentException("This role cannot be selected during public registration");
         }
         request.setEmail(request.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new EmailAlreadyExistsException("Bu e-posta adresi zaten kayıtlı: " + request.getEmail());
+            throw new EmailAlreadyExistsException("This email address is already registered: " + request.getEmail());
         }
 
         User user = User.builder()
@@ -55,15 +55,15 @@ public class AuthService {
             .build();
 
         user = userRepository.saveAndFlush(user);
-        log.info("Yeni kullanıcı kaydedildi: {}", user.getEmail());
+        log.info("New user registered: {}", user.getEmail());
 
         events.enqueue(
             new com.lms.userservice.event.PlatformNotice(
                 UUID.randomUUID(),
                 user.getId(),
                 null,
-                "İleri Akademi'ye hoş geldiniz",
-                "Hesabınızı kullanmaya devam etmek için e-posta adresinizi doğrulayın.",
+                "Welcome to Ileri Academy",
+                "Verify your email address to continue using your account.",
                 "/verify-email",
                 "SECURITY",
                 user.getEmailVerificationToken()
@@ -79,21 +79,21 @@ public class AuthService {
         throttle.check(request.getEmail());
         User user = userRepository.findForLogin(request.getEmail()).orElseThrow(() -> {
             throttle.failure(request.getEmail());
-            return new BadCredentialsException("Geçersiz e-posta veya şifre");
+            return new BadCredentialsException("Invalid email or password");
         });
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throttle.failure(request.getEmail());
-            throw new BadCredentialsException("Geçersiz e-posta veya şifre");
+            throw new BadCredentialsException("Invalid email or password");
         }
 
         if (user.getStatus() == UserStatus.BANNED || user.getStatus() == UserStatus.INACTIVE) {
-            throw new BadCredentialsException("Hesabınız aktif değil");
+            throw new BadCredentialsException("Your account is not active");
         }
 
         mfa.verify(user.getId(), request.getOtp(), false);
         throttle.success(request.getEmail());
-        log.info("Kullanıcı giriş yaptı: {}", user.getEmail());
+        log.info("User signed in: {}", user.getEmail());
         return buildAuthResponse(user);
     }
 
@@ -105,10 +105,10 @@ public class AuthService {
         var issued = sessions.rotate(token);
         var user = userRepository
             .findById(issued.userId())
-            .orElseThrow(() -> new BadCredentialsException("Hesap bulunamadı"));
+            .orElseThrow(() -> new BadCredentialsException("Account not found"));
         if (user.getStatus() == UserStatus.BANNED || user.getStatus() == UserStatus.INACTIVE) {
             sessions.revokeAll(user.getId());
-            throw new BadCredentialsException("Hesabınız aktif değil");
+            throw new BadCredentialsException("Your account is not active");
         }
         return response(user, issued);
     }

@@ -16,7 +16,7 @@ const course = {
   status: 'PUBLISHED',
   level: 'BEGINNER',
   price: 450,
-  language: 'Türkçe',
+  language: 'Turkish',
   totalEnrollments: 42,
   averageRating: 4.8,
   totalReviews: 8,
@@ -98,8 +98,15 @@ async function mockApi(page: Page, role = 'STUDENT') {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     let data: unknown = pageData([]);
-    if (path === '/api/v1/users/me')
+    if (path.endsWith('/learning-rules'))
+      data = { revision: 0, sequential: false, releaseDays: 0, prerequisites: [] };
+    else if (path.endsWith('/assignment/policy'))
+      data = { revision: 0, allowLate: true, rubric: [] };
+    else if (path.endsWith('/learning/reminders'))
+      data = { enabled: false, timeZone: 'UTC', hour: 18 };
+    else if (path === '/api/v1/users/me')
       data = { ...user, id: role === 'INSTRUCTOR' ? 'instructor-1' : user.id, role };
+    else if (path === '/api/v1/courses/discover') data = pageData([course]);
     else if (path === '/api/v1/courses/categories') data = [{ id: 3, name: 'Tasarım' }];
     else if (path.endsWith('/workspace'))
       data = {
@@ -182,16 +189,16 @@ test('instructor stages a library video in the workspace before publication', as
     await route.fulfill({ json: envelope(workspace) });
   });
   await page.goto('/instructor/course-1');
-  await page.getByRole('button', { name: 'Tasarım nedir? · Okuma', exact: true }).click();
-  await page.getByLabel('Ders türü', { exact: true }).selectOption('VIDEO');
-  await page.getByLabel('Ders videosu', { exact: true }).selectOption(media.streamUrl);
-  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
-  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
+  await page.getByRole('button', { name: 'Tasarım nedir? · Article', exact: true }).click();
+  await page.getByLabel('Lesson type', { exact: true }).selectOption('VIDEO');
+  await page.getByLabel('Lesson video', { exact: true }).selectOption(media.streamUrl);
+  await page.getByRole('button', { name: 'Finish editing' }).click();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect
     .poll(() => saved?.document.course.sections[0].lessons[0].videoUrl)
     .toBe(media.streamUrl);
   expect(saved.document.course.sections[0].lessons[0].content).toBe('İlk dersin içeriği.');
-  await expect(page.getByRole('button', { name: 'İncelemeye gönder', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Submit for review', exact: true })).toBeEnabled();
 });
 
 test('video lesson without a URL explains that an instructor must attach its video', async ({
@@ -200,7 +207,9 @@ test('video lesson without a URL explains that an instructor must attach its vid
   await session(page);
   await mockApi(page);
   await page.goto('/learn/enrollment-1?lesson=lesson-2');
-  await expect(page.getByText('Bu derse henüz video bağlanmamış.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('No video is attached to this lesson yet.', { exact: false }),
+  ).toBeVisible();
 });
 
 test('continue learning opens the most recently watched unfinished lesson', async ({ page }) => {
@@ -259,13 +268,14 @@ test('quiz questions remain in the saved workspace when reopened', async ({ page
   });
   await page.goto('/instructor/course-1');
   await page.getByRole('button', { name: 'Tasarım nedir? · Test', exact: true }).click();
-  await page.getByLabel('Soru 1', { exact: true }).fill('Kaydedilmiş yeni soru');
-  await page.getByRole('button', { name: 'Düzenlemeyi bitir' }).click();
-  await page.getByRole('button', { name: 'Taslağı kaydet', exact: true }).click();
+  await page.getByLabel('Question 1', { exact: true }).fill('Kaydedilmiş yeni soru');
+  await page.getByRole('button', { name: 'Finish editing' }).click();
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect.poll(() => workspace.revision).toBe(2);
+  await expect(page.getByText('Changes saved.', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Tasarım nedir? · Test', exact: true }).click();
-  await expect(page.getByLabel('Soru 1', { exact: true })).toHaveValue('Kaydedilmiş yeni soru');
+  await expect(page.getByLabel('Question 1', { exact: true })).toHaveValue('Kaydedilmiş yeni soru');
 });
 
 test.describe('decoded student video playback', () => {
@@ -344,12 +354,32 @@ test.describe('decoded student video playback', () => {
     await page.route('**/api/v1/media/my?**', (route) =>
       route.fulfill({ json: envelope(pageData([])) }),
     );
-    await page.route('**/api/v1/media/video', async (route) => {
-      const form = route.request().postDataBuffer()!.toString();
-      expect(form).toContain('name="courseId"\r\n\r\ncourse-1');
-
-      expect(route.request().headers().authorization).toBe('Bearer test-token');
-      await route.fulfill({ status: 201, json: envelope({ ...media, status: 'PROCESSING' }) });
+    await page.route('**/api/v1/media/uploads**', async (route) => {
+      const request = route.request();
+      expect(request.headers().authorization).toBe('Bearer test-token');
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith('/uploads') && request.method() === 'GET') {
+        await route.fulfill({ json: envelope([]) });
+      } else if (path.endsWith('/uploads')) {
+        const input = request.postDataJSON();
+        expect(input.courseId).toBe('course-1');
+        await route.fulfill({
+          json: envelope({
+            id: 'upload-1',
+            status: 'OPEN',
+            chunkBytes: 8 * 1024 * 1024,
+            receivedBytes: 0,
+            totalBytes: input.totalBytes,
+            parts: [],
+          }),
+        });
+      } else if (path.endsWith('/complete')) {
+        await route.fulfill({ json: envelope({ ...media, status: 'PROCESSING' }) });
+      } else {
+        expect(request.headers()['upload-checksum']).toMatch(/^[a-f0-9]{64}$/);
+        expect(request.postDataBuffer()!.length).toBeGreaterThan(0);
+        await route.fulfill({ json: envelope({ status: 'OPEN' }) });
+      }
     });
     let attached = false;
     let workspace: any = {
@@ -371,15 +401,15 @@ test.describe('decoded student video playback', () => {
       await route.fulfill({ json: envelope(workspace) });
     });
     await page.goto('/media?course=course-1');
-    await page.getByLabel('Dosya türü').selectOption('video');
-    await page.getByLabel('İlgili ders (isteğe bağlı)').selectOption('lesson-1');
-    await page.getByLabel('Dosya seç').setInputFiles({
+    await page.getByLabel('File type').selectOption('video');
+    await page.getByLabel('Related lesson (optional)').selectOption('lesson-1');
+    await page.getByLabel('Choose files').setInputFiles({
       name: 'lesson.mp4',
       mimeType: 'video/mp4',
       buffer: Buffer.from('upload-fixture'),
     });
-    await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
-    await expect(page.getByRole('status')).toContainText('1 dosya yüklendi.');
+    await page.getByRole('button', { name: 'Upload file' }).click();
+    await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible();
     expect(attached).toBe(true);
 
     const context = await browser.newContext();
@@ -440,7 +470,7 @@ test.describe('decoded student video playback', () => {
         });
     });
     await page.goto('/learn/enrollment-1?lesson=lesson-2');
-    await expect(page.getByText('Video hazırlanıyor.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Your video is being processed.', { exact: false })).toBeVisible();
     expect(streamRequests).toBe(0);
     ready = true;
     const video = page.locator('video');
@@ -473,14 +503,14 @@ test('unsupported H.264 playback shows a useful error before starting a protecte
 test('public catalog search, category selection, detail and preview work', async ({ page }) => {
   await mockApi(page);
   await page.goto('/catalog');
-  await expect(page.getByRole('heading', { name: 'Sırada ne öğrenmek var?' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Kurs ara' }).fill('Tasarım');
-  await page.getByRole('button', { name: 'Ara', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'What will you learn next?' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search courses' }).fill('Tasarım');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page).toHaveURL(/q=Tasar/);
-  await page.getByLabel('Kategori', { exact: true }).selectOption('3');
+  await page.getByLabel('Category', { exact: true }).selectOption('3');
   await expect(page).toHaveURL(/category=3/);
   await page.getByRole('heading', { name: course.title, exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Neler öğreneceksin?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What you will learn' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Birlikte keşfedelim/ })).toBeDisabled();
   await page.getByRole('button', { name: /Tasarım nedir/ }).click();
   await expect(page.getByRole('dialog')).toContainText('İlk dersin içeriği.');
@@ -491,15 +521,19 @@ test('signed-out protected pages return to login and preserve destination', asyn
   await mockApi(page);
   await page.goto('/payments');
   await expect(page).toHaveURL('/login');
-  await expect(page.getByRole('heading', { name: 'Yeniden hoş geldin.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
 });
 test('students cannot open the instructor or administrator area', async ({ page }) => {
   await session(page);
   await mockApi(page);
   await page.goto('/instructor');
-  await expect(page.getByRole('heading', { name: 'Bu sayfaya erişiminiz yok' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'You do not have access to this page' }),
+  ).toBeVisible();
   await page.goto('/admin/users');
-  await expect(page.getByRole('heading', { name: 'Bu sayfaya erişiminiz yok' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'You do not have access to this page' }),
+  ).toBeVisible();
 });
 test('article completion sends the real section and video has no manual completion', async ({
   page,
@@ -513,13 +547,13 @@ test('article completion sends the real section and video has no manual completi
   });
   await page.goto('/learn/enrollment-1');
   await expect(page.getByRole('heading', { name: 'Tasarım nedir?', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Okudum, tamamla' }).click();
+  await page.getByRole('button', { name: 'I have read this lesson' }).click();
   await expect.poll(() => request).toEqual({ sectionId: 'section-1', completed: true });
-  await page.getByRole('button', { name: 'Sonraki ders' }).click();
+  await page.getByRole('button', { name: 'Next lesson' }).click();
   await expect(
     page.getByRole('heading', { name: 'Birlikte keşfedelim', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Okudum, tamamla' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'I have read this lesson' })).toHaveCount(0);
 });
 test('profile updates omit blank password changes', async ({ page }) => {
   await session(page);
@@ -530,9 +564,9 @@ test('profile updates omit blank password changes', async ({ page }) => {
     await route.fulfill({ json: envelope({ ...user, firstName: 'Ece Nur' }) });
   });
   await page.goto('/profile');
-  await page.getByLabel('Ad', { exact: true }).fill('Ece Nur');
-  await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
-  await expect(page.getByRole('status')).toContainText('Profilin güncellendi.');
+  await page.getByLabel('First name', { exact: true }).fill('Ece Nur');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Your profile has been updated.');
   expect(payload?.firstName).toBe('Ece Nur');
   expect(payload).not.toHaveProperty('newPassword');
   expect(payload).not.toHaveProperty('currentPassword');
@@ -563,10 +597,10 @@ test('refund submits the owned payment and displays its status', async ({ page }
     await route.fulfill({ json: envelope({ id: 'refund-1', status: 'PENDING', amount: 450 }) });
   });
   await page.goto('/payments');
-  await page.getByRole('button', { name: 'İade iste' }).click();
-  await page.getByLabel('İade nedeni').fill('Kurs ihtiyacıma uygun değil.');
-  await page.getByRole('button', { name: 'İade talebini gönder' }).click();
-  await expect(page.getByRole('dialog')).toContainText('İade talebin alındı.');
+  await page.getByRole('button', { name: 'Request refund' }).click();
+  await page.getByLabel('Reason for refund').fill('Kurs ihtiyacıma uygun değil.');
+  await page.getByRole('button', { name: 'Submit refund request' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Your refund request has been received.');
   expect(payload).toEqual({ paymentId: 'payment-1', reason: 'Kurs ihtiyacıma uygun değil.' });
 });
 test('service failures remain visible instead of becoming empty data', async ({ page }) => {
@@ -580,7 +614,7 @@ test('service failures remain visible instead of becoming empty data', async ({ 
   );
   await page.goto('/media');
   await expect(page.getByRole('alert')).toContainText('Depolama hizmeti kullanılamıyor');
-  await expect(page.getByRole('heading', { name: 'İçeriklerin için yer hazır.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Ready for your content.' })).toHaveCount(0);
 });
 test('mobile navigation and desktop dashboard stay within viewport', async ({ page }) => {
   await session(page);
@@ -592,11 +626,11 @@ test('mobile navigation and desktop dashboard stay within viewport', async ({ pa
     animations: 'disabled',
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('button', { name: 'Menüyü aç' })).toBeVisible();
-  await page.getByRole('button', { name: 'Menüyü aç' }).click();
+  await expect(page.getByRole('button', { name: 'Open menu' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open menu' }).click();
   await page
-    .getByRole('navigation', { name: 'Ana menü', exact: true })
-    .getByRole('link', { name: 'Öğrenim alanım' })
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
+    .getByRole('link', { name: 'My learning' })
     .click();
   await expect(page).toHaveURL('/my-learning');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -634,7 +668,7 @@ test('media upload preserves file and owner authentication, then lists the new f
     await route.fulfill({ json: envelope(media) });
   });
   await page.goto('/media');
-  await page.getByLabel('Dosya seç').setInputFiles({
+  await page.getByLabel('Choose files').setInputFiles({
     name: 'lesson.png',
     mimeType: 'image/png',
     buffer: Buffer.from(
@@ -642,9 +676,9 @@ test('media upload preserves file and owner authentication, then lists the new f
       'base64',
     ),
   });
-  await page.getByRole('button', { name: 'Dosyayı yükle' }).click();
+  await page.getByRole('button', { name: 'Upload file' }).click();
   await expect(page.getByRole('heading', { name: 'lesson.png' })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('1 dosya yüklendi.');
+  await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible();
 });
 
 test('certificate download and public verification use their separate endpoints', async ({
@@ -668,13 +702,13 @@ test('certificate download and public verification use their separate endpoints'
     route.fulfill({ json: envelope({ ...certificate, pdfUrl: undefined }) }),
   );
   await page.goto('/certificates?enrollment=enrollment-1');
-  await expect(page.getByRole('link', { name: 'PDF indir' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
     'href',
     certificate.pdfUrl,
   );
-  await page.getByRole('link', { name: 'Doğrula', exact: true }).click();
-  await expect(page.getByText('Sertifika doğrulandı.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'PDF indir' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Verify', exact: true }).click();
+  await expect(page.getByText('Certificate verified.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download PDF' })).toHaveCount(0);
 });
 
 test('administrator searches accounts and views a selected user', async ({ page }) => {
@@ -685,9 +719,9 @@ test('administrator searches accounts and views a selected user', async ({ page 
   );
   await page.route('**/api/v1/users/student-1', (route) => route.fulfill({ json: envelope(user) }));
   await page.goto('/admin/users');
-  await page.getByRole('textbox', { name: 'Kullanıcı ara' }).fill('Ece');
-  await page.getByRole('button', { name: 'Ara', exact: true }).click();
-  await page.getByRole('button', { name: 'İncele' }).click();
+  await page.getByRole('textbox', { name: 'Search users' }).fill('Ece');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.getByRole('button', { name: 'Review' }).click();
   await expect(page.getByRole('dialog')).toContainText('student@example.test');
 });
 
@@ -699,7 +733,7 @@ test('email verification submits once even in strict mode', async ({ page }) => 
     return route.fulfill({ json: envelope(null) });
   });
   await page.goto('/verify-email?token=local-code');
-  await expect(page.getByRole('status')).toContainText('E-posta adresiniz doğrulandı.');
+  await expect(page.getByRole('status')).toContainText('Your email address has been verified.');
   expect(count).toBe(1);
 });
 
@@ -719,12 +753,12 @@ test('administrator changes account role and status with a recorded reason', asy
     await route.fulfill({ json: envelope(target) });
   });
   await page.goto('/admin/users');
-  await page.getByRole('button', { name: 'İncele', exact: true }).click();
-  await page.getByLabel('Kullanıcı rolü').selectOption('INSTRUCTOR');
-  await page.getByLabel('Hesap durumu').selectOption('BANNED');
-  await page.getByLabel('Kullanıcı değişikliği gerekçesi').fill('İçerik politikası ihlali');
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByLabel('User role').selectOption('INSTRUCTOR');
+  await page.getByLabel('Account status').selectOption('BANNED');
+  await page.getByLabel('Reason for user change').fill('İçerik politikası ihlali');
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Kullanıcı yetkilerini kaydet' }).click();
+  await page.getByRole('button', { name: 'Save user permissions' }).click();
   await expect
     .poll(() => saved)
     .toEqual({ role: 'INSTRUCTOR', status: 'BANNED', reason: 'İçerik politikası ihlali' });
@@ -746,9 +780,9 @@ test('administrator reviews a course before it is published', async ({ page }) =
     await route.fulfill({ json: envelope({ ...course, status: 'PUBLISHED' }) });
   });
   await page.goto('/admin/courses');
-  await page.getByRole('button', { name: 'Onayla', exact: true }).click();
-  await page.getByLabel('Karar gerekçesi').fill('İçerik kontrol edildi');
-  await page.getByRole('button', { name: 'Kararı kaydet' }).click();
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await page.getByLabel('Reason for decision').fill('İçerik kontrol edildi');
+  await page.getByRole('button', { name: 'Save decision' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(decision).toEqual({ action: 'APPROVE', reason: 'İçerik kontrol edildi' });
 });
@@ -769,7 +803,7 @@ test('free course enrollment opens learning without creating a payment', async (
     await route.fulfill({ json: envelope(enrollment) });
   });
   await page.goto('/courses/course-1');
-  await page.getByRole('button', { name: 'Ücretsiz kursa katıl' }).click();
+  await page.getByRole('button', { name: 'Join free course' }).click();
   await expect(page).toHaveURL(/\/learn\/enrollment-1(?:\?lesson=lesson-1)?$/);
   expect(joined).toBe(true);
 });
@@ -801,11 +835,13 @@ test('student submits quiz answers and completion follows the server result', as
   });
   await page.goto('/learn/enrollment-1');
   await page.getByLabel('4', { exact: true }).check();
-  await page.getByRole('button', { name: 'Testi gönder' }).click();
-  await expect(page.getByText('Testi geçtin; ders tamamlandı.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Submit quiz' }).click();
+  await expect(
+    page.getByText('You passed the quiz and completed the lesson.', { exact: false }),
+  ).toBeVisible();
   expect(payload).toEqual({
     enrollmentId: 'enrollment-1',
-    answers: [{ questionId: 'question-1', option: 0 }],
+    answers: [{ questionId: 'question-1', option: 0, options: [0] }],
   });
 });
 
@@ -842,8 +878,8 @@ test('students can save personal notes and ask lesson questions', async ({ page 
     route.fulfill({ json: envelope([]) }),
   );
   await page.goto('/learn/enrollment-1');
-  await page.getByLabel('Ders notun').fill('Önemli bir nokta');
-  await page.getByRole('button', { name: 'Not ekle', exact: true }).click();
+  await page.getByLabel('Your lesson note').fill('Önemli bir nokta');
+  await page.getByRole('button', { name: 'Add note', exact: true }).click();
   await expect
     .poll(() => note)
     .toEqual({
@@ -852,10 +888,10 @@ test('students can save personal notes and ask lesson questions', async ({ page 
       positionSeconds: 0,
       content: 'Önemli bir nokta',
     });
-  await page.getByText('Yeni soru sor', { exact: true }).click();
-  await page.getByLabel('Soru başlığı').fill('Bir örnek daha?');
-  await page.getByLabel('Sorunun ayrıntısı').fill('Açıklayabilir misiniz?');
-  await page.getByRole('button', { name: 'Soruyu gönder' }).click();
+  await page.getByText('Ask a question', { exact: true }).click();
+  await page.getByLabel('Question title').fill('Bir örnek daha?');
+  await page.getByLabel('Question details').fill('Açıklayabilir misiniz?');
+  await page.getByRole('button', { name: 'Submit question' }).click();
   await expect
     .poll(() => question)
     .toEqual({ lessonId: 'lesson-1', title: 'Bir örnek daha?', content: 'Açıklayabilir misiniz?' });
@@ -871,5 +907,86 @@ test('failed enrollment requests render an error without waiting for a disabled 
   );
   await page.goto('/learn/enrollment-1');
   await expect(page.getByRole('alert')).toContainText('Bu kayda erişiminiz yok');
-  await expect(page.getByText('Yükleniyor…', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0);
+});
+
+test('multiple answer questions render checkboxes and submit the complete selection', async ({
+  page,
+}) => {
+  await session(page);
+  await mockApi(page);
+  const copy = structuredClone(course);
+  copy.sections[0].lessons[0].type = 'QUIZ';
+  await page.route('**/api/v1/courses/course-1', (route) =>
+    route.fulfill({ json: envelope(copy) }),
+  );
+  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz', (route) =>
+    route.fulfill({
+      json: envelope({
+        passingScore: 70,
+        questions: [
+          {
+            id: 'multi-1',
+            prompt: 'Choose the prime numbers',
+            options: ['Two', 'Four', 'Five'],
+            questionType: 'MULTIPLE_CHOICE',
+            weight: 3,
+          },
+        ],
+      }),
+    }),
+  );
+  let payload: any;
+  await page.route('**/api/v1/courses/course-1/lessons/lesson-1/quiz/attempts', async (route) => {
+    if (route.request().method() === 'POST') {
+      payload = route.request().postDataJSON();
+      await route.fulfill({
+        json: envelope({ id: 'attempt-multi', score: 100, passed: true, correct: 1, total: 1 }),
+      });
+    } else await route.fulfill({ json: envelope([]) });
+  });
+  await page.goto('/learn/enrollment-1');
+  await page.getByRole('checkbox', { name: 'Two', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Five', exact: true }).check();
+  await page.getByRole('button', { name: 'Submit quiz' }).click();
+  await expect(
+    page.getByText('You passed the quiz and completed the lesson.', { exact: false }),
+  ).toBeVisible();
+  expect(payload.answers[0].options).toEqual([0, 2]);
+});
+
+test('a replaced course cover recovers after the previous image failed', async ({ page }) => {
+  await mockApi(page);
+  let replacement = false,
+    failedRequest = false;
+  await page.route(/\/api\/v1\/courses(?:\/search)?\?/, (route) =>
+    route.fulfill({
+      json: envelope(
+        pageData([
+          { ...course, thumbnailUrl: replacement ? '/fresh-cover.svg' : '/missing-cover.png' },
+        ]),
+      ),
+    }),
+  );
+  await page.route('**/missing-cover.png', (route) => {
+    failedRequest = true;
+    return route.fulfill({ status: 404 });
+  });
+  await page.route('**/fresh-cover.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="60"><rect width="80" height="60" fill="blue"/></svg>',
+    }),
+  );
+  await page.goto('/catalog');
+  const card = page.locator('.course-card').filter({ hasText: course.title });
+  await expect.poll(() => failedRequest).toBe(true);
+  await expect(card.locator('.cover-label')).toBeVisible();
+  replacement = true;
+  await page.getByRole('textbox', { name: 'Search courses' }).fill('replacement');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  const image = card.getByRole('img', { name: course.title, exact: true });
+  await expect(image).toBeVisible();
+  await expect(image).toHaveAttribute('src', /fresh-cover\.svg$/);
+  await expect.poll(() => image.evaluate((e) => (e as HTMLImageElement).naturalWidth)).toBe(80);
 });

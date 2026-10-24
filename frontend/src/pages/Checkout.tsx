@@ -27,7 +27,8 @@ function PaymentForm({ courseId, paymentId }: { courseId: string; paymentId: str
         },
         redirect: 'if_required',
       });
-      if (result.error) throw new Error(result.error.message || 'Ödeme tamamlanamadı.');
+      if (result.error)
+        throw new Error(result.error.message || 'The payment could not be completed.');
       navigate(`/checkout/${courseId}?payment=${encodeURIComponent(paymentId)}`, { replace: true });
     } catch (e) {
       setError(e);
@@ -40,7 +41,7 @@ function PaymentForm({ courseId, paymentId }: { courseId: string; paymentId: str
       <PaymentElement />
       {!!error && <ErrorBox error={error} />}
       <div className="form-actions">
-        <Submit busy={busy || !stripe}>Güvenli ödemeyi tamamla</Submit>
+        <Submit busy={busy || !stripe}>Complete secure payment</Submit>
       </div>
     </form>
   );
@@ -57,10 +58,10 @@ function PaymentStatus({ paymentId }: { paymentId: string }) {
   if (payment.data?.status === 'COMPLETED')
     return (
       <>
-        <Success>Ödemeniz doğrulandı. Kurs kaydınız hazırlanıyor.</Success>
-        <p>Kursunuz kısa süre içinde öğrenim alanınıza eklenecek.</p>
+        <Success>Your payment has been verified. Your enrollment is being prepared.</Success>
+        <p>Your course will appear in your learning area shortly.</p>
         <Link className="button primary" to="/my-learning">
-          Öğrenim alanına git
+          Go to my learning
         </Link>
       </>
     );
@@ -68,19 +69,18 @@ function PaymentStatus({ paymentId }: { paymentId: string }) {
     return (
       <ErrorBox
         error={
-          new Error(
-            'Ödeme tamamlanamadı. Ödemeler sayfasından işlem durumunu kontrol edebilirsiniz.',
-          )
+          new Error('The payment could not be completed. Check its status on the payments page.')
         }
       />
     );
   return (
     <>
       <div className="notice warning">
-        Ödeme sonucu bekleniyor. Banka onayı geldikten sonra kurs kaydınız oluşturulacak.
+        Waiting for payment confirmation. Enrollment will be created after your bank confirms the
+        payment.
       </div>
       <Link className="button secondary" to="/payments">
-        Ödemelerimi görüntüle
+        View my payments
       </Link>
     </>
   );
@@ -109,9 +109,7 @@ export default function Checkout() {
         body: body({ courseId, couponCode: String(f.get('couponCode') || '').trim() || undefined }),
       });
       if (!result.clientSecret)
-        throw new Error(
-          'Ödeme bilgileri oluşturulamadı. Ödemeler sayfasından işlem durumunu kontrol edin.',
-        );
+        throw new Error('Payment details could not be created. Check the payments page.');
       setIntent(result);
     } catch (e) {
       setError(e);
@@ -125,24 +123,24 @@ export default function Checkout() {
   return (
     <>
       <Link className="back-link" to={`/courses/${courseId}`}>
-        <ArrowLeft size={16} /> Kursa dön
+        <ArrowLeft size={16} /> Back to course
       </Link>
       <PageTitle
-        eyebrow="BİR ADIM DAHA YAKIN"
-        title="Öğrenmeye yatırım yap."
-        description="Ödemen onaylandığında kursun öğrenim alanına eklenecek."
+        eyebrow="ONE STEP CLOSER"
+        title="Invest in your learning."
+        description="Your course will appear in your learning area after payment is confirmed."
       />
       <div className="checkout-layout">
         <section className="panel">
           <h2>
-            <LockKeyhole size={20} /> Güvenli ödeme
+            <LockKeyhole size={20} /> Secure payment
           </h2>
           {paymentId ? (
             <PaymentStatus paymentId={paymentId} />
           ) : !key ? (
             <div className="notice warning">
-              Kartla ödeme şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin veya eğitim
-              sağlayıcısıyla iletişime geçin.
+              Card payments are currently unavailable. Try again later or contact the training
+              provider.
             </div>
           ) : intent?.clientSecret && stripe ? (
             <Elements
@@ -162,15 +160,15 @@ export default function Checkout() {
             <form onSubmit={begin}>
               {c.price === 0 && (
                 <p className="notice warning">
-                  Bu kurs ücretsiz olarak listeleniyor. Katılım, sağlayıcının ödeme ve kayıt
-                  doğrulamasına bağlıdır.
+                  This course is listed as free. Enrollment depends on the provider's payment and
+                  registration checks.
                 </p>
               )}
-              <Field label="Kupon kodu (isteğe bağlı)">
-                <input name="couponCode" placeholder="Kupon kodun varsa gir" />
+              <Field label="Coupon code (optional)">
+                <input name="couponCode" placeholder="Enter a coupon code" />
               </Field>
               {!!error && <ErrorBox error={error} />}
-              <Submit busy={busy}>Ödeme adımına geç</Submit>
+              <Submit busy={busy}>Continue to payment</Submit>
             </form>
           )}
         </section>
@@ -179,12 +177,12 @@ export default function Checkout() {
           <h3>{c.title}</h3>
           <p>{c.instructorName}</p>
           <div className="order-total">
-            <span>Toplam</span>
+            <span>Total</span>
             <strong>
               {intent ? money(intent.amount, intent.currency) : money(c.discountPrice ?? c.price)}
             </strong>
           </div>
-          <small>Kart bilgilerin Stripe tarafından güvenle işlenir.</small>
+          <small>Your card details are processed securely by Stripe.</small>
         </aside>
       </div>
     </>

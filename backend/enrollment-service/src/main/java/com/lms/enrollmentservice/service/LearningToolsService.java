@@ -77,7 +77,7 @@ public class LearningToolsService {
         if (
             t.dueDate().isBefore(LocalDate.now().minusDays(1)) ||
             t.dueDate().isAfter(LocalDate.now().plusYears(2))
-        ) throw new IllegalArgumentException("Plan tarihi geçersiz");
+        ) throw new IllegalArgumentException("Invalid study plan date");
         jdbc.update(
             "insert into learning_tasks(id,student_id,title,due_date,enrollment_id) values(?,?,?,?,?)",
             UUID.randomUUID(),
@@ -112,7 +112,7 @@ public class LearningToolsService {
         if (
             l == null ||
             b.positionSeconds() > Math.max(0, l.durationSeconds() == null ? 0 : l.durationSeconds())
-        ) throw new IllegalArgumentException("Ders veya konum geçersiz");
+        ) throw new IllegalArgumentException("Invalid lesson or playback position");
         jdbc.update(
             "insert into lesson_bookmarks(id,enrollment_id,lesson_id,title,position_seconds) values(?,?,?,?,?)",
             UUID.randomUUID(),

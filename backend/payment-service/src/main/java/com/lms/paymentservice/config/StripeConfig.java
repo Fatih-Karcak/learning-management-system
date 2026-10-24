@@ -19,7 +19,7 @@ public class StripeConfig {
     @PostConstruct
     public void init() {
         Stripe.apiKey = secretKey;
-        log.info("Stripe SDK başlatıldı");
+        log.info("Stripe SDK initialized");
     }
 
     public String getWebhookSecret() {

@@ -31,14 +31,14 @@ public class LessonController {
             @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        lessonService.createLesson(request, user.id()), "Ders oluşturuldu"));
+                        lessonService.createLesson(request, user.id()), "Lesson created"));
     }
 
     @GetMapping("/section/{sectionId}")
     public ResponseEntity<ApiResponse<List<LessonResponse>>> getLessons(
             @PathVariable UUID sectionId, @AuthenticationPrincipal AuthenticatedUser viewer) {
         return ResponseEntity.ok(ApiResponse.success(
-                lessonService.getLessonsBySection(sectionId, viewer), "Başarılı"));
+                lessonService.getLessonsBySection(sectionId, viewer), "Successful"));
     }
 
     @DeleteMapping("/{id}")
@@ -47,7 +47,7 @@ public class LessonController {
             @PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser user) {
         lessonService.deleteLesson(id, user.id());
-        return ResponseEntity.ok(ApiResponse.success(null, "Ders silindi"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Lesson deleted"));
     }
 
     @PutMapping("/{id}/video")
@@ -57,6 +57,6 @@ public class LessonController {
             @Valid @RequestBody UpdateLessonVideoRequest request,
             @AuthenticationPrincipal AuthenticatedUser user) {
         return ResponseEntity.ok(ApiResponse.success(
-                lessonService.updateVideo(id, request, user.id()), "Ders videosu güncellendi"));
+                lessonService.updateVideo(id, request, user.id()), "Lesson video updated"));
     }
 }

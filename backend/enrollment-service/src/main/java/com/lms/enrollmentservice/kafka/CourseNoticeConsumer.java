@@ -25,7 +25,7 @@ public class CourseNoticeConsumer {
     @Transactional
     public void receive(PlatformNotice event) {
         if (event.courseId() == null || event.recipientId() != null) throw new IllegalArgumentException(
-            "Kurs duyurusu geçersiz"
+            "Invalid course announcement"
         );
         UUID after = new UUID(0, 0);
         int batch = 0;

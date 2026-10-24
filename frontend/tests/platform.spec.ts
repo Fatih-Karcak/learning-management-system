@@ -26,8 +26,8 @@ test.describe('real platform experience', () => {
       .poll(() => video.evaluate((e) => (e as HTMLVideoElement).textTracks[0]?.cues?.length || 0))
       .toBeGreaterThan(0);
     expect(await video.evaluate((e) => (e as HTMLVideoElement).videoWidth)).toBe(320);
-    await page.getByLabel(/Bu konuma yer imi ekle/).fill(bookmarkTitle);
-    await page.getByRole('button', { name: 'Yer imi ekle', exact: true }).click();
+    await page.getByLabel(/Bookmark this position/).fill(bookmarkTitle);
+    await page.getByRole('button', { name: 'Add bookmark', exact: true }).click();
     await expect(page.getByRole('button', { name: new RegExp(bookmarkTitle) })).toBeVisible();
     await expect
       .poll(async () => {
@@ -41,7 +41,7 @@ test.describe('real platform experience', () => {
       })
       .toBe('COMPLETED');
     await page.goto('/study-plan');
-    await expect(page.getByRole('heading', { name: 'Çalışma planım' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My study plan' })).toBeVisible();
     await expect(page.getByRole('link', { name: new RegExp(bookmarkTitle) })).toBeVisible();
   });
   test('instructor sees learning reports and can publish an announcement', async ({ page }) => {
@@ -49,15 +49,17 @@ test.describe('real platform experience', () => {
     const announcementTitle = `Tarayıcı pilot duyurusu ${crypto.randomUUID()}`;
     await login(page, f.teacher);
     await page.goto(`/instructor/${f.courseId}`);
-    await page.getByRole('button', { name: 'Öğrenme raporu', exact: true }).click();
+    await page.getByRole('button', { name: 'Learning report', exact: true }).click();
     await expect(
-      page.getByRole('table', { name: 'Ders bazında katılım ve sonuçlar' }),
+      page.getByRole('table', { name: 'Lesson participation and results' }),
     ).toBeVisible();
-    await expect(page.getByRole('row', { name: /Practice test/ })).toContainText('%100');
-    await page.getByRole('button', { name: 'Duyurular', exact: true }).click();
-    await page.getByLabel('Duyuru başlığı').fill(announcementTitle);
-    await page.getByLabel('Duyuru metni').fill('Bu duyuru gerçek backend üzerinden kaydedildi.');
-    await page.getByRole('button', { name: 'Duyuruyu yayımla' }).click();
+    await expect(page.getByRole('row', { name: /Practice test/ })).toContainText('100%');
+    await page.getByRole('button', { name: 'Announcements', exact: true }).click();
+    await page.getByLabel('Announcement title').fill(announcementTitle);
+    await page
+      .getByLabel('Announcement text')
+      .fill('Bu duyuru gerçek backend üzerinden kaydedildi.');
+    await page.getByRole('button', { name: 'Publish announcement' }).click();
     await expect(page.getByRole('heading', { name: announcementTitle })).toBeVisible();
   });
   test('student saves preferences and creates a study task', async ({ page }) => {
@@ -65,16 +67,16 @@ test.describe('real platform experience', () => {
     const taskTitle = `Tarayıcı üzerinden çalışma planı ${crypto.randomUUID()}`;
     await login(page, f.student);
     await page.goto('/security');
-    await page.getByLabel('Haftalık video çalışma hedefi (dakika)').fill('90');
-    await page.getByLabel('Öğrenmeyle ilgili e-postalar').uncheck();
-    await page.getByRole('button', { name: 'Tercihleri kaydet' }).click();
-    await expect(page.getByRole('status')).toContainText('İşlem kaydedildi.');
+    await page.getByLabel('Weekly video study target (minutes)').fill('90');
+    await page.getByLabel('Learning emails').uncheck();
+    await page.getByRole('button', { name: 'Save preferences' }).click();
+    await expect(page.getByRole('status')).toContainText('Changes saved.');
     await page.reload();
-    await expect(page.getByLabel('Haftalık video çalışma hedefi (dakika)')).toHaveValue('90');
-    await expect(page.getByLabel('Öğrenmeyle ilgili e-postalar')).not.toBeChecked();
+    await expect(page.getByLabel('Weekly video study target (minutes)')).toHaveValue('90');
+    await expect(page.getByLabel('Learning emails')).not.toBeChecked();
     await page.goto('/study-plan');
-    await page.getByLabel('Çalışma hedefi', { exact: true }).fill(taskTitle);
-    await page.getByRole('button', { name: 'Plana ekle' }).click();
+    await page.getByLabel('Study goal', { exact: true }).fill(taskTitle);
+    await page.getByRole('button', { name: 'Add to plan' }).click();
     await expect(page.getByLabel(taskTitle, { exact: true })).toBeVisible();
     await page.getByLabel(taskTitle, { exact: true }).check();
     await expect(page.getByLabel(taskTitle, { exact: true })).toBeChecked();
@@ -133,9 +135,9 @@ test.describe('real platform experience', () => {
     await login(page, f.admin);
     await page.goto('/admin/courses');
     const row = page.locator('article').filter({ hasText: c.title });
-    await row.getByRole('button', { name: 'Taslağı incele' }).click();
-    await page.getByRole('button', { name: 'Taslağı onayla ve yayımla' }).click();
-    await expect(page.getByRole('dialog').getByText('Yayında', { exact: true })).toBeVisible();
+    await row.getByRole('button', { name: 'Review draft' }).click();
+    await page.getByRole('button', { name: 'Approve and publish draft' }).click();
+    await expect(page.getByRole('dialog').getByText('Published', { exact: true })).toBeVisible();
     const published = await page.request.get(`http://127.0.0.1:8080/api/v1/courses/${c.id}`);
     expect((await published.json()).data.status).toBe('PUBLISHED');
   });
@@ -144,15 +146,15 @@ test.describe('real platform experience', () => {
     const supportTitle = `Tarayıcı pilot destek talebi ${crypto.randomUUID()}`;
     await login(page, f.student);
     await page.goto('/support');
-    await page.getByLabel('Konu', { exact: true }).fill(supportTitle);
-    await page.getByLabel('Kategori', { exact: true }).selectOption('TECHNICAL');
+    await page.getByLabel('Subject', { exact: true }).fill(supportTitle);
+    await page.getByLabel('Category', { exact: true }).selectOption('TECHNICAL');
     await page
-      .getByLabel('Açıklama', { exact: true })
+      .getByLabel('Description', { exact: true })
       .fill('Öğrenci destek akışı kontrol ediliyor.');
-    await page.getByRole('button', { name: 'Destek talebi aç' }).click();
+    await page.getByRole('button', { name: 'Create support ticket' }).click();
     await page.getByRole('button', { name: supportTitle, exact: true }).click();
-    await page.getByLabel('Yanıt', { exact: true }).fill('Sorunla ilgili ek bilgi.');
-    await page.getByRole('button', { name: 'Yanıt gönder' }).click();
+    await page.getByLabel('Reply', { exact: true }).fill('Sorunla ilgili ek bilgi.');
+    await page.getByRole('button', { name: 'Send reply' }).click();
     await expect(page.getByText('Sorunla ilgili ek bilgi.', { exact: true })).toBeVisible();
   });
 });

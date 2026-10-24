@@ -36,7 +36,7 @@ class CourseWorkspaceTest {
         .description("Details")
         .shortDescription("Summary")
         .price(BigDecimal.ZERO)
-        .language("Türkçe")
+        .language("Turkish")
         .level(CourseLevel.BEGINNER)
         .status(CourseStatus.DRAFT)
         .build();

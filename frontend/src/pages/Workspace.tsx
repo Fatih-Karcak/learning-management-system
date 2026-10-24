@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useBlocker } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { api, body, levels, lessonTypes } from '../api';
 import type { Course, Category, Lesson, Quiz, Media, Page, Material, Workspace } from '../types';
-import { Badge, ErrorBox, Field, Loading, Modal, PageTitle, Success } from '../ui';
+import { Badge, ErrorBox, Field, Loading, Modal, PageTitle, Pagination, Success } from '../ui';
 import VideoPlayer from '../VideoPlayer';
 import { AssignmentGrading, CourseStudents, CourseDiscussion } from './LearningFeatures';
 import { CourseAnalytics, Announcements } from './Platform';
@@ -12,6 +12,8 @@ import RichTextEditor from '../RichTextEditor';
 import { duplicateLesson } from '../courseAuthoring';
 import { useAuth } from '../auth';
 import { CourseTeam } from './CourseAuthoring';
+import { LearningRules } from './LearningPaths';
+import AssignmentPolicyEditor from './AssignmentPolicy';
 const blankQuiz = (): Quiz => ({ passingScore: 70, questions: [] });
 const blankQuestion = () => ({
   id: crypto.randomUUID(),
@@ -29,6 +31,8 @@ export default function CourseWorkspace({
 }) {
   const client = useQueryClient();
   const { session } = useAuth();
+  const [mediaPage, setMediaPage] = useState(0);
+  const [mediaSearch, setMediaSearch] = useState('');
   const query = useQuery({
     queryKey: ['workspace', courseId],
     queryFn: () => api<Workspace>(`/courses/${courseId}/workspace`),
@@ -43,8 +47,11 @@ export default function CourseWorkspace({
     queryFn: () => api<Category[]>('/courses/categories'),
   });
   const media = useQuery({
-    queryKey: ['workspace-media', courseId],
-    queryFn: () => api<Page<Media>>(`/media/my?courseId=${courseId}&size=100&sort=createdAt,desc`),
+    queryKey: ['workspace-media', courseId, mediaPage, mediaSearch],
+    queryFn: () =>
+      api<Page<Media>>(
+        `/media/my?courseId=${courseId}&type=VIDEO&status=READY&query=${encodeURIComponent(mediaSearch)}&page=${mediaPage}&size=12&sort=createdAt,desc`,
+      ),
     enabled: !review,
     refetchInterval: (q) =>
       q.state.data?.content.some((m) => m.status === 'PROCESSING') ? 4000 : false,
@@ -56,6 +63,32 @@ export default function CourseWorkspace({
   const [tool, setTool] = useState<string>();
   const [uploadError, setUploadError] = useState<unknown>();
   const [uploading, setUploading] = useState(false);
+  const blocker = useBlocker(dirty && !review);
+  const recoveryKey = `lms.draft.${session?.user.id}.${courseId}`;
+  const initialized = useRef('');
+  const [recovery, setRecovery] = useState<Workspace>();
+  useEffect(() => {
+    if (!query.data || review || initialized.current === recoveryKey) return;
+    initialized.current = recoveryKey;
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || 'null');
+      if (
+        stored?.workspace?.document?.course?.id === courseId &&
+        Date.now() - stored.savedAt < 7 * 86400000
+      )
+        setRecovery(stored.workspace);
+    } catch {
+      sessionStorage.removeItem(recoveryKey);
+    }
+  }, [query.data, recoveryKey, courseId, review]);
+  useEffect(() => {
+    if (!dirty || !workspace || review) return;
+    try {
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ savedAt: Date.now(), workspace }));
+    } catch {
+      /* Navigation protection and server saving still work if storage is full. */
+    }
+  }, [workspace, dirty, recoveryKey, review]);
   useEffect(() => {
     if (query.data && !dirty) setWorkspace(structuredClone(query.data));
   }, [query.data, dirty]);
@@ -98,8 +131,8 @@ export default function CourseWorkspace({
       if (kind === 'submit')
         return api<Workspace>(`${path}/submit?revision=${workspace!.revision}`, { method: 'POST' });
       if (kind === 'withdraw') return api<Workspace>(`${path}/withdraw`, { method: 'POST' });
-      const reason = kind === 'reject' ? window.prompt('Düzeltme gerekçesi') : null;
-      if (kind === 'reject' && !reason) throw new Error('Gerekçe gerekli.');
+      const reason = kind === 'reject' ? window.prompt('Reason for requesting changes') : null;
+      if (kind === 'reject' && !reason) throw new Error('A reason is required.');
       return api<Workspace>(
         `/courses/admin/${courseId}/workspace/decision?revision=${workspace!.revision}`,
         {
@@ -109,6 +142,7 @@ export default function CourseWorkspace({
       );
     },
     onSuccess: (w) => {
+      sessionStorage.removeItem(recoveryKey);
       setDirty(false);
       setWorkspace(structuredClone(w));
       client.setQueryData(['workspace', courseId], w);
@@ -117,6 +151,30 @@ export default function CourseWorkspace({
       void client.invalidateQueries({ queryKey: ['course', courseId] });
     },
   });
+  useEffect(() => {
+    if (
+      !dirty ||
+      review ||
+      workspace?.status === 'PENDING_REVIEW' ||
+      uploading ||
+      blocker.state === 'blocked' ||
+      action.isPending ||
+      action.isError ||
+      recovery
+    )
+      return;
+    const timer = setTimeout(() => action.mutate('save'), 3000);
+    return () => clearTimeout(timer);
+  }, [
+    dirty,
+    workspace,
+    review,
+    uploading,
+    action.isPending,
+    action.isError,
+    recovery,
+    blocker.state,
+  ]);
   function change(update: (w: Workspace) => void) {
     setWorkspace((current) => {
       if (!current) return current;
@@ -198,23 +256,107 @@ export default function CourseWorkspace({
   }
   return (
     <>
+      {blocker.state === 'blocked' && (
+        <Modal title="Unsaved changes" onClose={() => blocker.reset()}>
+          <p>Save your changes before leaving this course.</p>
+          {action.error && <ErrorBox error={action.error} />}
+          <div className="form-actions">
+            <button
+              className="button primary"
+              disabled={action.isPending}
+              onClick={async () => {
+                try {
+                  await action.mutateAsync('save');
+                  blocker.proceed();
+                } catch {
+                  /* Keep the editor open. */
+                }
+              }}
+            >
+              Save and leave
+            </button>
+            <button
+              className="button secondary"
+              disabled={action.isPending}
+              onClick={() => {
+                sessionStorage.removeItem(recoveryKey);
+                setDirty(false);
+                blocker.proceed();
+              }}
+            >
+              Discard changes
+            </button>
+            <button className="button secondary" onClick={() => blocker.reset()}>
+              Keep editing
+            </button>
+          </div>
+        </Modal>
+      )}
+      {recovery && (
+        <Modal title="Recover your draft" onClose={() => setRecovery(undefined)}>
+          <p>An unsaved draft was found in this browser.</p>
+          {recovery.revision !== w.revision ? (
+            <p>
+              The server version has changed. Download your draft to compare it before applying
+              changes.
+            </p>
+          ) : (
+            <button
+              className="button primary"
+              onClick={() => {
+                setWorkspace(recovery);
+                setDirty(true);
+                setRecovery(undefined);
+              }}
+            >
+              Recover draft
+            </button>
+          )}
+          <button
+            className="button secondary"
+            onClick={() => {
+              const url = URL.createObjectURL(
+                new Blob([JSON.stringify(recovery.document, null, 2)], {
+                  type: 'application/json',
+                }),
+              );
+              const anchor = document.createElement('a');
+              anchor.href = url;
+              anchor.download = 'course-draft.json';
+              anchor.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            Download draft
+          </button>
+          <button
+            className="button secondary"
+            onClick={() => {
+              sessionStorage.removeItem(recoveryKey);
+              setRecovery(undefined);
+            }}
+          >
+            Use server version
+          </button>
+        </Modal>
+      )}
       <Link className="back-link" to={review ? '/admin/courses' : '/instructor'}>
-        ← {review ? 'İncelemeler' : 'Kurslarım'}
+        ← {review ? 'Reviews' : 'My courses'}
       </Link>
       <PageTitle
-        eyebrow={review ? 'KURS İNCELEMESİ' : 'EĞİTMEN STÜDYOSU'}
+        eyebrow={review ? 'COURSE REVIEW' : 'INSTRUCTOR STUDIO'}
         title={c.title}
-        description="Değişiklikler onaylandığında öğrencilere yayımlanır."
+        description="Approved changes are published to learners."
       />
       <div className="panel workspace-toolbar">
         <Badge value={w.status} />
         <span>
-          Sürüm taslağı {w.revision}
-          {dirty ? ' · Kaydedilmemiş değişiklikler' : ''}
+          Draft revision {w.revision}
+          {dirty ? ' · Unsaved changes' : ''}
         </span>
         <div className="form-actions">
           <button className="button secondary" onClick={() => setPreview(!preview)}>
-            {preview ? 'Düzenlemeye dön' : 'Öğrenci görünümünde ön izle'}
+            {preview ? 'Back to editing' : 'Preview as a learner'}
           </button>
           {!review && !locked && (
             <>
@@ -223,7 +365,7 @@ export default function CourseWorkspace({
                 disabled={!dirty || action.isPending || uploading}
                 onClick={() => action.mutate('save')}
               >
-                Taslağı kaydet
+                Save draft
               </button>
               {canManage && (
                 <button
@@ -231,7 +373,7 @@ export default function CourseWorkspace({
                   disabled={dirty || w.revision === 0 || action.isPending || uploading}
                   onClick={() => action.mutate('submit')}
                 >
-                  İncelemeye gönder
+                  Submit for review
                 </button>
               )}
             </>
@@ -242,7 +384,7 @@ export default function CourseWorkspace({
               disabled={action.isPending}
               onClick={() => action.mutate('withdraw')}
             >
-              Başvuruyu geri çek
+              Withdraw submission
             </button>
           )}
           {review && w.status === 'PENDING_REVIEW' && (
@@ -252,14 +394,14 @@ export default function CourseWorkspace({
                 disabled={action.isPending}
                 onClick={() => action.mutate('approve')}
               >
-                Taslağı onayla ve yayımla
+                Approve and publish draft
               </button>
               <button
                 className="button secondary"
                 disabled={action.isPending}
                 onClick={() => action.mutate('reject')}
               >
-                Düzeltme iste
+                Request changes
               </button>
             </>
           )}
@@ -268,11 +410,11 @@ export default function CourseWorkspace({
               className="button secondary"
               disabled={dirty || saveTemplate.isPending}
               onClick={() => {
-                const name = window.prompt('Kişisel şablon adı');
+                const name = window.prompt('Personal template name');
                 if (name?.trim()) saveTemplate.mutate(name.trim());
               }}
             >
-              Şablon olarak kaydet
+              Save as template
             </button>
           )}
           {!review && canManage && live.data?.status !== 'ARCHIVED' && (
@@ -282,40 +424,39 @@ export default function CourseWorkspace({
               onClick={() => {
                 if (
                   window.confirm(
-                    'Kurs yeni kayıtlara kapatılacak. Mevcut öğrenciler erişmeye devam eder. İnceleme başvurusu varsa geri çekilir.',
+                    'The course will close to new enrollments. Existing learners keep access. Any pending review will be withdrawn.',
                   )
                 )
                   archive.mutate();
               }}
             >
-              Kursu arşivle
+              Archive course
             </button>
           )}
         </div>
       </div>
       {!review && !canManage && (
         <p className="notice">
-          Bu kursta ortak eğitmensiniz. Taslağı düzenleyebilirsiniz; yayın başvurusunu kurs sahibi
-          gönderir.
+          You are a co-instructor on this course. You can edit the draft; the owner submits it for
+          publication.
         </p>
       )}
       {saveTemplate.error && <ErrorBox error={saveTemplate.error} />}
       {saveTemplate.isSuccess && (
         <Success>
-          Kişisel şablon kaydedildi. Eğitmen stüdyosundaki şablon listesinden yeni kurs
-          oluşturabilirsiniz.
+          Personal template saved. Create a new course from your template list in the instructor
+          studio.
         </Success>
       )}
+      {!review && canManage && <LearningRules courseId={courseId} />}
       {archive.error && <ErrorBox error={archive.error} />}
-      {archive.isSuccess && (
-        <Success>Kurs arşivlendi. Mevcut öğrencilerin erişimi korunuyor.</Success>
-      )}
-      {w.feedback && <p className="notice warning">Yönetici geri bildirimi: {w.feedback}</p>}
+      {archive.isSuccess && <Success>Course archived. Existing learners keep access.</Success>}
+      {w.feedback && <p className="notice warning">Administrator feedback: {w.feedback}</p>}
       {action.error && <ErrorBox error={action.error} />}{' '}
-      {action.isSuccess && <Success>İşlem kaydedildi.</Success>}
+      {action.isSuccess && <Success>Changes saved.</Success>}
       {!!w.checklist.length && (
         <details className="panel">
-          <summary>Yayın öncesi kontrol listesi ({w.checklist.length})</summary>
+          <summary>Publication checklist ({w.checklist.length})</summary>
           <ul>
             {w.checklist.map((i) => (
               <li key={i}>{i}</li>
@@ -327,7 +468,7 @@ export default function CourseWorkspace({
         <section className="panel">
           <h2>{c.title}</h2>
           <ReactMarkdown>{c.description || ''}</ReactMarkdown>
-          <h3>Öğreneceklerin</h3>
+          <h3>Learning outcomes</h3>
           <ul>
             {c.outcomes?.map((o) => (
               <li key={o}>{o}</li>
@@ -368,8 +509,8 @@ export default function CourseWorkspace({
       ) : (
         <>
           <fieldset className="panel workspace-fields" disabled={locked || action.isPending}>
-            <legend>Kurs bilgileri</legend>
-            <Field label="Kurs başlığı">
+            <legend>Course details</legend>
+            <Field label="Course title">
               <input
                 value={c.title}
                 maxLength={200}
@@ -380,7 +521,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Kısa açıklama">
+            <Field label="Short description">
               <textarea
                 value={c.shortDescription || ''}
                 maxLength={500}
@@ -391,7 +532,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Bu kurs kimler için?">
+            <Field label="Who is this course for?">
               <textarea
                 value={c.targetAudience || ''}
                 maxLength={2000}
@@ -402,7 +543,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Açıklama">
+            <Field label="Description">
               <RichTextEditor
                 rows={6}
                 value={c.description || ''}
@@ -414,7 +555,7 @@ export default function CourseWorkspace({
               />
             </Field>
             <div className="form-grid">
-              <Field label="Kategori">
+              <Field label="Category">
                 <select
                   value={w.document.categoryId}
                   onChange={(e) =>
@@ -430,7 +571,7 @@ export default function CourseWorkspace({
                   ))}
                 </select>
               </Field>
-              <Field label="Seviye">
+              <Field label="Level">
                 <select
                   value={c.level}
                   onChange={(e) =>
@@ -446,7 +587,7 @@ export default function CourseWorkspace({
                   ))}
                 </select>
               </Field>
-              <Field label="Dil">
+              <Field label="Language">
                 <input
                   value={c.language || ''}
                   onChange={(e) =>
@@ -456,7 +597,7 @@ export default function CourseWorkspace({
                   }
                 />
               </Field>
-              <Field label="Fiyat">
+              <Field label="Price">
                 <input
                   type="number"
                   min="0"
@@ -469,7 +610,7 @@ export default function CourseWorkspace({
                   }
                 />
               </Field>
-              <Field label="İndirimli fiyat">
+              <Field label="Discounted price">
                 <input
                   type="number"
                   min="0"
@@ -484,7 +625,37 @@ export default function CourseWorkspace({
                 />
               </Field>
             </div>
-            <Field label="Kapak görseli adresi">
+            <Field label="Upload course cover">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                aria-label="Upload course cover"
+                disabled={uploading}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  setUploadError(undefined);
+                  try {
+                    const data = new FormData();
+                    data.set('file', file);
+                    data.set('courseId', courseId);
+                    const uploaded = await api<Media & { publicUrl: string }>('/media/image', {
+                      method: 'POST',
+                      body: data,
+                    });
+                    change((next) => {
+                      next.document.course.thumbnailUrl = uploaded.publicUrl;
+                    });
+                  } catch (error) {
+                    setUploadError(error);
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+              />
+            </Field>
+            <Field label="Course cover URL">
               <input
                 value={c.thumbnailUrl || ''}
                 onChange={(e) =>
@@ -494,7 +665,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Ön koşullar — her satıra bir madde">
+            <Field label="Requirements — one per line">
               <textarea
                 value={c.requirements?.join('\n') || ''}
                 onChange={(e) =>
@@ -504,7 +675,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Kazanımlar — her satıra bir madde">
+            <Field label="Learning outcomes — one per line">
               <textarea
                 value={c.outcomes?.join('\n') || ''}
                 onChange={(e) =>
@@ -516,16 +687,16 @@ export default function CourseWorkspace({
             </Field>
           </fieldset>
           <section className="panel">
-            <h2>Müfredat</h2>
+            <h2>Curriculum</h2>
             <p className="muted">
-              Yayımlanmış derslerin kimliği korunur. İçerik ve sıra değişebilir; ders kaldırmak veya
-              türünü değiştirmek için yeni bir kurs hazırlayın.
+              Published lesson identities are preserved. Content and order can change; create a new
+              course to remove lessons or change their types.
             </p>
             {c.sections?.map((s, si) => (
               <article key={s.id} className="editor-section">
                 <div className="form-actions">
                   <input
-                    aria-label={`Bölüm ${si + 1} başlığı`}
+                    aria-label={`Section ${si + 1} title`}
                     disabled={locked}
                     value={s.title}
                     onChange={(e) =>
@@ -537,7 +708,7 @@ export default function CourseWorkspace({
                   <button
                     className="button secondary small"
                     disabled={locked || si === 0}
-                    aria-label={`${s.title} bölümünü yukarı taşı`}
+                    aria-label={`${s.title} move section up`}
                     onClick={() => moveSection(si, -1)}
                   >
                     ↑
@@ -545,7 +716,7 @@ export default function CourseWorkspace({
                   <button
                     className="button secondary small"
                     disabled={locked || si === c.sections!.length - 1}
-                    aria-label={`${s.title} bölümünü aşağı taşı`}
+                    aria-label={`${s.title} move section down`}
                     onClick={() => moveSection(si, 1)}
                   >
                     ↓
@@ -556,7 +727,7 @@ export default function CourseWorkspace({
                     onClick={() => {
                       if (
                         window.confirm(
-                          'Bölüm taslaktan kaldırılsın mı? Yayımlanmış dersler kaldırılamaz.',
+                          'Remove this section from the draft? Published lessons cannot be removed.',
                         )
                       )
                         change((n) => {
@@ -564,7 +735,7 @@ export default function CourseWorkspace({
                         });
                     }}
                   >
-                    Bölümü kaldır
+                    Remove section
                   </button>
                 </div>
                 {s.lessons.map((l, li) => (
@@ -575,7 +746,7 @@ export default function CourseWorkspace({
                     <button
                       className="icon-button"
                       disabled={locked || li === 0}
-                      aria-label={`${l.title} dersini yukarı taşı`}
+                      aria-label={`${l.title} move lesson up`}
                       onClick={() => moveLesson(s.id, li, -1)}
                     >
                       ↑
@@ -583,7 +754,7 @@ export default function CourseWorkspace({
                     <button
                       className="icon-button"
                       disabled={locked || li === s.lessons.length - 1}
-                      aria-label={`${l.title} dersini aşağı taşı`}
+                      aria-label={`${l.title} move lesson down`}
                       onClick={() => moveLesson(s.id, li, 1)}
                     >
                       ↓
@@ -591,14 +762,14 @@ export default function CourseWorkspace({
                     <button
                       className="button secondary small"
                       disabled={locked}
-                      aria-label={`${l.title} dersini kopyala`}
+                      aria-label={`${l.title} duplicate lesson`}
                       onClick={() =>
                         change((next) => {
                           duplicateLesson(next, l.id);
                         })
                       }
                     >
-                      Dersi kopyala
+                      Duplicate lesson
                     </button>
                   </div>
                 ))}
@@ -610,7 +781,7 @@ export default function CourseWorkspace({
                       change((n) => {
                         n.document.course.sections![si].lessons.push({
                           id,
-                          title: 'Yeni ders',
+                          title: 'New lesson',
                           type: 'ARTICLE',
                           orderIndex: s.lessons.length,
                           previewAllowed: false,
@@ -620,7 +791,7 @@ export default function CourseWorkspace({
                       setSelected(id);
                     }}
                   >
-                    Ders ekle
+                    Add lesson
                   </button>
                 )}
               </article>
@@ -634,17 +805,17 @@ export default function CourseWorkspace({
                       n.document.course.sections ||= [];
                       n.document.course.sections.push({
                         id: crypto.randomUUID(),
-                        title: 'Yeni bölüm',
+                        title: 'New section',
                         orderIndex: n.document.course.sections.length,
                         lessons: [],
                       });
                     })
                   }
                 >
-                  Bölüm ekle
+                  Add section
                 </button>
                 <Link className="button secondary" to={`/media?course=${courseId}`}>
-                  Toplu video yükle
+                  Upload videos
                 </Link>
               </div>
             )}
@@ -655,12 +826,12 @@ export default function CourseWorkspace({
         <>
           <div className="feature-tabs">
             {[
-              ['students', 'Öğrenciler'],
-              ['reports', 'Öğrenme raporu'],
-              ['announcements', 'Duyurular'],
-              ['questions', 'Soru-cevap'],
-              ['versions', 'Yayın geçmişi'],
-              ['team', 'Kurs ekibi'],
+              ['students', 'Learners'],
+              ['reports', 'Learning report'],
+              ['announcements', 'Announcements'],
+              ['questions', 'Questions and answers'],
+              ['versions', 'Publication history'],
+              ['team', 'Course team'],
             ]
               .filter(([key]) => canManage || ['team', 'versions'].includes(key))
               .map(([key, label]) => (
@@ -686,7 +857,7 @@ export default function CourseWorkspace({
       {lesson && (
         <Modal title={lesson.title} onClose={() => setSelected(undefined)}>
           <fieldset disabled={locked || uploading} className="workspace-fields">
-            <Field label="Ders başlığı">
+            <Field label="Lesson title">
               <input
                 value={lesson.title}
                 maxLength={200}
@@ -697,7 +868,7 @@ export default function CourseWorkspace({
                 }
               />
             </Field>
-            <Field label="Ders türü">
+            <Field label="Lesson type">
               <select
                 disabled={publishedLessonIds.has(lesson.id)}
                 value={lesson.type}
@@ -714,7 +885,7 @@ export default function CourseWorkspace({
                 ))}
               </select>
             </Field>
-            <Field label="Bölüm">
+            <Field label="Section">
               <select
                 value={c.sections?.find((s) => s.lessons.some((l) => l.id === lesson.id))?.id}
                 onChange={(e) =>
@@ -743,13 +914,13 @@ export default function CourseWorkspace({
                   })
                 }
               />{' '}
-              Bu ders herkese açık ön izlenebilir
+              Allow public preview of this lesson
             </label>
             <Field
               label={
                 lesson.type === 'ASSIGNMENT'
-                  ? 'Ödev yönergesi ve değerlendirme ölçütleri'
-                  : 'Ders metni'
+                  ? 'Assignment instructions and assessment criteria'
+                  : 'Lesson text'
               }
             >
               <RichTextEditor
@@ -764,7 +935,18 @@ export default function CourseWorkspace({
             </Field>
             {lesson.type === 'VIDEO' && (
               <>
-                <Field label="Ders videosu">
+                <Field label="Search course videos">
+                  <input
+                    aria-label="Search course videos"
+                    placeholder="Search videos by filename"
+                    value={mediaSearch}
+                    onChange={(e) => {
+                      setMediaSearch(e.target.value);
+                      setMediaPage(0);
+                    }}
+                  />
+                </Field>
+                <Field label="Lesson video">
                   <select
                     value={lesson.videoUrl || ''}
                     onChange={(e) =>
@@ -773,10 +955,10 @@ export default function CourseWorkspace({
                       })
                     }
                   >
-                    <option value="">Video seç</option>
+                    <option value="">Select video</option>
                     {lesson.videoUrl &&
                       !media.data?.content.some((m) => m.streamUrl === lesson.videoUrl) && (
-                        <option value={lesson.videoUrl}>Mevcut video</option>
+                        <option value={lesson.videoUrl}>Current video</option>
                       )}
                     {media.data?.content
                       .filter(
@@ -792,14 +974,33 @@ export default function CourseWorkspace({
                       ))}
                   </select>
                 </Field>
-                <p className="muted">İşlenen videolar hazır olduğunda listede görünür.</p>
+                {media.error && <ErrorBox error={media.error} />}
+                <Pagination
+                  page={mediaPage}
+                  pages={media.data?.totalPages || 0}
+                  onChange={setMediaPage}
+                />
+                <p className="muted">Processed videos appear when they are ready.</p>
               </>
+            )}
+            {lesson.type === 'ASSIGNMENT' && (
+              <AssignmentPolicyEditor
+                value={w.document.assignments?.[lesson.id]}
+                onChange={(policy) =>
+                  change((next) => {
+                    next.document.assignments = {
+                      ...next.document.assignments,
+                      [lesson.id]: policy,
+                    };
+                  })
+                }
+              />
             )}
             {lesson.type === 'QUIZ' && (
               <>
-                <h3>Test ve soru bankası</h3>
+                <h3>Quiz and question bank</h3>
                 <div className="form-grid">
-                  <Field label="Geçme puanı">
+                  <Field label="Passing score">
                     <input
                       type="number"
                       min="1"
@@ -813,9 +1014,9 @@ export default function CourseWorkspace({
                     />
                   </Field>
                   {[
-                    ['maxAttempts', 'Deneme sınırı (boş: sınırsız)'],
-                    ['timeLimitSeconds', 'Süre sınırı (saniye, boş: sınırsız)'],
-                    ['questionCount', 'Bankadan seçilecek soru sayısı'],
+                    ['maxAttempts', 'Attempt limit (blank: unlimited)'],
+                    ['timeLimitSeconds', 'Time limit (seconds, blank: unlimited)'],
+                    ['questionCount', 'Number of questions to select from the bank'],
                   ].map(([key, label]) => (
                     <Field key={key} label={label}>
                       <input
@@ -843,11 +1044,11 @@ export default function CourseWorkspace({
                       })
                     }
                   />{' '}
-                  Soruları rastgele seç ve sırala
+                  Randomize question selection and order
                 </label>
                 {w.document.quizzes[lesson.id]?.questions.map((q, qi) => (
                   <article className="panel" key={q.id}>
-                    <Field label={`Soru ${qi + 1}`}>
+                    <Field label={`Question ${qi + 1}`}>
                       <textarea
                         value={q.prompt}
                         onChange={(e) =>
@@ -858,7 +1059,7 @@ export default function CourseWorkspace({
                       />
                     </Field>
                     {q.options.map((o, oi) => (
-                      <Field key={oi} label={`Seçenek ${oi + 1}`}>
+                      <Field key={oi} label={`Option ${oi + 1}`}>
                         <input
                           value={o}
                           onChange={(e) =>
@@ -869,23 +1070,76 @@ export default function CourseWorkspace({
                         />
                       </Field>
                     ))}
-                    <Field label="Doğru seçenek">
+                    <Field label="Question type">
                       <select
-                        value={q.correctOption ?? 0}
+                        value={q.questionType || 'SINGLE_CHOICE'}
                         onChange={(e) =>
                           setQuiz((quiz) => {
-                            quiz.questions[qi].correctOption = Number(e.target.value);
+                            quiz.questions[qi].questionType = e.target.value as
+                              'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
+                            quiz.questions[qi].correctOptions = [q.correctOption || 0];
                           })
                         }
                       >
-                        {q.options.map((_, i) => (
-                          <option value={i} key={i}>
-                            {i + 1}
-                          </option>
-                        ))}
+                        <option value="SINGLE_CHOICE">Single answer</option>
+                        <option value="MULTIPLE_CHOICE">Multiple answers</option>
                       </select>
                     </Field>
-                    <Field label="Sonuç açıklaması">
+                    <Field label="Question weight">
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={q.weight || 1}
+                        onChange={(e) =>
+                          setQuiz((quiz) => {
+                            quiz.questions[qi].weight = Number(e.target.value);
+                          })
+                        }
+                      />
+                    </Field>
+                    {q.questionType === 'MULTIPLE_CHOICE' && (
+                      <fieldset>
+                        <legend>Correct answers</legend>
+                        {q.options.map((option, index) => (
+                          <label key={index}>
+                            <input
+                              type="checkbox"
+                              checked={(q.correctOptions || [q.correctOption || 0]).includes(index)}
+                              onChange={(e) =>
+                                setQuiz((quiz) => {
+                                  const current = q.correctOptions || [q.correctOption || 0];
+                                  quiz.questions[qi].correctOptions = e.target.checked
+                                    ? [...current, index]
+                                    : current.filter((i) => i !== index);
+                                })
+                              }
+                            />
+                            {option || `Option ${index + 1}`}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    {q.questionType !== 'MULTIPLE_CHOICE' && (
+                      <Field label="Correct option">
+                        <select
+                          value={q.correctOption ?? 0}
+                          onChange={(e) =>
+                            setQuiz((quiz) => {
+                              quiz.questions[qi].correctOption = Number(e.target.value);
+                              quiz.questions[qi].correctOptions = [Number(e.target.value)];
+                            })
+                          }
+                        >
+                          {q.options.map((_, i) => (
+                            <option value={i} key={i}>
+                              {i + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
+                    <Field label="Answer explanation">
                       <textarea
                         value={q.explanation || ''}
                         onChange={(e) =>
@@ -905,7 +1159,7 @@ export default function CourseWorkspace({
                           })
                         }
                       >
-                        Seçenek ekle
+                        Add option
                       </button>
                       <button
                         className="text-button danger"
@@ -915,7 +1169,7 @@ export default function CourseWorkspace({
                           })
                         }
                       >
-                        Soruyu kaldır
+                        Remove question
                       </button>
                     </div>
                   </article>
@@ -928,14 +1182,14 @@ export default function CourseWorkspace({
                     })
                   }
                 >
-                  Soru ekle
+                  Add question
                 </button>
               </>
             )}
-            <h3>Kaynaklar ve altyazılar</h3>
+            <h3>Resources and subtitles</h3>
             {(w.document.materials[lesson.id] || []).map((m, i) => (
               <div className="panel" key={i}>
-                <Field label="Kaynak adı">
+                <Field label="Resource name">
                   <input
                     value={m.title}
                     onChange={(e) =>
@@ -945,7 +1199,7 @@ export default function CourseWorkspace({
                     }
                   />
                 </Field>
-                <Field label="Adres">
+                <Field label="URL">
                   <input
                     value={m.url}
                     onChange={(e) =>
@@ -955,7 +1209,7 @@ export default function CourseWorkspace({
                     }
                   />
                 </Field>
-                <Field label="Tür">
+                <Field label="Type">
                   <select
                     value={m.type}
                     onChange={(e) =>
@@ -965,12 +1219,12 @@ export default function CourseWorkspace({
                       })
                     }
                   >
-                    <option value="RESOURCE">İndirilebilir kaynak</option>
-                    <option value="SUBTITLE">WebVTT altyazı</option>
+                    <option value="RESOURCE">Downloadable resource</option>
+                    <option value="SUBTITLE">WebVTT subtitles</option>
                   </select>
                 </Field>
                 {m.type === 'SUBTITLE' && (
-                  <Field label="Dil kodu">
+                  <Field label="Language code">
                     <input
                       value={m.language || ''}
                       onChange={(e) =>
@@ -989,7 +1243,7 @@ export default function CourseWorkspace({
                     })
                   }
                 >
-                  Kaynağı kaldır
+                  Remove resource
                 </button>
               </div>
             ))}
@@ -1000,17 +1254,17 @@ export default function CourseWorkspace({
                   change((n) => {
                     n.document.materials[lesson.id] ||= [];
                     n.document.materials[lesson.id].push({
-                      title: 'Yeni kaynak',
+                      title: 'New resource',
                       url: '',
                       type: 'RESOURCE',
                     });
                   })
                 }
               >
-                Bağlantı ekle
+                Add link
               </button>
               <label className="button secondary">
-                Dosya yükle
+                Upload file
                 <input
                   className="sr-only"
                   type="file"
@@ -1031,7 +1285,7 @@ export default function CourseWorkspace({
               className="text-button danger"
               disabled={publishedLessonIds.has(lesson.id)}
               onClick={() => {
-                if (window.confirm('Ders taslaktan kaldırılsın mı?')) {
+                if (window.confirm('Remove this lesson from the draft?')) {
                   change((n) => {
                     for (const s of n.document.course.sections!)
                       s.lessons = s.lessons.filter((l) => l.id !== lesson.id);
@@ -1042,19 +1296,17 @@ export default function CourseWorkspace({
                 }
               }}
             >
-              Dersi taslaktan kaldır
+              Remove lesson from draft
             </button>
           </fieldset>
           {!!uploadError && <ErrorBox error={uploadError} />}{' '}
-          {uploading && <p role="status">Dosya yükleniyor…</p>}
+          {uploading && <p role="status">Uploading file…</p>}
           {!review && canManage && lesson.type === 'ASSIGNMENT' && (
             <AssignmentGrading courseId={courseId} lessonId={lesson.id} />
           )}
-          <p className="muted">
-            Ders değişiklikleri ana ekrandaki “Taslağı kaydet” ile kaydedilir.
-          </p>
+          <p className="muted">Lesson changes are saved with Save draft on the main editor.</p>
           <button className="button primary" onClick={() => setSelected(undefined)}>
-            Düzenlemeyi bitir
+            Finish editing
           </button>
         </Modal>
       )}
@@ -1069,7 +1321,7 @@ function VersionHistory({ courseId }: { courseId: string }) {
   });
   return (
     <section className="panel">
-      <h2>Yayın geçmişi</h2>
+      <h2>Publication history</h2>
       {q.error ? (
         <ErrorBox error={q.error} />
       ) : q.isPending ? (
@@ -1078,7 +1330,7 @@ function VersionHistory({ courseId }: { courseId: string }) {
         <ul>
           {q.data?.map((v) => (
             <li key={v.version_number}>
-              Sürüm {v.version_number} · {new Date(v.published_at).toLocaleString('tr-TR')}
+              Version {v.version_number} · {new Date(v.published_at).toLocaleString('en-US')}
             </li>
           ))}
         </ul>

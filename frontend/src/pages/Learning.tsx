@@ -39,9 +39,9 @@ export function MyLearning() {
   return (
     <>
       <PageTitle
-        eyebrow="KENDİNE AYIRDIĞIN ZAMAN"
-        title="Öğrenim alanım"
-        description="Küçük adımların, büyük birikimlere dönüşsün."
+        eyebrow="TIME FOR YOURSELF"
+        title="My learning"
+        description="Small steps build lasting knowledge."
       />
       {items.isPending ? (
         <Loading />
@@ -54,9 +54,10 @@ export function MyLearning() {
               <article className="course-card" key={e.id}>
                 <Cover
                   course={{
+                    id: e.courseId,
                     title: e.courseTitle,
                     thumbnailUrl: e.courseThumbnailUrl,
-                    categoryName: 'Öğrenme yolculuğun',
+                    categoryName: 'Your learning journey',
                   }}
                 />
                 <div className="course-card-body">
@@ -66,17 +67,17 @@ export function MyLearning() {
                   <div className="learning-progress">
                     <progress max="100" value={e.progressPercentage || 0} />
                     <small>
-                      {e.completedLessons} / {e.totalLessons} ders{' '}
-                      <b>%{Math.round(e.progressPercentage || 0)}</b>
+                      {e.completedLessons} / {e.totalLessons} lessons{' '}
+                      <b>{Math.round(e.progressPercentage || 0)}%</b>
                     </small>
                   </div>
                   {['ACTIVE', 'COMPLETED'].includes(e.status) ? (
                     <Link className="button secondary" to={`/learn/${e.id}`}>
-                      {e.status === 'COMPLETED' ? 'Kursu tekrar görüntüle' : 'Devam et'}{' '}
+                      {e.status === 'COMPLETED' ? 'Review course' : 'Continue'}{' '}
                       <ArrowRight size={16} />
                     </Link>
                   ) : (
-                    <p className="muted">Bu kayda şu anda erişilemiyor.</p>
+                    <p className="muted">This enrollment is currently unavailable.</p>
                   )}
                 </div>
               </article>
@@ -86,11 +87,11 @@ export function MyLearning() {
         </>
       ) : (
         <Empty
-          title="İlk adımını atmaya hazır mısın?"
-          text="Katıldığın kurslar burada görünecek. Seni heyecanlandıran bir konuyla başla."
+          title="Ready to take your first step?"
+          text="Your enrolled courses will appear here. Start with something that inspires you."
         >
           <Link className="button primary" to="/catalog">
-            Kursları keşfet <ArrowRight size={17} />
+            Explore courses <ArrowRight size={17} />
           </Link>
         </Empty>
       )}
@@ -143,7 +144,7 @@ export function Learning() {
     queryKey: ['materials', enrollment.data?.courseId, lesson?.id],
     queryFn: () =>
       api<Material[]>(`/courses/${enrollment.data!.courseId}/lessons/${lesson!.id}/materials`),
-    enabled: !!lesson && !!enrollment.data,
+    enabled: !!lesson && !lesson.locked && !!enrollment.data,
   });
 
   useEffect(() => {
@@ -155,6 +156,8 @@ export function Learning() {
     void client.invalidateQueries({ queryKey: ['progress', enrollmentId] });
     void client.invalidateQueries({ queryKey: ['enrollment', enrollmentId] });
     void client.invalidateQueries({ queryKey: ['enrollments'] });
+    void client.invalidateQueries({ queryKey: ['course'] });
+    void client.invalidateQueries({ queryKey: ['learning-path'] });
   };
   const update = useMutation({
     mutationFn: ({
@@ -176,6 +179,8 @@ export function Learning() {
       void client.invalidateQueries({ queryKey: ['progress', enrollmentId] });
       void client.invalidateQueries({ queryKey: ['enrollment', enrollmentId] });
       void client.invalidateQueries({ queryKey: ['enrollments'] });
+      void client.invalidateQueries({ queryKey: ['course'] });
+      void client.invalidateQueries({ queryKey: ['learning-path'] });
     },
   });
   if (enrollment.error || course.error || progress.error)
@@ -194,24 +199,24 @@ export function Learning() {
   if (!['ACTIVE', 'COMPLETED'].includes(e.status))
     return (
       <Empty
-        title="Bu kurs kaydı aktif değil"
-        text="Ödeme veya iade durumunu hesabından kontrol edebilirsin."
+        title="This course enrollment is not active"
+        text="Check the payment or refund status in your account."
       >
         <Link to="/payments" className="button primary">
-          Ödemelerim
+          My payments
         </Link>
       </Empty>
     );
   return (
     <>
       <Link className="back-link" to="/my-learning">
-        <ArrowLeft size={16} /> Öğrenim alanım
+        <ArrowLeft size={16} /> My learning
       </Link>
-      <PageTitle eyebrow="HER DERS YENİ BİR ADIM" title={e.courseTitle}>
+      <PageTitle eyebrow="EVERY LESSON IS A NEW STEP" title={e.courseTitle}>
         <div className="course-completion">
-          <strong>%{Math.round(e.progressPercentage || 0)}</strong>
+          <strong>{Math.round(e.progressPercentage || 0)}%</strong>
           <span>
-            {e.completedLessons}/{e.totalLessons} ders
+            {e.completedLessons}/{e.totalLessons} lessons
           </span>
           <progress value={e.progressPercentage || 0} max="100" />
         </div>
@@ -261,18 +266,24 @@ export function Learning() {
                   }}
                 />
               )}
-              {lesson.type === 'VIDEO' && !lesson.videoUrl && (
+              {lesson.locked && (
+                <p role="status" className="notice warning">
+                  {lesson.lockReason}
+                </p>
+              )}
+              {lesson.type === 'VIDEO' && !lesson.videoUrl && !lesson.locked && (
                 <p role="status" className="notice">
-                  Bu derse henüz video bağlanmamış. Eğitmenin videoyu derse eklemesi gerekiyor.
+                  No video is attached to this lesson yet. Your instructor needs to add one.
                 </p>
               )}
               <div className="prose">
                 <ReactMarkdown>
-                  {lesson.content || (lesson.videoUrl ? '' : 'Bu derse henüz içerik eklenmemiş.')}
+                  {lesson.content ||
+                    (lesson.videoUrl ? '' : 'No content has been added to this lesson yet.')}
                 </ReactMarkdown>
               </div>
               {!!playbackError && <ErrorBox error={playbackError} />}
-              {lesson.type === 'QUIZ' && (
+              {lesson.type === 'QUIZ' && !lesson.locked && (
                 <QuizLesson
                   key={lesson.id}
                   courseId={e.courseId}
@@ -281,7 +292,7 @@ export function Learning() {
                   onCompleted={refreshProgress}
                 />
               )}
-              {lesson.type === 'ASSIGNMENT' && (
+              {lesson.type === 'ASSIGNMENT' && !lesson.locked && (
                 <AssignmentLesson
                   key={lesson.id}
                   courseId={e.courseId}
@@ -294,12 +305,12 @@ export function Learning() {
               <div className="lesson-footer">
                 {current?.status === 'COMPLETED' ? (
                   <span className="success-text">
-                    <CheckCircle2 size={18} /> Ders tamamlandı
+                    <CheckCircle2 size={18} /> Lesson completed
                   </span>
                 ) : lesson.type === 'ARTICLE' ? (
                   <button
                     className="button primary"
-                    disabled={update.isPending || e.status !== 'ACTIVE'}
+                    disabled={lesson.locked || update.isPending || e.status !== 'ACTIVE'}
                     onClick={() =>
                       update.mutate({
                         lessonId: lesson.id,
@@ -308,15 +319,15 @@ export function Learning() {
                       })
                     }
                   >
-                    Okudum, tamamla <CheckCircle2 size={17} />
+                    I have read this lesson <CheckCircle2 size={17} />
                   </button>
                 ) : (
                   <p className="muted">
                     {lesson.type === 'VIDEO'
-                      ? 'İzleme konumun kaydedilir. Videonun %90’ı izlenince ders otomatik tamamlanır.'
+                      ? 'Your playback position is saved. The lesson completes after you watch 90% of the video.'
                       : lesson.type === 'QUIZ'
-                        ? 'Geçme puanına ulaştığında ders tamamlanır.'
-                        : 'Ödevin eğitmen tarafından kabul edilince ders tamamlanır.'}
+                        ? 'The lesson completes when you reach the passing score.'
+                        : 'The lesson completes when your instructor accepts your assignment.'}
                   </p>
                 )}
                 {lessons.indexOf(lesson) + 1 < lessons.length && (
@@ -324,11 +335,11 @@ export function Learning() {
                     className="button secondary"
                     onClick={() => setParams({ lesson: lessons[lessons.indexOf(lesson) + 1].id })}
                   >
-                    Sonraki ders <ArrowRight size={16} />
+                    Next lesson <ArrowRight size={16} />
                   </button>
                 )}
               </div>
-              <LessonMaterials courseId={e.courseId} lessonId={lesson.id} />
+              {!lesson.locked && <LessonMaterials courseId={e.courseId} lessonId={lesson.id} />}
               <LessonBookmarks
                 enrollmentId={e.id}
                 lessonId={lesson.id}
@@ -353,11 +364,14 @@ export function Learning() {
               />
             </>
           ) : (
-            <Empty title="Dersler hazırlanıyor" text="Dersler eklendiğinde burada görünecek." />
+            <Empty
+              title="Lessons are being prepared"
+              text="Lessons will appear here when they are added."
+            />
           )}
         </section>
         <aside className="lesson-sidebar panel">
-          <h3>Kurs içeriği</h3>
+          <h3>Course content</h3>
           {course.data?.sections?.map((section) => (
             <div className="lesson-group" key={section.id}>
               <h4>{section.title}</h4>
@@ -376,7 +390,7 @@ export function Learning() {
                     {l.title}
                     <small>
                       {lessonTypes[l.type]}
-                      {l.durationSeconds ? ` · ${Math.ceil(l.durationSeconds / 60)} dk` : ''}
+                      {l.durationSeconds ? ` · ${Math.ceil(l.durationSeconds / 60)} min` : ''}
                     </small>
                   </span>
                 </button>
@@ -385,7 +399,7 @@ export function Learning() {
           ))}
           {e.status === 'COMPLETED' && (
             <Link className="button primary" to={`/certificates?enrollment=${e.id}`}>
-              <Award size={17} /> Sertifikamı görüntüle
+              <Award size={17} /> View my certificate
             </Link>
           )}
         </aside>
@@ -415,7 +429,7 @@ function CertificateView({ certificate: c }: { certificate: Certificate }) {
     <>
       <div className="certificate-art">
         <Award size={52} />
-        <span className="eyebrow">BAŞARI SERTİFİKASI</span>
+        <span className="eyebrow">CERTIFICATE OF COMPLETION</span>
         <h2>{c.courseTitle}</h2>
         <p>{c.studentName}</p>
         <small>
@@ -431,14 +445,14 @@ function CertificateView({ certificate: c }: { certificate: Certificate }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Download size={17} /> PDF indir
+            <Download size={17} /> Download PDF
           </a>
         )}
         <Link
           className="button secondary"
           to={`/certificates/verify/${encodeURIComponent(c.verificationCode)}`}
         >
-          <ShieldCheck size={17} /> Doğrula
+          <ShieldCheck size={17} /> Verify
         </Link>
       </div>
     </>
@@ -471,9 +485,9 @@ export function Certificates() {
   return (
     <>
       <PageTitle
-        eyebrow="EMEĞİNİN KARŞILIĞI"
-        title="Öğrendiklerini görünür kıl."
-        description="Başarılarını keşfet, sertifikanı indir veya bir sertifikayı doğrula."
+        eyebrow="CELEBRATE YOUR PROGRESS"
+        title="Show what you have learned."
+        description="Explore your achievements, download a certificate or verify one."
       />
       {code ? (
         <section className="panel narrow">
@@ -485,14 +499,14 @@ export function Certificates() {
             verified.data && (
               <>
                 <div className="notice success">
-                  <ShieldCheck size={20} /> Sertifika doğrulandı.
+                  <ShieldCheck size={20} /> Certificate verified.
                 </div>
                 <CertificateView certificate={verified.data} />
               </>
             )
           )}
           <Link className="back-link" to="/certificates">
-            <ArrowLeft size={16} /> Sertifikalara dön
+            <ArrowLeft size={16} /> Back to certificates
           </Link>
         </section>
       ) : (
@@ -515,11 +529,11 @@ export function Certificates() {
                 </div>
                 {!enrolled.data?.content.some((e) => e.status === 'COMPLETED') && (
                   <Empty
-                    title="Bir başarı hikâyesi yazılıyor."
-                    text="Tamamladığın kursların sertifikaları burada yer alacak. Kaldığın yerden devam et."
+                    title="Your success story is taking shape."
+                    text="Certificates for completed courses will appear here. Keep learning."
                   >
                     <Link to="/my-learning" className="button primary">
-                      Öğrenim alanına git
+                      Go to my learning
                     </Link>
                   </Empty>
                 )}
@@ -530,13 +544,13 @@ export function Certificates() {
           <section className="panel verify-panel">
             <ShieldCheck size={32} />
             <div>
-              <h2>Sertifika doğrula</h2>
-              <p>Bir sertifikanın geçerliliğini doğrulama koduyla kontrol et.</p>
+              <h2>Verify a certificate</h2>
+              <p>Check a certificate using its verification code.</p>
               <form onSubmit={verify}>
-                <Field label="Doğrulama kodu">
-                  <input name="code" required placeholder="Sertifikanın üzerindeki kod" />
+                <Field label="Verification code">
+                  <input name="code" required placeholder="The code printed on the certificate" />
                 </Field>
-                <Submit busy={false}>Sertifikayı doğrula</Submit>
+                <Submit busy={false}>Verify certificate</Submit>
               </form>
             </div>
           </section>

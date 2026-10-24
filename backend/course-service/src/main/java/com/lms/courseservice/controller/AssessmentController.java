@@ -19,13 +19,23 @@ public class AssessmentController {
 
     private final AssessmentService service;
 
+    @GetMapping("/assignment/policy")
+    public ApiResponse<?> policy(@PathVariable UUID courseId,@PathVariable UUID lessonId,@AuthenticationPrincipal AuthenticatedUser user) {
+        return ApiResponse.success(service.assignmentPolicy(courseId,lessonId,user),"Assignment policy");
+    }
+    @PutMapping("/assignment/policy")
+    public ApiResponse<?> savePolicy(@PathVariable UUID courseId,@PathVariable UUID lessonId,
+        @Valid @RequestBody com.lms.courseservice.service.AssignmentPolicyService.Policy input,@AuthenticationPrincipal AuthenticatedUser user) {
+        return ApiResponse.success(service.saveAssignmentPolicy(courseId,lessonId,input,user),"Assignment policy saved");
+    }
+
     @GetMapping("/quiz")
     public ApiResponse<AssessmentService.PublicQuiz> quiz(
         @PathVariable UUID courseId,
         @PathVariable UUID lessonId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.view(courseId, lessonId, user), "Başarılı");
+        return ApiResponse.success(service.view(courseId, lessonId, user), "Successful");
     }
 
     @GetMapping("/quiz/manage")
@@ -34,7 +44,7 @@ public class AssessmentController {
         @PathVariable UUID lessonId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.manage(courseId, lessonId, user), "Başarılı");
+        return ApiResponse.success(service.manage(courseId, lessonId, user), "Successful");
     }
 
     @PutMapping("/quiz/manage")
@@ -44,7 +54,7 @@ public class AssessmentController {
         @Valid @RequestBody AssessmentService.Quiz request,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.save(courseId, lessonId, request, user), "Test kaydedildi");
+        return ApiResponse.success(service.save(courseId, lessonId, request, user), "Quiz saved");
     }
 
     @PostMapping("/quiz/start")
@@ -54,7 +64,7 @@ public class AssessmentController {
         @Valid @RequestBody AssessmentService.StartInput request,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.start(courseId, lessonId, request, user), "Test başladı");
+        return ApiResponse.success(service.start(courseId, lessonId, request, user), "Quiz started");
     }
 
     @GetMapping("/assignment/history")
@@ -63,7 +73,7 @@ public class AssessmentController {
         @PathVariable UUID lessonId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.assignmentHistory(courseId, lessonId, user), "Teslim geçmişi");
+        return ApiResponse.success(service.assignmentHistory(courseId, lessonId, user), "Submission history");
     }
 
     @PostMapping("/quiz/attempts")
@@ -75,7 +85,7 @@ public class AssessmentController {
     ) {
         return ApiResponse.success(
             service.attempt(courseId, lessonId, request, user),
-            "Test değerlendirildi"
+            "Quiz graded"
         );
     }
 
@@ -85,7 +95,7 @@ public class AssessmentController {
         @PathVariable UUID lessonId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.attempts(courseId, lessonId, user), "Başarılı");
+        return ApiResponse.success(service.attempts(courseId, lessonId, user), "Successful");
     }
 
     @GetMapping("/assignment/my")
@@ -94,7 +104,7 @@ public class AssessmentController {
         @PathVariable UUID lessonId,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.mine(courseId, lessonId, user), "Başarılı");
+        return ApiResponse.success(service.mine(courseId, lessonId, user), "Successful");
     }
 
     @PostMapping("/assignment")
@@ -104,7 +114,7 @@ public class AssessmentController {
         @Valid @RequestBody AssessmentService.SubmissionInput request,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.submit(courseId, lessonId, request, user), "Ödev gönderildi");
+        return ApiResponse.success(service.submit(courseId, lessonId, request, user), "Assignment submitted");
     }
 
     @GetMapping("/assignment/submissions")
@@ -114,7 +124,7 @@ public class AssessmentController {
         @AuthenticationPrincipal AuthenticatedUser user,
         Pageable pageable
     ) {
-        return ApiResponse.success(service.submissions(courseId, lessonId, user, pageable), "Başarılı");
+        return ApiResponse.success(service.submissions(courseId, lessonId, user, pageable), "Successful");
     }
 
     @PutMapping("/assignment/submissions/{submissionId}")
@@ -127,7 +137,7 @@ public class AssessmentController {
     ) {
         return ApiResponse.success(
             service.grade(courseId, lessonId, submissionId, request, user),
-            "Ödev değerlendirildi"
+            "Assignment graded"
         );
     }
 }

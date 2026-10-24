@@ -20,7 +20,7 @@ public class CourseWorkspaceController {
     @GetMapping("/{id}/workspace")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     public ApiResponse<?> get(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-        return ApiResponse.success(service.get(id, user), "Taslak");
+        return ApiResponse.success(service.get(id, user), "Draft");
     }
 
     @PutMapping("/{id}/workspace")
@@ -30,7 +30,7 @@ public class CourseWorkspaceController {
         @Valid @RequestBody CourseWorkspaceService.Save input,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.save(id, input, user), "Taslak kaydedildi");
+        return ApiResponse.success(service.save(id, input, user), "Draft saved");
     }
 
     @PostMapping("/{id}/workspace/submit")
@@ -40,25 +40,25 @@ public class CourseWorkspaceController {
         @RequestParam long revision,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.submit(id, revision, user), "İncelemeye gönderildi");
+        return ApiResponse.success(service.submit(id, revision, user), "Submitted for review");
     }
 
     @PostMapping("/{id}/workspace/withdraw")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     public ApiResponse<?> withdraw(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-        return ApiResponse.success(service.withdraw(id, user), "Başvuru geri çekildi");
+        return ApiResponse.success(service.withdraw(id, user), "Submission withdrawn");
     }
 
     @GetMapping("/{id}/versions")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     public ApiResponse<?> versions(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser user) {
-        return ApiResponse.success(service.history(id, user), "Sürümler");
+        return ApiResponse.success(service.history(id, user), "Versions");
     }
 
     @GetMapping("/admin/workspaces")
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<?> pending(@AuthenticationPrincipal AuthenticatedUser user) {
-        return ApiResponse.success(service.pending(user), "İncelemeler");
+        return ApiResponse.success(service.pending(user), "Reviews");
     }
 
     @PostMapping("/admin/{id}/workspace/decision")
@@ -69,7 +69,7 @@ public class CourseWorkspaceController {
         @Valid @RequestBody CourseWorkspaceService.Decision input,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.decide(id, revision, input, user), "Karar kaydedildi");
+        return ApiResponse.success(service.decide(id, revision, input, user), "Decision saved");
     }
 
     @GetMapping("/{id}/lessons/{lesson}/materials")
@@ -79,6 +79,6 @@ public class CourseWorkspaceController {
         @PathVariable UUID lesson,
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return ApiResponse.success(service.materials(id, lesson, user), "Kaynaklar");
+        return ApiResponse.success(service.materials(id, lesson, user), "Resources");
     }
 }

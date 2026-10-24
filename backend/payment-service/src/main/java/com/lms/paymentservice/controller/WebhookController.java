@@ -34,11 +34,11 @@ public class WebhookController {
             event = Webhook.constructEvent(
                     payload, sigHeader, stripeConfig.getWebhookSecret());
         } catch (SignatureVerificationException e) {
-            log.warn("Geçersiz Stripe webhook imzası");
-            return ResponseEntity.badRequest().body("Geçersiz imza");
+            log.warn("Invalid Stripe webhook signature");
+            return ResponseEntity.badRequest().body("Invalid signature");
         }
 
-        log.info("Stripe webhook alındı: {}", event.getType());
+        log.info("Stripe webhook received: {}", event.getType());
 
         Optional<StripeObject> stripeObject = event.getDataObjectDeserializer()
                 .getObject();
@@ -64,7 +64,7 @@ public class WebhookController {
                 }
             }
 
-            default -> log.debug("İşlenmeyen webhook tipi: {}", event.getType());
+            default -> log.debug("Unhandled webhook type: {}", event.getType());
         }
 
         return ResponseEntity.ok("OK");

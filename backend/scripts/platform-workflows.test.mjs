@@ -1,3 +1,4 @@
+import { decodeMailhogMessage } from './mailhog.mjs';
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, createHmac } from "node:crypto";
@@ -111,7 +112,7 @@ describe(
       workspace.document.course.targetAudience =
         "Students starting their first project";
       workspace.document.course.level = "BEGINNER";
-      workspace.document.course.language = "Türkçe";
+      workspace.document.course.language = "English";
       workspace.document.course.outcomes = ["Complete a practical project"];
       workspace.document.course.requirements = ["No prerequisites"];
       workspace.document.course.sections = [
@@ -443,7 +444,7 @@ describe(
       await req("DELETE", `/courses/${course.id}/wishlist`, student);
       const found = await req(
         "GET",
-        "/courses/discover?query=Pilot%20revised&level=BEGINNER&language=Türkçe&free=true",
+        "/courses/discover?query=Pilot%20revised&level=BEGINNER&language=English&free=true",
       );
       assert.ok(found.content.some((c) => c.id === course.id));
     });
@@ -621,11 +622,7 @@ describe(
             !m.Content?.Headers?.To?.some((to) => to.includes(temp.user.email))
           )
             continue;
-          const decoded = (m.Content.Body || "")
-            .replace(/=\r?\n/g, "")
-            .replace(/=([0-9A-F]{2})/gi, (_, hex) =>
-              String.fromCharCode(parseInt(hex, 16)),
-            );
+          const decoded = decodeMailhogMessage(m);
           const match = decoded.match(/reset-password\?token=([^"\s<]+)/);
           if (match)
             token = decodeURIComponent(match[1].replace(/&amp;.*/, ""));

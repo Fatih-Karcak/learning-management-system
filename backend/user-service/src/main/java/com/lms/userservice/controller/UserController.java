@@ -28,13 +28,13 @@ public class UserController {
             @AuthenticationPrincipal UserDetails userDetails) {
         UUID userId = UUID.fromString(userDetails.getUsername());
         return ResponseEntity.ok(
-                ApiResponse.success(userService.getUserById(userId), "Başarılı"));
+                ApiResponse.success(userService.getUserById(userId), "Successful"));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable UUID id) {
         return ResponseEntity.ok(
-                ApiResponse.success(userService.getUserById(id), "Başarılı"));
+                ApiResponse.success(userService.getUserById(id), "Successful"));
     }
 
     @PutMapping("/me")
@@ -43,7 +43,7 @@ public class UserController {
             @Valid @RequestBody UpdateProfileRequest request) {
         UUID userId = UUID.fromString(userDetails.getUsername());
         return ResponseEntity.ok(
-                ApiResponse.success(userService.updateProfile(userId, request), "Profil güncellendi"));
+                ApiResponse.success(userService.updateProfile(userId, request), "Profile updated"));
     }
 
     @GetMapping("/search")
@@ -51,7 +51,7 @@ public class UserController {
     public ResponseEntity<ApiResponse<Page<UserResponse>>> searchUsers(
             @RequestParam String query, Pageable pageable) {
         return ResponseEntity.ok(
-                ApiResponse.success(userService.searchUsers(query, pageable), "Başarılı"));
+                ApiResponse.success(userService.searchUsers(query, pageable), "Successful"));
     }
 
     @DeleteMapping("/me")
@@ -59,6 +59,6 @@ public class UserController {
             @AuthenticationPrincipal UserDetails userDetails) {
         UUID userId = UUID.fromString(userDetails.getUsername());
         userService.deactivateUser(userId);
-        return ResponseEntity.ok(ApiResponse.success(null, "Hesap devre dışı bırakıldı"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Account deactivated"));
     }
 }

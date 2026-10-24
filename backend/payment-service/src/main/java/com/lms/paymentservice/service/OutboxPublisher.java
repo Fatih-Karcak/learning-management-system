@@ -53,7 +53,7 @@ public class OutboxPublisher {
             } catch (Exception e) {
 
                 log.error(
-                        "Outbox gönderilemedi. ID: {}",
+                        "Outbox delivery failed. ID: {}",
                         event.getId(),
                         e
                 );

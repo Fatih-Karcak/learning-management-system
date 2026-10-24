@@ -9,6 +9,8 @@ import java.util.UUID;
 
 @HttpExchange(url = "/api/v1/internal/users")
 public interface UserClient {
+    @GetExchange("/by-email")
+    UserInfoResult byEmail(@org.springframework.web.bind.annotation.RequestParam String email);
     @GetExchange("/{id}")
     UserInfoResult getUserById(@PathVariable UUID id);
 }

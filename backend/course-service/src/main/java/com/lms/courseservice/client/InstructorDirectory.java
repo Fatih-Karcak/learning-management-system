@@ -58,7 +58,7 @@ public class InstructorDirectory {
                 .body(Envelope.class);
             if (
                 result == null || !result.success() || result.data() == null
-            ) throw new IllegalStateException("Eğitmen doğrulanamadı");
+            ) throw new IllegalStateException("The instructor could not be verified");
             return result.data();
         } catch (
             org.springframework.web.client.RestClientResponseException ex
@@ -66,11 +66,11 @@ public class InstructorDirectory {
             if (
                 ex.getStatusCode().value() == 404
             ) throw new IllegalArgumentException(
-                "Bu e-posta adresiyle kayıtlı aktif eğitmen bulunamadı"
+                "No active instructor is registered with this email address"
             );
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-                "Eğitmen bilgisi doğrulanamadı"
+                "Instructor details could not be verified"
             );
         }
     }

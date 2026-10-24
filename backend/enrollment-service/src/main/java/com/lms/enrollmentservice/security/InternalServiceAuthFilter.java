@@ -28,7 +28,7 @@ public class InternalServiceAuthFilter
 
         if (key == null || key.length() < 32) {
             throw new IllegalStateException(
-                    "INTERNAL_API_KEY en az 32 karakter olmalı"
+                    "INTERNAL_API_KEY must contain at least 32 characters"
             );
         }
 

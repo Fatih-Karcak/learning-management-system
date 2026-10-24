@@ -92,7 +92,7 @@ public class JwtTokenProvider {
                 claims.getIssuedAt() != null
             );
         } catch (JwtException | IllegalArgumentException e) {
-            log.error("Geçersiz JWT token: {}", e.getMessage());
+            log.error("Invalid JWT token: {}", e.getMessage());
             return false;
         }
     }

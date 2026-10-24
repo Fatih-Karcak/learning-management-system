@@ -35,14 +35,14 @@ public class ReviewController {
                 ApiResponse.success(
                         reviewService.createReview(courseId, request, user.id(),
                                 user.displayName(), avatarUrl),
-                        "Yorum eklendi"));
+                        "Review added"));
     }
 
     @GetMapping("/course/{courseId}")
     public ResponseEntity<ApiResponse<Page<ReviewResponse>>> getCourseReviews(
             @PathVariable UUID courseId, Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
-                reviewService.getCourseReviews(courseId, pageable), "Başarılı"));
+                reviewService.getCourseReviews(courseId, pageable), "Successful"));
     }
 
     @DeleteMapping("/{id}")
@@ -50,6 +50,6 @@ public class ReviewController {
             @PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser user) {
         reviewService.deleteReview(id, user.id());
-        return ResponseEntity.ok(ApiResponse.success(null, "Yorum silindi"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Review deleted"));
     }
 }

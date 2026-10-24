@@ -40,7 +40,7 @@ export function Profile() {
       delete data.newPassword;
       delete data.currentPassword;
     } else if (!data.currentPassword) {
-      setError(new Error('Şifrenizi değiştirmek için mevcut şifrenizi yazın.'));
+      setError(new Error('Enter your current password to change your password.'));
       setBusy(false);
       return;
     }
@@ -55,11 +55,7 @@ export function Profile() {
     }
   }
   async function deactivate() {
-    if (
-      !window.confirm(
-        'Hesabınız devre dışı bırakılacak ve oturumunuz kapatılacak. Devam edilsin mi?',
-      )
-    )
+    if (!window.confirm('Your account will be deactivated and you will be signed out. Continue?'))
       return;
     setDeactivating(true);
     setError(null);
@@ -75,9 +71,9 @@ export function Profile() {
   return (
     <>
       <PageTitle
-        eyebrow="SANA AİT BİR ALAN"
-        title="Hesap ayarları"
-        description="Profilini güncelle, hesabını güvenle yönet."
+        eyebrow="YOUR PERSONAL SPACE"
+        title="Account settings"
+        description="Update your profile and manage your account securely."
       />
       <div className="profile-layout">
         <aside className="panel profile-summary">
@@ -89,24 +85,24 @@ export function Profile() {
           <Badge value={user.status} />
           <p>
             {user.role === 'STUDENT'
-              ? 'Öğrenci'
+              ? 'Learner'
               : user.role === 'INSTRUCTOR'
-                ? 'Eğitmen'
-                : 'Yönetici'}{' '}
+                ? 'Instructor'
+                : 'Administrator'}{' '}
             · {date(user.createdAt)}
           </p>
           <div className="notice">
             <Mail size={18} />
             {user.emailVerified
-              ? 'E-posta adresin doğrulandı.'
-              : 'E-postandaki bağlantıdan adresini doğrula.'}
+              ? 'Your email address is verified.'
+              : 'Verify your email address using the link in your inbox.'}
           </div>
         </aside>
         <div>
           <form className="panel" onSubmit={submit}>
-            <h2>Profil bilgilerin</h2>
+            <h2>Your profile</h2>
             <div className="form-grid">
-              <Field label="Ad">
+              <Field label="First name">
                 <input
                   name="firstName"
                   required
@@ -114,7 +110,7 @@ export function Profile() {
                   autoComplete="given-name"
                 />
               </Field>
-              <Field label="Soyad">
+              <Field label="Last name">
                 <input
                   name="lastName"
                   required
@@ -123,7 +119,7 @@ export function Profile() {
                 />
               </Field>
             </div>
-            <Field label="Telefon">
+            <Field label="Phone number">
               <input
                 name="phoneNumber"
                 type="tel"
@@ -131,10 +127,10 @@ export function Profile() {
                 autoComplete="tel"
               />
             </Field>
-            <Field label="Hakkında">
+            <Field label="About you">
               <textarea name="bio" rows={4} defaultValue={user.bio} />
             </Field>
-            <Field label="Profil görseli adresi">
+            <Field label="Profile image URL">
               <input
                 name="avatarUrl"
                 type="url"
@@ -143,13 +139,13 @@ export function Profile() {
               />
             </Field>
             <hr />
-            <h3>Şifre değiştir</h3>
-            <p className="muted">Şifreni değiştirmek istemiyorsan bu alanları boş bırak.</p>
+            <h3>Change password</h3>
+            <p className="muted">Leave these fields blank to keep your current password.</p>
             <div className="form-grid">
-              <Field label="Mevcut şifre">
+              <Field label="Current password">
                 <input name="currentPassword" type="password" autoComplete="current-password" />
               </Field>
-              <Field label="Yeni şifre">
+              <Field label="New password">
                 <input
                   name="newPassword"
                   type="password"
@@ -159,18 +155,18 @@ export function Profile() {
               </Field>
             </div>
             {!!error && <ErrorBox error={error} />}{' '}
-            {saved && <Success>Profilin güncellendi.</Success>}
-            <Submit busy={busy}>Değişiklikleri kaydet</Submit>
+            {saved && <Success>Your profile has been updated.</Success>}
+            <Submit busy={busy}>Save changes</Submit>
           </form>
           <section className="panel danger-zone">
-            <h3>Hesabı devre dışı bırak</h3>
-            <p>Hesabına erişimin kapanır ve oturumun sonlandırılır.</p>
+            <h3>Deactivate account</h3>
+            <p>Your account access and active sessions will end.</p>
             <button
               className="button danger-button"
               disabled={deactivating}
               onClick={() => void deactivate()}
             >
-              Hesabımı devre dışı bırak
+              Deactivate my account
             </button>
           </section>
         </div>
@@ -194,9 +190,9 @@ export function Payments() {
   return (
     <>
       <PageTitle
-        eyebrow="ÖĞRENMEYE YAPTIĞIN YATIRIM"
-        title="Ödemelerim"
-        description="İşlemlerini incele, makbuzlarına ulaş ve iade talebi oluştur."
+        eyebrow="YOUR INVESTMENT IN LEARNING"
+        title="My payments"
+        description="Review transactions, access receipts and request a refund."
       />
       {payments.isPending ? (
         <Loading />
@@ -209,11 +205,11 @@ export function Payments() {
               <table>
                 <thead>
                   <tr>
-                    <th>Kurs / İşlem</th>
-                    <th>Tarih</th>
-                    <th>Tutar</th>
-                    <th>Durum</th>
-                    <th>İşlemler</th>
+                    <th>Course / Transaction</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -241,12 +237,12 @@ export function Payments() {
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              Makbuz <ExternalLink size={14} />
+                              Receipt <ExternalLink size={14} />
                             </a>
                           )}
                           {p.status === 'COMPLETED' && (
                             <button className="text-button" onClick={() => setRefundPayment(p)}>
-                              İade iste
+                              Request refund
                             </button>
                           )}
                         </div>
@@ -261,21 +257,21 @@ export function Payments() {
         </>
       ) : (
         <Empty
-          title="Henüz bir ödeme kaydın yok"
-          text="Kurslar için yaptığın ödemeleri ve işlem durumlarını burada görebilirsin."
+          title="You have no payments yet"
+          text="Your course payments and transaction status will appear here."
         >
           <Link to="/catalog" className="button primary">
-            <CreditCard size={17} /> Kursları keşfet
+            <CreditCard size={17} /> Explore courses
           </Link>
         </Empty>
       )}
       {refundPayment && (
-        <Modal title="İade talebi oluştur" onClose={() => setRefundPayment(undefined)}>
+        <Modal title="Create refund request" onClose={() => setRefundPayment(undefined)}>
           <RefundForm payment={refundPayment} />
         </Modal>
       )}
       {selected && (
-        <Modal title="Ödeme ayrıntısı" onClose={() => setSelected(undefined)}>
+        <Modal title="Payment details" onClose={() => setSelected(undefined)}>
           {details.isPending ? (
             <Loading />
           ) : details.error ? (
@@ -288,7 +284,7 @@ export function Payments() {
                 <Badge value={details.data.status} />
                 <p>{date(details.data.createdAt)}</p>
                 <Link className="button secondary" to={`/courses/${details.data.courseId}`}>
-                  Kursu görüntüle
+                  View course
                 </Link>
               </>
             )
@@ -314,23 +310,23 @@ function RefundForm({ payment }: { payment: Payment }) {
   }
   return refund.isSuccess ? (
     <>
-      <Success>İade talebin alındı.</Success>
+      <Success>Your refund request has been received.</Success>
       <Badge value={refund.data.status} />
       <p>{money(refund.data.amount, payment.currency)}</p>
-      <p>İşlem sonucunu ödemeler sayfasından takip edebilirsin.</p>
+      <p>Track the result on the payments page.</p>
     </>
   ) : (
     <form onSubmit={submit}>
       <h3>{payment.courseTitle}</h3>
-      <p>İşlem tutarı: {money(payment.amount, payment.currency)}</p>
-      <Field label="İade nedeni">
+      <p>Transaction amount: {money(payment.amount, payment.currency)}</p>
+      <Field label="Reason for refund">
         <textarea name="reason" required minLength={3} rows={4} />
       </Field>
       <p className="muted">
-        İade, sağlayıcının koşullarına göre değerlendirilir. İade edilen kurslara erişim sona erer.
+        Refunds are reviewed under the provider's terms. Access to refunded courses ends.
       </p>
       {refund.error && <ErrorBox error={refund.error} />}
-      <Submit busy={refund.isPending}>İade talebini gönder</Submit>
+      <Submit busy={refund.isPending}>Submit refund request</Submit>
     </form>
   );
 }
@@ -344,9 +340,9 @@ export function Notifications() {
   return (
     <>
       <PageTitle
-        eyebrow="YOLCULUĞUNDAN HABERLER"
-        title="Bildirimler"
-        description="Eğitimlerin, ödemelerin ve hesabınla ilgili e-posta bildirimleri."
+        eyebrow="NEWS FROM YOUR LEARNING JOURNEY"
+        title="Notifications"
+        description="Email notifications about your courses, payments and account."
       />
       <Inbox />
       {items.isPending ? (
@@ -373,8 +369,8 @@ export function Notifications() {
         </>
       ) : (
         <Empty
-          title="Şimdilik her şey sakin."
-          text="Yeni bildirimlerin burada görünecek. Öğrenmeye devam et."
+          title="You are all caught up."
+          text="New notifications will appear here. Keep learning."
         />
       )}
     </>
@@ -417,9 +413,9 @@ export function AdminUsers() {
   return (
     <>
       <PageTitle
-        eyebrow="YÖNETİCİ ALANI"
-        title="Kullanıcılar"
-        description="Kullanıcıları ara; rol, erişim durumu ve yönetici işlemlerini yönet."
+        eyebrow="ADMINISTRATION"
+        title="Users"
+        description="Search users and manage roles, access and administrative actions."
       />
       <AdminNavigation />
       <form
@@ -432,12 +428,12 @@ export function AdminUsers() {
       >
         <Search size={19} />
         <input
-          aria-label="Kullanıcı ara"
+          aria-label="Search users"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ad veya e-posta ile ara"
+          placeholder="Search by name or email"
         />
-        <button className="button primary small">Ara</button>
+        <button className="button primary small">Search</button>
       </form>
       {users.isPending ? (
         <Loading />
@@ -450,10 +446,10 @@ export function AdminUsers() {
               <table>
                 <thead>
                   <tr>
-                    <th>Kullanıcı</th>
-                    <th>Rol</th>
-                    <th>Durum</th>
-                    <th>Kayıt tarihi</th>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
                     <th />
                   </tr>
                 </thead>
@@ -468,10 +464,10 @@ export function AdminUsers() {
                       </td>
                       <td>
                         {u.role === 'STUDENT'
-                          ? 'Öğrenci'
+                          ? 'Learner'
                           : u.role === 'INSTRUCTOR'
-                            ? 'Eğitmen'
-                            : 'Yönetici'}
+                            ? 'Instructor'
+                            : 'Administrator'}
                       </td>
                       <td>
                         <Badge value={u.status} />
@@ -479,7 +475,7 @@ export function AdminUsers() {
                       <td>{date(u.createdAt)}</td>
                       <td>
                         <button className="text-button" onClick={() => setSelected(u.id)}>
-                          İncele
+                          Review
                         </button>
                       </td>
                     </tr>
@@ -491,13 +487,10 @@ export function AdminUsers() {
           <Pagination page={page} pages={users.data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <Empty
-          title="Kullanıcı bulunamadı"
-          text="Farklı bir ad veya e-posta ile tekrar arayabilirsin."
-        />
+        <Empty title="No users found" text="Try another name or email address." />
       )}
       {selected && (
-        <Modal title="Kullanıcı bilgileri" onClose={() => setSelected(undefined)}>
+        <Modal title="User details" onClose={() => setSelected(undefined)}>
           {details.isPending ? (
             <Loading />
           ) : details.error ? (
@@ -511,53 +504,53 @@ export function AdminUsers() {
                 </h3>
                 <p>{details.data.email}</p>
                 <Badge value={details.data.status} />
-                <p>{details.data.bio || 'Profil açıklaması bulunmuyor.'}</p>
+                <p>{details.data.bio || 'No profile description available.'}</p>
                 <p>{details.data.phoneNumber}</p>
                 <p>
                   <Shield size={16} />{' '}
-                  {details.data.emailVerified ? 'E-posta doğrulandı' : 'E-posta doğrulanmadı'}
+                  {details.data.emailVerified ? 'Email verified' : 'Email not verified'}
                 </p>
                 {selected !== session?.user.id && (
                   <form
                     key={`${selected}-${details.data.role}-${details.data.status}`}
                     onSubmit={(e) => {
                       e.preventDefault();
-                      if (window.confirm('Kullanıcının rolü ve erişim durumu güncellensin mi?'))
+                      if (window.confirm("Update this user's role and access status?"))
                         update.mutate(Object.fromEntries(new FormData(e.currentTarget)));
                     }}
                   >
-                    <Field label="Kullanıcı rolü">
+                    <Field label="User role">
                       <select name="role" defaultValue={details.data.role}>
-                        <option value="STUDENT">Öğrenci</option>
-                        <option value="INSTRUCTOR">Eğitmen</option>
-                        <option value="ADMIN">Yönetici</option>
+                        <option value="STUDENT">Learner</option>
+                        <option value="INSTRUCTOR">Instructor</option>
+                        <option value="ADMIN">Administrator</option>
                       </select>
                     </Field>
-                    <Field label="Yönetici kapsamı (yalnızca yönetici rolünde uygulanır)">
+                    <Field label="Administrator scope (applies only to administrators)">
                       <select name="scope" defaultValue={details.data.adminScope || 'FULL'}>
-                        <option value="FULL">Tam yönetim</option>
-                        <option value="MODERATION">Kurs ve içerik moderasyonu</option>
-                        <option value="SUPPORT">Destek ve kayıt işlemleri</option>
+                        <option value="FULL">Full administration</option>
+                        <option value="MODERATION">Course and content moderation</option>
+                        <option value="SUPPORT">Support and enrollment management</option>
                       </select>
                     </Field>
-                    <Field label="Hesap durumu">
+                    <Field label="Account status">
                       <select name="status" defaultValue={details.data.status}>
-                        <option value="ACTIVE">Aktif</option>
-                        <option value="INACTIVE">Pasif</option>
-                        <option value="BANNED">Yasaklandı</option>
-                        <option value="PENDING_VERIFICATION">E-posta doğrulaması bekliyor</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="INACTIVE">Inactive</option>
+                        <option value="BANNED">Banned</option>
+                        <option value="PENDING_VERIFICATION">Awaiting email verification</option>
                       </select>
                     </Field>
-                    <Field label="Kullanıcı değişikliği gerekçesi">
+                    <Field label="Reason for user change">
                       <textarea name="reason" minLength={3} maxLength={1000} required />
                     </Field>
                     {update.error && <ErrorBox error={update.error} />}{' '}
                     {update.isSuccess && (
                       <Success>
-                        Kullanıcı güncellendi. Eski yetkiler sonraki istekte geçersizleşir.
+                        The user has been updated. Previous permissions expire on the next request.
                       </Success>
                     )}
-                    <Submit busy={update.isPending}>Kullanıcı yetkilerini kaydet</Submit>
+                    <Submit busy={update.isPending}>Save user permissions</Submit>
                   </form>
                 )}
               </div>

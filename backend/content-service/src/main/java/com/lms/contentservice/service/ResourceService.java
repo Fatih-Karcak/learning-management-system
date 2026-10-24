@@ -71,7 +71,7 @@ public class ResourceService {
             data.length == 0 || data.length > 25 * 1024 * 1024
         ) throw new ResponseStatusException(
             HttpStatus.PAYLOAD_TOO_LARGE,
-            "Dosya 25 MB sınırını aşıyor veya boş"
+            "The file is empty or exceeds 25 MB"
         );
         String lower = name.toLowerCase(Locale.ROOT);
         if (
@@ -87,21 +87,21 @@ public class ResourceService {
                     .decode(ByteBuffer.wrap(data))
                     .toString();
             } catch (CharacterCodingException e) {
-                throw new IllegalArgumentException("Metin UTF-8 olmalı");
+                throw new IllegalArgumentException("Text must use UTF-8 encoding");
             }
             if (text.indexOf(0) >= 0) throw new IllegalArgumentException(
-                "Metin dosyası geçersiz"
+                "Invalid text file"
             );
             if (lower.endsWith(".vtt")) {
                 if (
                     data.length > 1024 * 1024
                 ) throw new IllegalArgumentException(
-                    "Altyazı en fazla 1 MB olabilir"
+                    "Subtitles must not exceed 1 MB"
                 );
                 if (
                     !text.stripLeading().startsWith("WEBVTT")
                 ) throw new IllegalArgumentException(
-                    "Geçerli WebVTT altyazısı gerekli"
+                    "A valid WebVTT subtitle file is required"
                 );
                 return "text/vtt";
             }
@@ -109,7 +109,7 @@ public class ResourceService {
         }
         throw new ResponseStatusException(
             HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-            "Yalnızca PDF, UTF-8 TXT ve WebVTT kabul edilir"
+            "Only PDF, UTF-8 TXT and WebVTT files are accepted"
         );
     }
 
@@ -141,12 +141,12 @@ public class ResourceService {
                 !status.startsWith("stream: OK")
             ) throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY,
-                "Dosya güvenlik taramasından geçemedi"
+                "The file did not pass the security scan"
             );
         } catch (IOException e) {
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "Dosya tarama servisi kullanılamıyor"
+                "The file scanning service is unavailable"
             );
         }
     }
@@ -161,20 +161,20 @@ public class ResourceService {
     ) throws IOException {
         if (
             !Set.of("MATERIAL", "ASSIGNMENT").contains(purpose)
-        ) throw new IllegalArgumentException("Dosya amacı geçersiz");
+        ) throw new IllegalArgumentException("Invalid file purpose");
         boolean owner = courses.owner(course, user);
         if (
             purpose.equals("MATERIAL") &&
             !Set.of("INSTRUCTOR", "ADMIN").contains(role)
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Kaynak yüklemek için eğitmen yetkisi gerekli"
+            "Instructor access is required to upload resources"
         );
         if (
             purpose.equals("MATERIAL") && !courses.canEdit(course, user)
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Yalnızca kurs eğitmeni kaynak ekleyebilir"
+            "Only a course author can add resources"
         );
         if (
             purpose.equals("ASSIGNMENT") &&
@@ -184,13 +184,13 @@ public class ResourceService {
                 ))
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Ödev dosyası için öğrenci kaydı gerekli"
+            "An active enrollment is required to upload assignment files"
         );
         if (
             file.getSize() > 25 * 1024 * 1024
         ) throw new ResponseStatusException(
             HttpStatus.PAYLOAD_TOO_LARGE,
-            "Dosya en fazla 25 MB olabilir"
+            "Files must not exceed 25 MB"
         );
         String name =
             file.getOriginalFilename() == null
@@ -233,11 +233,11 @@ public class ResourceService {
             ? courses.canEdit(resource.courseId(), user) ||
               Boolean.TRUE.equals(
                   enrollments.checkEnrollment(resource.courseId(), user).data()
-              )
+              ) && courses.canReadResource(resource.courseId(),id,user)
             : courses.owner(resource.courseId(), user);
         if (!allowed) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Dosyaya erişim yetkiniz yok"
+            "You do not have access to this file"
         );
         String key = jdbc.queryForObject(
             "select storage_key from learning_resources where id=?",

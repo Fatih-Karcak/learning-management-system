@@ -52,7 +52,7 @@ public class VideoRecoveryService {
               );
         if (changed != 1) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Yalnızca size ait başarısız video yeniden işlenebilir"
+            "Only your own failed videos can be retried"
         );
         try {
             processor.processVideoAsync(id);

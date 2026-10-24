@@ -104,6 +104,26 @@ class VideoProcessingTest {
     }
 
     @Test
+    void producesAnAdaptiveLadderWithDecodableVariants() throws Exception {
+        Path source = temp.resolve("adaptive.mp4");
+        run("ffmpeg","-v","error","-y","-f","lavfi","-i","testsrc2=size=1280x720:rate=24",
+            "-t","1","-an","-c:v","mpeg4",source.toString());
+        UUID id = process(source);
+        String prefix="hls/"+id+"/";
+        String master=new String(uploaded.get(prefix+"master.m3u8"),java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(master.contains("RESOLUTION=640x360"),master);
+        assertTrue(master.contains("RESOLUTION=1280x720"),master);
+        assertFalse(master.contains("1080"),"Never upscale the source");
+        for (int height : new int[]{360,720}) {
+            String name="quality-"+height;
+            assertTrue(new String(uploaded.get(prefix+name+".m3u8")).contains(name+"-00000.ts"));
+            Path segment=temp.resolve(name+".ts");Files.write(segment,uploaded.get(prefix+name+"-00000.ts"));
+            run("ffmpeg","-v","error","-i",segment.toString(),"-f","null","-");
+        }
+        verify(repository,never()).failProcessing(any(),any(),anyString());
+    }
+
+    @Test
     void silentSubsecondVideoHasThumbnailAndPositiveDuration() throws Exception {
         Path source = temp.resolve("short.mp4");
         run(
@@ -135,7 +155,7 @@ class VideoProcessingTest {
         verify(repository).failProcessing(
             eq(id),
             eq(MediaStatus.FAILED),
-            contains("Video bilgileri okunamadı")
+            contains("Video details could not be read")
         );
         verify(repository, never()).completeProcessing(any(), any(), anyInt(), anyString(), anyString());
         assertTrue(uploaded.isEmpty());

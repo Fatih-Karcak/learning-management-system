@@ -31,14 +31,14 @@ public class InternalMediaController {
     private void requireKey(String key) {
         if (internalKey.isBlank() || key == null || !MessageDigest.isEqual(
                 internalKey.getBytes(StandardCharsets.UTF_8), key.getBytes(StandardCharsets.UTF_8))) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Servis kimliği doğrulanamadı");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Service authentication failed");
         }
     }
 
     @GetMapping("/{id}/metadata")
     public ApiResponse<MediaAssetResponse> metadata(@PathVariable UUID id,@RequestHeader(value="X-Internal-Service-Key",required=false) String key) {
         requireKey(key);
-        return ApiResponse.success(mediaService.getInternalMetadata(id),"Başarılı");
+        return ApiResponse.success(mediaService.getInternalMetadata(id),"Successful");
     }
 
     @PutMapping("/{id}/lesson")
@@ -48,6 +48,6 @@ public class InternalMediaController {
             @Valid @RequestBody LinkRequest request) {
         requireKey(key);
         return ApiResponse.success(mediaService.linkVideoToLesson(
-                id, request.courseId(), request.lessonId(), request.ownerId()), "Video derse bağlandı");
+                id, request.courseId(), request.lessonId(), request.ownerId()), "Video attached to lesson");
     }
 }

@@ -35,45 +35,45 @@ public class AuthController {
     @PostMapping("/forgot-password")
     public ApiResponse<?> forgot(@Valid @RequestBody Recovery r) {
         recovery.request(r.email(), false);
-        return ApiResponse.success(null, "Adres uygunsa sıfırlama bağlantısı gönderilecek");
+        return ApiResponse.success(null, "A reset link will be sent if the address is eligible");
     }
 
     @PostMapping("/resend-verification")
     public ApiResponse<?> resend(@Valid @RequestBody Recovery r) {
         recovery.request(r.email(), true);
-        return ApiResponse.success(null, "Adres uygunsa doğrulama bağlantısı gönderilecek");
+        return ApiResponse.success(null, "A verification link will be sent if the address is eligible");
     }
 
     @PostMapping("/reset-password")
     public ApiResponse<?> reset(@Valid @RequestBody Reset r) {
         recovery.reset(r.token(), r.password());
-        return ApiResponse.success(null, "Parola yenilendi; tekrar giriş yapın");
+        return ApiResponse.success(null, "Password reset; sign in again");
     }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(
-            ApiResponse.success(response, "Kayıt başarılı")
+            ApiResponse.success(response, "Registration successful")
         );
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.success(response, "Giriş başarılı"));
+        return ResponseEntity.ok(ApiResponse.success(response, "Sign-in successful"));
     }
 
     public record Refresh(@jakarta.validation.constraints.NotBlank String refreshToken) {}
 
     @PostMapping("/refresh")
     public ApiResponse<AuthResponse> refresh(@Valid @RequestBody Refresh request) {
-        return ApiResponse.success(authService.refresh(request.refreshToken()), "Oturum yenilendi");
+        return ApiResponse.success(authService.refresh(request.refreshToken()), "Session refreshed");
     }
 
     @GetMapping("/verify-email")
     public ResponseEntity<ApiResponse<Void>> verifyEmail(@RequestParam String token) {
         userService.verifyEmail(token); // ← authService yerine userService
-        return ResponseEntity.ok(ApiResponse.success(null, "E-posta başarıyla doğrulandı"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Email verified successfully"));
     }
 }

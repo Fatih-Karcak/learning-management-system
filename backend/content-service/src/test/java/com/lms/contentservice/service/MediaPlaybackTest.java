@@ -27,6 +27,7 @@ class MediaPlaybackTest {
     final MediaAssetRepository repository = mock(MediaAssetRepository.class);
     final StorageService storage = mock(StorageService.class);
     final EnrollmentClient enrollments = mock(EnrollmentClient.class);
+    final CourseIdentityClient courses = mock(CourseIdentityClient.class);
     final MediaService service = new MediaService(
         mock(ApplicationEventPublisher.class),
         repository,
@@ -34,7 +35,7 @@ class MediaPlaybackTest {
         mock(VideoProcessingService.class),
         enrollments,
         Mappers.getMapper(MediaAssetMapper.class),
-        mock(CourseIdentityClient.class)
+        courses
     );
     final UUID student = UUID.randomUUID();
     final UUID course = UUID.randomUUID();
@@ -48,6 +49,7 @@ class MediaPlaybackTest {
 
     MediaPlaybackTest() {
         ReflectionTestUtils.setField(service, "hlsBucket", "hls");
+        when(courses.canLearn(any(),any(),any())).thenReturn(true);
         when(repository.findById(asset.getId())).thenReturn(Optional.of(asset));
     }
 

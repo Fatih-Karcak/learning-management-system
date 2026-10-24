@@ -33,7 +33,7 @@ public class InboxService {
     @Transactional
     public void receive(PlatformNotice notice) {
         if (notice.id() == null || notice.recipientId() == null) throw new IllegalArgumentException(
-            "Bildirim alıcısı eksik"
+            "Notification recipient is missing"
         );
         int created = jdbc.update(
             "insert into notification_deliveries(id,recipient_id,payload) values(?,?,?) on conflict do nothing",
@@ -63,12 +63,12 @@ public class InboxService {
                 var e = json.readValue((String) row.get("payload"), PlatformNotice.class);
                 var result = users.getUserById(e.recipientId());
                 if (result == null || result.data() == null) throw new IllegalStateException(
-                    "Kullanıcıya ulaşılamadı"
+                    "The user could not be reached"
                 );
                 if (!"SECURITY".equals(e.kind())) {
                     var prefs = users.preferences(e.recipientId());
                     if (prefs == null || prefs.data() == null) throw new IllegalStateException(
-                        "Bildirim tercihlerine ulaşılamadı"
+                        "Notification preferences could not be retrieved"
                     );
                     if (
                         !prefs.data().learningEmails() ||

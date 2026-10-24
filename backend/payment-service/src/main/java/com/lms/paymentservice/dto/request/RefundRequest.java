@@ -12,6 +12,6 @@ public class RefundRequest {
     @NotNull
     private UUID paymentId;
 
-    @NotBlank(message = "İade nedeni boş olamaz")
+    @NotBlank(message = "A refund reason is required")
     private String reason;
 }

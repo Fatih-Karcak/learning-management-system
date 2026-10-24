@@ -16,6 +16,14 @@ public class CourseCatalogService {
 
     private final CourseClient courseClient;
 
+    public void requireLessonAccess(UUID course,UUID lesson,UUID student) {
+        var response=courseClient.access(course,lesson,student);
+        if(response==null||!response.success()||response.data()==null) throw new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"Learning access could not be verified");
+        if(!response.data()) throw new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.FORBIDDEN,"Complete prerequisite lessons or wait for the release date");
+    }
+
     public CourseSummaryResponse requireCourse(
             UUID courseId) {
 
@@ -28,7 +36,7 @@ public class CourseCatalogService {
                 || !courseId.equals(response.data().id())) {
 
             throw new IllegalStateException(
-                    "Course Service geçerli kurs bilgisi döndürmedi"
+                    "The course service returned invalid course details"
             );
         }
 
@@ -42,7 +50,7 @@ public class CourseCatalogService {
 
         if (total <= 0) {
             throw new IllegalStateException(
-                    "Kursun ders sayısı hesaplanamadı"
+                    "The course lesson count could not be calculated"
             );
         }
 

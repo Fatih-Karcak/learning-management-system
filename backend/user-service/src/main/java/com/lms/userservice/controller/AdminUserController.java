@@ -35,19 +35,19 @@ public class AdminUserController {
         org.springframework.security.core.Authentication auth
     ) {
         scopes.set(id, input.scope(), input.reason(), UUID.fromString(auth.getName()));
-        return ApiResponse.success(null, "Yetki kapsamı güncellendi");
+        return ApiResponse.success(null, "Permission scope updated");
     }
 
     private final AdminUserService service;
 
     @GetMapping("/summary")
     public ApiResponse<Map<String, Object>> summary() {
-        return ApiResponse.success(service.summary(), "Başarılı");
+        return ApiResponse.success(service.summary(), "Successful");
     }
 
     @GetMapping("/audit")
     public ApiResponse<List<Map<String, Object>>> audit(@RequestParam(defaultValue = "0") int page) {
-        return ApiResponse.success(service.audit(page), "Başarılı");
+        return ApiResponse.success(service.audit(page), "Successful");
     }
 
     @PutMapping("/{id}")
@@ -58,7 +58,7 @@ public class AdminUserController {
     ) {
         return ApiResponse.success(
             service.update(id, request, UUID.fromString(auth.getName())),
-            "Kullanıcı güncellendi"
+            "User updated"
         );
     }
 }

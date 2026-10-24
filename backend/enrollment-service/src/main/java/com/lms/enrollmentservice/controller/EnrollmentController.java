@@ -37,7 +37,7 @@ public class EnrollmentController {
                                 currentStudentId(auth),
                                 pageable
                         ),
-                        "Başarılı"
+                        "Successful"
                 )
         );
     }
@@ -54,7 +54,7 @@ public class EnrollmentController {
                                 id,
                                 currentStudentId(auth)
                         ),
-                        "Başarılı"
+                        "Successful"
                 )
         );
     }
@@ -71,7 +71,7 @@ public class EnrollmentController {
         );
 
         return ResponseEntity.ok(
-                ApiResponse.success(enrolled, "Başarılı")
+                ApiResponse.success(enrolled, "Successful")
         );
     }
 
@@ -87,7 +87,7 @@ public class EnrollmentController {
                                 id,
                                 currentStudentId(auth)
                         ),
-                        "Başarılı"
+                        "Successful"
                 )
         );
     }
@@ -99,7 +99,7 @@ public class EnrollmentController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         certificateService.verifyCertificate(code),
-                        "Sertifika doğrulandı"
+                        "Certificate verified"
                 )
         );
     }

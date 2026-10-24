@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(
                         ApiResponse.error(
-                                "İstek alanları geçersiz"
+                                "Invalid request fields"
                         )
                 );
     }
@@ -58,20 +58,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode()).body(ApiResponse.error(ex.getReason()));
     }
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleDenied(Exception ex) {return ResponseEntity.status(403).body(ApiResponse.error("Erişim yetkiniz yok"));}
+    public ResponseEntity<ApiResponse<Void>> handleDenied(Exception ex) {return ResponseEntity.status(403).body(ApiResponse.error("Access denied"));}
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(
             Exception ex) {
 
-        log.error("Beklenmeyen sunucu hatası", ex);
+        log.error("Unexpected server error", ex);
 
         return ResponseEntity.status(
                         HttpStatus.INTERNAL_SERVER_ERROR
                 )
                 .body(
                         ApiResponse.error(
-                                "Sunucu hatası oluştu"
+                                "A server error occurred"
                         )
                 );
     }

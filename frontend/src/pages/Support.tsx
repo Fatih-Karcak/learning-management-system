@@ -30,8 +30,8 @@ export default function Support({ admin = false }: { admin?: boolean }) {
   return (
     <>
       <PageTitle
-        title={admin ? 'Destek ve içerik şikâyetleri' : 'Destek taleplerim'}
-        description="Teknik sorunları ve içerik şikâyetlerini buradan takip et."
+        title={admin ? 'Support and content reports' : 'My support tickets'}
+        description="Track technical issues and content reports here."
       />
       {admin && <AdminNavigation />}
       {!admin && (
@@ -48,24 +48,24 @@ export default function Support({ admin = false }: { admin?: boolean }) {
             });
           }}
         >
-          <Field label="Konu">
+          <Field label="Subject">
             <input name="subject" required maxLength={200} />
           </Field>
-          <Field label="Kategori">
+          <Field label="Category">
             <select name="category">
-              <option value="TECHNICAL">Teknik sorun</option>
-              <option value="COURSE">Kurs hakkında</option>
-              <option value="CONTENT_REPORT">İçerik şikâyeti</option>
-              <option value="ACCOUNT">Hesap ve kişisel veriler</option>
+              <option value="TECHNICAL">Technical issue</option>
+              <option value="COURSE">About a course</option>
+              <option value="CONTENT_REPORT">Report content</option>
+              <option value="ACCOUNT">Account and personal data</option>
             </select>
           </Field>
-          <Field label="Kurs kimliği (varsa)">
+          <Field label="Course reference (if available)">
             <input name="courseId" pattern="[0-9a-fA-F-]{36}" />
           </Field>
-          <Field label="Açıklama">
+          <Field label="Description">
             <textarea name="content" required maxLength={10000} rows={5} />
           </Field>
-          <Submit busy={action.isPending}>Destek talebi aç</Submit>
+          <Submit busy={action.isPending}>Create support ticket</Submit>
           {action.error && <ErrorBox error={action.error} />}
         </form>
       )}
@@ -82,8 +82,7 @@ export default function Support({ admin = false }: { admin?: boolean }) {
               </button>
             </h2>
             <p>
-              {t.status === 'OPEN' ? 'Açık' : 'Yanıtlandı / kapalı'} · {date(t.created_at)}{' '}
-              {t.email}
+              {t.status === 'OPEN' ? 'Open' : 'Answered / Closed'} · {date(t.created_at)} {t.email}
             </p>
             {selected?.id === t.id && <TicketThread ticket={t} admin={admin} />}
           </article>
@@ -112,7 +111,7 @@ function TicketThread({ ticket, admin }: { ticket: Ticket; admin: boolean }) {
       {q.error && <ErrorBox error={q.error} />}{' '}
       {q.data?.map((r) => (
         <article className="notice" key={r.id}>
-          <b>{r.staff ? 'Destek ekibi' : 'Kullanıcı'}</b>
+          <b>{r.staff ? 'Support team' : 'User'}</b>
           <p className="pre-wrap">{r.content}</p>
           <small>{date(r.created_at)}</small>
         </article>
@@ -124,15 +123,15 @@ function TicketThread({ ticket, admin }: { ticket: Ticket; admin: boolean }) {
           send.mutate({ content: f.get('content'), close: f.has('close') });
         }}
       >
-        <Field label="Yanıt">
+        <Field label="Reply">
           <textarea name="content" required maxLength={10000} />
         </Field>
         {admin && (
           <label>
-            <input type="checkbox" name="close" /> Talebi yanıtlayıp kapat
+            <input type="checkbox" name="close" /> Reply and close ticket
           </label>
         )}
-        <Submit busy={send.isPending}>Yanıt gönder</Submit>
+        <Submit busy={send.isPending}>Send reply</Submit>
         {send.error && <ErrorBox error={send.error} />}
       </form>
     </>
@@ -170,20 +169,20 @@ export function Operations() {
   });
   return (
     <>
-      <PageTitle title="İşletim ve veri talepleri" />
+      <PageTitle title="Operations and data requests" />
       <AdminNavigation />
       {scope === 'FULL' && <VideoOperations />}
       <section className="panel">
-        <h2>Gönderilemeyen bildirimler</h2>
+        <h2>Failed notifications</h2>
         {failures.error && <ErrorBox error={failures.error} />}{' '}
         {failures.data?.map((f) => (
           <article key={f.id} className="notice">
             <p>
-              {f.status} · {f.attempts} deneme · {f.last_error}
+              {f.status} · {f.attempts} attempts · {f.last_error}
             </p>
             {f.status === 'FAILED' && (
               <button className="button secondary" onClick={() => retry.mutate(f.id)}>
-                Yeniden dene
+                Try again
               </button>
             )}
           </article>
@@ -191,10 +190,10 @@ export function Operations() {
         {retry.error && <ErrorBox error={retry.error} />}
       </section>
       <section className="panel">
-        <h2>Hesap silme talepleri</h2>
+        <h2>Account erasure requests</h2>
         <p>
-          İncelemeyi kaydetmek verilerin silindiği anlamına gelmez. Saklama ve silme prosedürünü
-          uygulayıp yapılan işlemleri gerekçeye yazın.
+          Recording a review does not erase data. Follow the retention and erasure procedure and
+          document the actions taken.
         </p>
         {privacy.error && <ErrorBox error={privacy.error} />}{' '}
         {privacy.data?.map((p) => (
@@ -211,10 +210,10 @@ export function Operations() {
                   review.mutate({ id: p.id, reason: String(f.get('reason')) });
                 }}
               >
-                <Field label="İşlem ve saklama gerekçesi">
+                <Field label="Action and retention reason">
                   <textarea name="reason" required maxLength={2000} />
                 </Field>
-                <Submit busy={review.isPending}>İncelemeyi kaydet</Submit>
+                <Submit busy={review.isPending}>Record review</Submit>
               </form>
             )}
           </article>

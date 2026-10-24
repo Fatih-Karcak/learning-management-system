@@ -55,9 +55,9 @@ public class DiscussionService {
     private Course require(UUID courseId, AuthenticatedUser user) {
         var course = courses
             .findById(courseId)
-            .orElseThrow(() -> new CourseNotFoundException("Kurs bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Course not found"));
         if (!access.canReadContent(course, user)) throw new UnauthorizedException(
-            "Soru-cevap için kursa kayıtlı olmalısınız"
+            "Enroll in this course to use questions and answers"
         );
         return course;
     }
@@ -86,7 +86,7 @@ public class DiscussionService {
             )
             .stream()
             .findFirst()
-            .orElseThrow(() -> new CourseNotFoundException("Soru bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Question not found"));
     }
 
     @Transactional(readOnly = true)
@@ -126,9 +126,9 @@ public class DiscussionService {
         if (input.lessonId() != null) {
             var lesson = lessons
                 .findById(input.lessonId())
-                .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+                .orElseThrow(() -> new CourseNotFoundException("Lesson not found"));
             if (!lesson.getSection().getCourse().getId().equals(courseId)) throw new IllegalArgumentException(
-                "Ders bu kursa ait değil"
+                "The lesson does not belong to this course"
             );
         }
         UUID id = UUID.randomUUID();
@@ -183,7 +183,7 @@ public class DiscussionService {
                 UUID.randomUUID(),
                 question.authorId(),
                 courseId,
-                "Sorunuza yeni yanıt",
+                "A new reply to your question",
                 input.content(),
                 "/courses/" + courseId,
                 "QUESTION_REPLY",
@@ -208,7 +208,7 @@ public class DiscussionService {
             !question.authorId().equals(user.id()) &&
             !course.getInstructorId().equals(user.id()) &&
             !user.isAdmin()
-        ) throw new UnauthorizedException("Yanıtı yalnızca soru sahibi veya eğitmen kabul edebilir");
+        ) throw new UnauthorizedException("Only the question author or instructor can accept a reply");
         if (
             jdbc.queryForObject(
                 "select count(*) from question_replies where id=? and question_id=?",
@@ -216,7 +216,7 @@ public class DiscussionService {
                 replyId,
                 questionId
             ) == 0
-        ) throw new CourseNotFoundException("Yanıt bulunamadı");
+        ) throw new CourseNotFoundException("Reply not found");
         jdbc.update("update course_questions set accepted_reply_id=? where id=?", replyId, questionId);
     }
 

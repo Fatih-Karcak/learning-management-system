@@ -40,7 +40,7 @@ public class CertificateScheduler {
             } catch (Exception e) {
 
                 log.error(
-                        "Sertifika üretimi başarısız: {}",
+                        "Certificate generation failed: {}",
                         enrollment.getId(),
                         e
                 );

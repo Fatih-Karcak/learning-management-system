@@ -28,9 +28,9 @@ export function InstructorCourses() {
   return (
     <>
       <PageTitle
-        eyebrow="BİLGİSİYLE İLHAM VERENLER"
-        title={courses.data?.content[0]?.instructorName || 'Eğitmenin kursları'}
-        description="Bu eğitmenin yayınladığı kursları keşfet."
+        eyebrow="LEARN FROM EXPERIENCED INSTRUCTORS"
+        title={courses.data?.content[0]?.instructorName || 'Instructor courses'}
+        description="Explore the courses published by this instructor."
       />
       {courses.isPending ? (
         <Loading />
@@ -47,8 +47,8 @@ export function InstructorCourses() {
         </>
       ) : (
         <Empty
-          title="Henüz yayınlanmış bir kurs yok"
-          text="Eğitmen yeni bir kurs yayınladığında burada görünecek."
+          title="No published courses yet"
+          text="New courses from this instructor will appear here."
         />
       )}
     </>
@@ -74,12 +74,12 @@ function LearningDashboard() {
   return (
     <>
       <PageTitle
-        eyebrow="ÖĞRENMEK İÇİN GÜZEL BİR GÜN"
-        title={session ? `Merhaba, ${session.user.firstName} 👋` : 'Bir sonraki adımın, ileri.'}
-        description="Merak ettiğin konuları keşfet, kendine yeni bir şey kat."
+        eyebrow="A GOOD DAY TO LEARN"
+        title={session ? `Hello, ${session.user.firstName} 👋` : 'Your next step starts here.'}
+        description="Explore your interests and learn something new."
       >
         <span className="date-chip">
-          {new Intl.DateTimeFormat('tr-TR', {
+          {new Intl.DateTimeFormat('en-US', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
@@ -89,19 +89,19 @@ function LearningDashboard() {
       <section className="hero">
         <div className="hero-copy">
           <span className="hero-tag">
-            <span /> SENİN GELECEĞİN, SENİN HIZIN
+            <span /> YOUR FUTURE, YOUR PACE
           </span>
           <h2>
-            Bugün öğrendiğin,
+            What you learn today
             <br />
-            yarınını <em>değiştirsin.</em>
+            can shape <em>your tomorrow.</em>
           </h2>
           <p>
-            Hedeflerine bir adım daha yaklaş. Uzmanlardan öğren,
-            <br className="desktop-only" /> öğrendiklerini hayata geçir.
+            Move closer to your goals. Learn from experts,
+            <br className="desktop-only" /> and put your knowledge into practice.
           </p>
           <Link className="button lime" to={active ? `/learn/${active.id}` : '/catalog'}>
-            {active ? 'Öğrenmeye devam et' : 'Kursları keşfet'} <ArrowUpRight size={18} />
+            {active ? 'Keep learning' : 'Explore courses'} <ArrowUpRight size={18} />
           </Link>
         </div>
         <div className="hero-art" aria-hidden="true">
@@ -116,8 +116,8 @@ function LearningDashboard() {
               <TrendingUp size={20} />
             </span>
             <div>
-              <b>Her gün biraz daha iyi</b>
-              <small>Yolculuğuna devam et.</small>
+              <b>A little better every day</b>
+              <small>Continue your journey.</small>
             </div>
           </div>
           <span className="art-dot" />
@@ -127,26 +127,26 @@ function LearningDashboard() {
         <div className="stats-grid">
           {[
             {
-              label: 'Kayıtlı olduğun kurs',
+              label: 'Enrolled courses',
               value: enrollments.data?.totalElements,
               icon: BookOpen,
             },
             {
-              label: 'Tamamlanan kurs',
+              label: 'Completed courses',
               value: enrollments.data
                 ? items.filter((x) => x.status === 'COMPLETED').length
                 : undefined,
               icon: CheckCheck,
             },
             {
-              label: 'Devam eden kurs',
+              label: 'Courses in progress',
               value: enrollments.data
                 ? items.filter((x) => x.status === 'ACTIVE').length
                 : undefined,
               icon: TrendingUp,
             },
             {
-              label: 'Sertifikaya hazır kurs',
+              label: 'Courses ready for certification',
               value: enrollments.data
                 ? items.filter((x) => x.status === 'COMPLETED').length
                 : undefined,
@@ -174,29 +174,29 @@ function LearningDashboard() {
             <Play size={24} />
           </div>
           <div>
-            <span className="eyebrow">KALDIĞIN YERDEN DEVAM ET</span>
+            <span className="eyebrow">PICK UP WHERE YOU LEFT OFF</span>
             <h3>{active.courseTitle}</h3>
             <p>
-              {active.completedLessons} / {active.totalLessons} ders tamamlandı
+              {active.completedLessons} / {active.totalLessons} lessons completed
             </p>
           </div>
           <div className="continue-progress">
-            <span>%{Math.round(active.progressPercentage || 0)}</span>
+            <span>{Math.round(active.progressPercentage || 0)}%</span>
             <progress max="100" value={active.progressPercentage || 0} />
           </div>
           <Link className="button secondary" to={`/learn/${active.id}`}>
-            Devam et <ArrowRight size={17} />
+            Continue <ArrowRight size={17} />
           </Link>
         </section>
       )}
       <section>
         <div className="section-heading">
           <div>
-            <span className="eyebrow">BİR ŞEYLER KEŞFET</span>
-            <h2>Yeni ilgi alanın burada olabilir.</h2>
+            <span className="eyebrow">DISCOVER SOMETHING NEW</span>
+            <h2>Find your next interest here.</h2>
           </div>
           <Link className="inline-link" to="/catalog">
-            Tüm kurslar <ArrowRight size={17} />
+            All courses <ArrowRight size={17} />
           </Link>
         </div>
         {courses.isPending ? (
@@ -211,15 +211,15 @@ function LearningDashboard() {
           </div>
         ) : (
           <Empty
-            title="Yeni bilgiler için yer aç."
-            text="Yayınlanan kurslar burada görünecek. Eğitmensen ilk kursunu paylaşabilirsin."
+            title="Make room for new knowledge."
+            text="Published courses will appear here. Instructors can share their first course."
           >
             <Link
               className="button secondary"
               to={session && session.user.role !== 'STUDENT' ? '/instructor/new' : '/catalog'}
             >
               <Compass size={17} />{' '}
-              {session && session.user.role !== 'STUDENT' ? 'Kurs oluştur' : 'Kataloğa göz at'}
+              {session && session.user.role !== 'STUDENT' ? 'Create course' : 'Browse the catalog'}
             </Link>
           </Empty>
         )}
@@ -227,10 +227,10 @@ function LearningDashboard() {
       <div className="journey-note">
         <Sparkles size={24} />
         <div>
-          <strong>Öğrenmek bir varış noktası değil, yolculuktur.</strong>
-          <p>Bir ders, bir fikir, bir yeni başlangıç.</p>
+          <strong>Learning is a journey.</strong>
+          <p>One lesson, one idea, one new beginning.</p>
         </div>
-        <span>Bir adım ileri ↗</span>
+        <span>One step forward ↗</span>
       </div>
     </>
   );
@@ -281,36 +281,36 @@ export function Catalog() {
   return (
     <>
       <PageTitle
-        eyebrow="MERAK ET. KEŞFET. ÖĞREN."
-        title="Sırada ne öğrenmek var?"
-        description="Yeni bir beceriye, yeni bir bakış açısına yer aç."
+        eyebrow="BE CURIOUS. EXPLORE. LEARN."
+        title="What will you learn next?"
+        description="Make room for a new skill and a new perspective."
       />
       <div className="catalog-toolbar">
         <form className="search-form" onSubmit={search}>
           <Search size={19} />
           <input
-            aria-label="Kurs ara"
-            placeholder="Öğrenmek istediğin konuyu ara…"
+            aria-label="Search courses"
+            placeholder="Search for something you want to learn…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button className="button primary small">Ara</button>
+          <button className="button primary small">Search</button>
         </form>
         <select
-          aria-label="Kursları sırala"
+          aria-label="Sort courses"
           value={sort}
           onChange={(e) => update('sort', e.target.value)}
         >
-          <option value="new">En yeni kurslar</option>
-          <option value="popular">En popüler kurslar</option>
-          <option value="rating">En yüksek puan</option>
+          <option value="new">Newest courses</option>
+          <option value="popular">Most popular</option>
+          <option value="rating">Highest rated</option>
         </select>
         <select
-          aria-label="Kategori"
+          aria-label="Category"
           value={category}
           onChange={(e) => update('category', e.target.value)}
         >
-          <option value="">Tüm kategoriler</option>
+          <option value="">All categories</option>
           {categories.data?.map((c) => (
             <option value={c.id} key={c.id}>
               {c.name}
@@ -320,9 +320,9 @@ export function Catalog() {
       </div>
       <div className="form-grid">
         <label>
-          Seviye
+          Level
           <select value={level} onChange={(e) => update('level', e.target.value)}>
-            <option value="">Tüm seviyeler</option>
+            <option value="">All levels</option>
             {Object.entries(levels).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
@@ -331,19 +331,19 @@ export function Catalog() {
           </select>
         </label>
         <label>
-          Dil
+          Language
           <select value={language} onChange={(e) => update('language', e.target.value)}>
-            <option value="">Tüm diller</option>
-            <option value="Türkçe">Türkçe</option>
+            <option value="">All languages</option>
+            <option value="Turkish">Turkish</option>
             <option value="English">English</option>
           </select>
         </label>
         <label>
-          En az puan
+          Minimum rating
           <select value={rating} onChange={(e) => update('rating', e.target.value)}>
-            <option value="">Tüm puanlar</option>
-            <option value="4">4 ve üzeri</option>
-            <option value="4.5">4,5 ve üzeri</option>
+            <option value="">All ratings</option>
+            <option value="4">4 and above</option>
+            <option value="4.5">4.5 and above</option>
           </select>
         </label>
         <label className="checkbox-field">
@@ -352,7 +352,7 @@ export function Catalog() {
             checked={free}
             onChange={(e) => update('free', String(e.target.checked))}
           />{' '}
-          Ücretsiz kurslar
+          Free courses
         </label>
       </div>
       {categories.error && (
@@ -360,9 +360,9 @@ export function Catalog() {
       )}
       <div className="results-heading">
         <span>
-          {courses.data ? `${courses.data.totalElements} kurs` : 'Kurslar'} {q && `· “${q}”`}
+          {courses.data ? `${courses.data.totalElements} courses` : 'Courses'} {q && `· “${q}”`}
           {category &&
-            ` · ${categories.data?.find((c) => String(c.id) === category)?.name || 'Seçili kategori'}`}
+            ` · ${categories.data?.find((c) => String(c.id) === category)?.name || 'Selected category'}`}
         </span>
         {(q || category) && (
           <button
@@ -372,7 +372,7 @@ export function Catalog() {
               setQuery('');
             }}
           >
-            Filtreleri temizle
+            Clear filters
           </button>
         )}
       </div>
@@ -395,11 +395,11 @@ export function Catalog() {
         </>
       ) : (
         <Empty
-          title="Henüz bir kurs bulunamadı"
+          title="No courses found"
           text={
             q || category
-              ? 'Başka bir arama yapabilir veya filtreleri temizleyebilirsin.'
-              : 'Yeni kurslar yayınlandığında burada görebilirsin.'
+              ? 'Try another search or clear the filters.'
+              : 'New courses will appear here when they are published.'
           }
         />
       )}

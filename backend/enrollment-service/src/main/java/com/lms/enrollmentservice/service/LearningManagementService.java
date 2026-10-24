@@ -43,7 +43,7 @@ public class LearningManagementService {
         BigDecimal price = course.discountPrice() != null ? course.discountPrice() : course.price();
         if (price == null || price.signum() != 0) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Bu kurs ücretsiz değil"
+            "This course is not free"
         );
         return create(course, student, null, null);
     }
@@ -56,7 +56,7 @@ public class LearningManagementService {
             !user.success() ||
             user.data() == null ||
             !request.studentId().equals(user.data().id())
-        ) throw new IllegalArgumentException("Öğrenci bulunamadı");
+        ) throw new IllegalArgumentException("Learner not found");
         return create(
             catalog.requireCourse(request.courseId()),
             request.studentId(),
@@ -70,10 +70,10 @@ public class LearningManagementService {
             !"PUBLISHED".equals(course.status()) || course.totalLessons() == 0
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Yalnızca yayındaki ve ders içeren kursa kayıt yapılabilir"
+            "Only published courses containing lessons can accept enrollments"
         );
         if (student.equals(course.instructorId())) throw new IllegalArgumentException(
-            "Kendi kursunuza öğrenci olarak kaydolamazsınız"
+            "You cannot enroll in your own course as a learner"
         );
         UUID proposed = UUID.randomUUID();
         var inserted = jdbc.queryForList(
@@ -89,13 +89,13 @@ public class LearningManagementService {
         );
         var enrollment = enrollments
             .findByStudentIdAndCourseId(student, course.id())
-            .orElseThrow(() -> new IllegalStateException("Kayıt oluşturulamadı"));
+            .orElseThrow(() -> new IllegalStateException("The enrollment could not be created"));
         if (
             enrollment.getStatus() != EnrollmentStatus.ACTIVE &&
             enrollment.getStatus() != EnrollmentStatus.COMPLETED
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Mevcut kayıt aktif değil; yöneticiyle iletişim kurun"
+            "The existing enrollment is not active; contact an administrator"
         );
         if (!inserted.isEmpty()) {
             var event = new CourseEnrolledEvent(
@@ -133,14 +133,14 @@ public class LearningManagementService {
         var course = catalog.requireCourse(courseId);
         if (!admin && !instructor.equals(course.instructorId())) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Kurs öğrencilerine erişim yetkiniz yok"
+            "You do not have access to this course's learners"
         );
         return enrollments.findByCourseId(courseId, pageable).map(e -> {
             var user = users.getUserById(e.getStudentId());
             var data = user != null ? user.data() : null;
             return new RosterRow(
                 mapper.toResponse(e),
-                data == null ? "Öğrenci" : data.firstName() + " " + data.lastName(),
+                data == null ? "Learner" : data.firstName() + " " + data.lastName(),
                 data == null ? "" : data.email()
             );
         });
@@ -149,15 +149,15 @@ public class LearningManagementService {
     @Transactional
     public void revoke(UUID id, String reason, UUID admin) {
         if (reason == null || reason.isBlank() || reason.length() > 1000) throw new IllegalArgumentException(
-            "İptal gerekçesi gerekli"
+            "A reason for revocation is required"
         );
         var enrollment = enrollments
             .findByIdForUpdate(id)
-            .orElseThrow(() -> new EnrollmentNotFoundException("Kayıt bulunamadı"));
+            .orElseThrow(() -> new EnrollmentNotFoundException("Enrollment not found"));
         // Financial enrollments must use their existing refund workflow.
         if (enrollment.getPaymentId() != null) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Ödemeli kaydın erişimi ödeme/iade akışından yönetilir"
+            "Paid enrollments are managed through the payment and refund workflow"
         );
         enrollment.setStatus(EnrollmentStatus.CANCELLED);
         jdbc.update(

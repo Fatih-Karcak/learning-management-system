@@ -20,27 +20,27 @@ public class EngagementController {
     @GetMapping("/wishlist")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<?> wishlist(@AuthenticationPrincipal AuthenticatedUser u) {
-        return ApiResponse.success(service.wishlist(u.id()), "İstek listesi");
+        return ApiResponse.success(service.wishlist(u.id()), "Wishlist");
     }
 
     @PutMapping("/{id}/wishlist")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<?> wish(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser u) {
         service.wish(id, u.id(), true);
-        return ApiResponse.success(null, "Listeye eklendi");
+        return ApiResponse.success(null, "Added to list");
     }
 
     @DeleteMapping("/{id}/wishlist")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<?> unwish(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser u) {
         service.wish(id, u.id(), false);
-        return ApiResponse.success(null, "Listeden kaldırıldı");
+        return ApiResponse.success(null, "Removed from list");
     }
 
     @GetMapping("/{id}/announcements")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<?> announcements(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser u) {
-        return ApiResponse.success(service.announcements(id, u), "Duyurular");
+        return ApiResponse.success(service.announcements(id, u), "Announcements");
     }
 
     @PostMapping("/{id}/announcements")
@@ -51,24 +51,24 @@ public class EngagementController {
         @Valid @RequestBody EngagementService.Announcement a
     ) {
         service.announce(id, u, a);
-        return ApiResponse.success(null, "Duyuru yayımlandı");
+        return ApiResponse.success(null, "Announcement published");
     }
 
     @GetMapping("/{id}/analytics")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     public ApiResponse<?> analytics(@PathVariable UUID id, @AuthenticationPrincipal AuthenticatedUser u) {
-        return ApiResponse.success(service.analytics(id, u), "Kurs raporu");
+        return ApiResponse.success(service.analytics(id, u), "Course report");
     }
 
     @GetMapping("/{id}/recommendations")
     public ApiResponse<?> recommended(@PathVariable UUID id) {
-        return ApiResponse.success(service.recommendations(id), "İlgili kurslar");
+        return ApiResponse.success(service.recommendations(id), "Related courses");
     }
 
     @GetMapping("/learning/export")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<?> export(@AuthenticationPrincipal AuthenticatedUser u) {
-        return ApiResponse.success(service.export(u.id()), "Kişisel kurs verileri");
+        return ApiResponse.success(service.export(u.id()), "Personal course data");
     }
 
     public record Reason(
@@ -85,6 +85,6 @@ public class EngagementController {
         @Valid @RequestBody Reason reason
     ) {
         service.moderateReview(id, u, reason.reason());
-        return ApiResponse.success(null, "Değerlendirme kaldırıldı");
+        return ApiResponse.success(null, "Review removed");
     }
 }

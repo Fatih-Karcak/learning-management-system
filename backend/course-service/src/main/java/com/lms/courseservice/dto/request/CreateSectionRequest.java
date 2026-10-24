@@ -12,7 +12,7 @@ public class CreateSectionRequest {
     @NotNull
     private UUID courseId;
 
-    @NotBlank(message = "Bölüm başlığı boş olamaz")
+    @NotBlank(message = "Section title is required")
     private String title;
 
     private String description;

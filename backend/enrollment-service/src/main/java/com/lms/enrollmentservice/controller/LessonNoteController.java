@@ -25,7 +25,7 @@ public class LessonNoteController {
         @RequestParam(required = false) UUID lessonId,
         Authentication auth
     ) {
-        return ApiResponse.success(notes.list(enrollmentId, lessonId, user(auth)), "Başarılı");
+        return ApiResponse.success(notes.list(enrollmentId, lessonId, user(auth)), "Successful");
     }
 
     @PostMapping
@@ -34,7 +34,7 @@ public class LessonNoteController {
         @Valid @RequestBody LessonNoteService.Input input,
         Authentication auth
     ) {
-        return ApiResponse.success(notes.save(enrollmentId, null, input, user(auth)), "Not kaydedildi");
+        return ApiResponse.success(notes.save(enrollmentId, null, input, user(auth)), "Note saved");
     }
 
     @PutMapping("/{id}")
@@ -44,7 +44,7 @@ public class LessonNoteController {
         @Valid @RequestBody LessonNoteService.Input input,
         Authentication auth
     ) {
-        return ApiResponse.success(notes.save(enrollmentId, id, input, user(auth)), "Not güncellendi");
+        return ApiResponse.success(notes.save(enrollmentId, id, input, user(auth)), "Note updated");
     }
 
     @DeleteMapping("/{id}")
@@ -54,6 +54,6 @@ public class LessonNoteController {
         Authentication auth
     ) {
         notes.delete(enrollmentId, id, user(auth));
-        return ApiResponse.success(null, "Not silindi");
+        return ApiResponse.success(null, "Note deleted");
     }
 }

@@ -38,7 +38,7 @@ public class CourseController {
     ) {
         return ApiResponse.success(
             courseService.discover(query, category, level, language, free, rating, order, pageable),
-            "Kurslar"
+            "Courses"
         );
     }
 
@@ -49,13 +49,13 @@ public class CourseController {
         Pageable pageable
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.getOwnCourses(user.id(), pageable), "Başarılı")
+            ApiResponse.success(courseService.getOwnCourses(user.id(), pageable), "Successful")
         );
     }
 
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<java.util.List<CourseService.CategorySummary>>> getCategories() {
-        return ResponseEntity.ok(ApiResponse.success(courseService.getCategories(), "Başarılı"));
+        return ResponseEntity.ok(ApiResponse.success(courseService.getCategories(), "Successful"));
     }
 
     @PostMapping
@@ -67,7 +67,7 @@ public class CourseController {
         return ResponseEntity.status(HttpStatus.CREATED).body(
             ApiResponse.success(
                 courseService.createCourse(request, user.id(), user.displayName()),
-                "Kurs oluşturuldu"
+                "Course created"
             )
         );
     }
@@ -80,7 +80,7 @@ public class CourseController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.updateCourse(id, request, user.id()), "Kurs güncellendi")
+            ApiResponse.success(courseService.updateCourse(id, request, user.id()), "Course updated")
         );
     }
 
@@ -93,7 +93,7 @@ public class CourseController {
         return ResponseEntity.ok(
             ApiResponse.success(
                 courseService.publishCourse(id, user.id()),
-                "Kurs yönetici incelemesine gönderildi"
+                "Course submitted for administrator review"
             )
         );
     }
@@ -105,7 +105,7 @@ public class CourseController {
         @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.archiveCourse(id, user.id()), "Kurs arşivlendi")
+            ApiResponse.success(courseService.archiveCourse(id, user.id()), "Course archived")
         );
     }
 
@@ -114,13 +114,13 @@ public class CourseController {
         @PathVariable UUID id,
         @AuthenticationPrincipal AuthenticatedUser viewer
     ) {
-        return ResponseEntity.ok(ApiResponse.success(courseService.getCourseById(id, viewer), "Başarılı"));
+        return ResponseEntity.ok(ApiResponse.success(courseService.getCourseById(id, viewer), "Successful"));
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<CourseSummaryResponse>>> getPublishedCourses(Pageable pageable) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.getPublishedCourses(pageable), "Başarılı")
+            ApiResponse.success(courseService.getPublishedCourses(pageable), "Successful")
         );
     }
 
@@ -130,7 +130,7 @@ public class CourseController {
         Pageable pageable
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.searchCourses(query, pageable), "Başarılı")
+            ApiResponse.success(courseService.searchCourses(query, pageable), "Successful")
         );
     }
 
@@ -140,13 +140,13 @@ public class CourseController {
         Pageable pageable
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.getCoursesByCategory(categoryId, pageable), "Başarılı")
+            ApiResponse.success(courseService.getCoursesByCategory(categoryId, pageable), "Successful")
         );
     }
 
     @GetMapping("/popular")
     public ResponseEntity<ApiResponse<Page<CourseSummaryResponse>>> getPopularCourses(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(courseService.getPopularCourses(pageable), "Başarılı"));
+        return ResponseEntity.ok(ApiResponse.success(courseService.getPopularCourses(pageable), "Successful"));
     }
 
     @GetMapping("/instructor/{instructorId}")
@@ -155,7 +155,7 @@ public class CourseController {
         Pageable pageable
     ) {
         return ResponseEntity.ok(
-            ApiResponse.success(courseService.getInstructorCourses(instructorId, pageable), "Başarılı")
+            ApiResponse.success(courseService.getInstructorCourses(instructorId, pageable), "Successful")
         );
     }
 }

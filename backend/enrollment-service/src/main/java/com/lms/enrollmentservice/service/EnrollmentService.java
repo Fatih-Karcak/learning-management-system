@@ -47,7 +47,7 @@ public class EnrollmentService {
           || event.amount().signum() < 0) {
 
    throw new IllegalArgumentException(
-           "Geçersiz payment-completed olayı"
+           "Invalid payment-completed event"
    );
   }
 
@@ -57,7 +57,7 @@ public class EnrollmentService {
           .isPresent()) {
 
    log.info(
-           "Ödeme daha önce işlendi: {}",
+           "Payment already processed: {}",
            event.paymentId()
    );
    return;
@@ -75,8 +75,8 @@ public class EnrollmentService {
            existing.get().getPaymentId())) {
 
     throw new IllegalStateException(
-            "Kurs için farklı ödeme kaydı mevcut. " +
-                    "Mutabakat gerekli."
+            "A different payment is already registered for this course. " +
+                    "Reconciliation is required."
     );
    }
    return;
@@ -117,7 +117,7 @@ public class EnrollmentService {
 
   if (refunded) {
    log.info(
-           "İadesi önceden alınmış ödeme: {}",
+           "Payment already refunded: {}",
            event.paymentId()
    );
    return;
@@ -145,7 +145,7 @@ public class EnrollmentService {
   );
 
   log.info(
-          "Enrollment oluşturuldu: {}",
+          "Enrollment created: {}",
           enrollment.getId()
   );
  }
@@ -161,7 +161,7 @@ public class EnrollmentService {
           || event.refundId() == null) {
 
    throw new IllegalArgumentException(
-           "Geçersiz refund olayı"
+           "Invalid refund event"
    );
   }
 
@@ -175,7 +175,7 @@ public class EnrollmentService {
            || !refund.getCourseId().equals(event.courseId())) {
 
     throw new IllegalStateException(
-            "Aynı ödeme için çelişkili iade bilgisi"
+            "Conflicting refund details for the same payment"
     );
    }
   } else {
@@ -199,7 +199,7 @@ public class EnrollmentService {
                    .equals(event.courseId())) {
 
             throw new IllegalStateException(
-                    "İade ile kayıt bilgileri uyuşmuyor"
+                    "Refund and enrollment details do not match"
             );
            }
 
@@ -222,7 +222,7 @@ public class EnrollmentService {
                    .equals(refund.getCourseId())) {
 
             throw new IllegalStateException(
-                    "İade kaydı tutarsız"
+                    "Inconsistent refund record"
             );
            }
 
@@ -245,13 +245,13 @@ public class EnrollmentService {
           .findById(enrollmentId)
           .orElseThrow(() ->
                   new EnrollmentNotFoundException(
-                          "Kayıt bulunamadı"
+                          "Enrollment not found"
                   )
           );
 
   if (!enrollment.getStudentId().equals(studentId)) {
    throw new EnrollmentNotFoundException(
-           "Kayıt bulunamadı"
+           "Enrollment not found"
    );
   }
 
@@ -269,7 +269,7 @@ public class EnrollmentService {
           )
           .orElseThrow(() ->
                   new EnrollmentNotFoundException(
-                          "Kayıt bulunamadı"
+                          "Enrollment not found"
                   )
           );
 
@@ -300,6 +300,20 @@ public class EnrollmentService {
                           EnrollmentStatus.COMPLETED
                   )
           );
+ }
+
+ public record LearningSnapshot(boolean enrolled, boolean completed, java.time.Instant enrolledAt, java.util.Set<UUID> completedLessons) {}
+
+ @Transactional(readOnly=true)
+ public LearningSnapshot learningSnapshot(UUID student,UUID course) {
+  var found=enrollmentRepository.findByStudentIdAndCourseId(student,course);
+  if(found.isEmpty() || !java.util.Set.of(EnrollmentStatus.ACTIVE,EnrollmentStatus.COMPLETED).contains(found.get().getStatus()))
+   return new LearningSnapshot(false,false,null,java.util.Set.of());
+  var value=found.get();
+  return new LearningSnapshot(true,value.getStatus()==EnrollmentStatus.COMPLETED,
+   value.getEnrolledAt().toInstant(java.time.ZoneOffset.UTC),
+   value.getLessonProgressList().stream().filter(p->p.getStatus()==com.lms.enrollmentservice.domain.enums.CompletionStatus.COMPLETED)
+    .map(com.lms.enrollmentservice.domain.entity.LessonProgress::getLessonId).collect(java.util.stream.Collectors.toSet()));
  }
 
  @Transactional(readOnly=true)

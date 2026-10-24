@@ -37,12 +37,12 @@ public class LessonNoteService {
     private com.lms.enrollmentservice.domain.entity.Enrollment require(UUID enrollmentId, UUID student) {
         var enrollment = enrollments
             .findById(enrollmentId)
-            .orElseThrow(() -> new EnrollmentNotFoundException("Kayıt bulunamadı"));
+            .orElseThrow(() -> new EnrollmentNotFoundException("Enrollment not found"));
         if (
             !enrollment.getStudentId().equals(student) ||
             (enrollment.getStatus() != EnrollmentStatus.ACTIVE &&
                 enrollment.getStatus() != EnrollmentStatus.COMPLETED)
-        ) throw new EnrollmentNotFoundException("Aktif kayıt bulunamadı");
+        ) throw new EnrollmentNotFoundException("Active enrollment not found");
         return enrollment;
     }
 
@@ -71,11 +71,11 @@ public class LessonNoteService {
         var lesson = courses
             .requireCourse(enrollment.getCourseId())
             .findLesson(input.sectionId(), input.lessonId());
-        if (lesson == null) throw new IllegalArgumentException("Notun dersi kursa ait değil");
+        if (lesson == null) throw new IllegalArgumentException("The note's lesson does not belong to this course");
         if (
             input.positionSeconds() > 0 &&
             (lesson.durationSeconds() == null || input.positionSeconds() > lesson.durationSeconds())
-        ) throw new IllegalArgumentException("Not konumu ders süresini aşıyor");
+        ) throw new IllegalArgumentException("The note position exceeds the lesson duration");
         UUID id = noteId == null ? UUID.randomUUID() : noteId;
         if (noteId == null) jdbc.update(
             "insert into lesson_notes(id,enrollment_id,lesson_id,position_seconds,content) values(?,?,?,?,?)",
@@ -94,7 +94,7 @@ public class LessonNoteService {
                 id,
                 enrollmentId
             ) != 1
-        ) throw new EnrollmentNotFoundException("Not bulunamadı");
+        ) throw new EnrollmentNotFoundException("Note not found");
         return jdbc.queryForObject(
             "select * from lesson_notes where id=?",
             (r, n) ->
@@ -114,6 +114,6 @@ public class LessonNoteService {
         require(enrollmentId, student);
         if (
             jdbc.update("delete from lesson_notes where id=? and enrollment_id=?", noteId, enrollmentId) != 1
-        ) throw new EnrollmentNotFoundException("Not bulunamadı");
+        ) throw new EnrollmentNotFoundException("Note not found");
     }
 }

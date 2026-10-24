@@ -47,7 +47,7 @@ public class CourseService {
         Category category = categoryRepository
             .findById(request.getCategoryId())
             .orElseThrow(() ->
-                new IllegalArgumentException("Kategori bulunamadı")
+                new IllegalArgumentException("Category not found")
             );
 
         Course course = Course.builder()
@@ -71,7 +71,7 @@ public class CourseService {
 
         course = courseRepository.save(course);
         log.info(
-            "Kurs oluşturuldu: {} - Eğitmen: {}",
+            "Course created: {} - Instructor: {}",
             course.getId(),
             instructorId
         );
@@ -96,7 +96,7 @@ public class CourseService {
                 )
         ) {
             throw new IllegalStateException(
-                "Kurs yayınlanabilmesi için en az bir ders gerekli"
+                "At least one lesson is required to publish a course"
             );
         }
 
@@ -116,7 +116,7 @@ public class CourseService {
         Course course = findCourseById(courseId);
         if (
             course.getStatus() != CourseStatus.PENDING_REVIEW
-        ) throw new IllegalStateException("Kurs inceleme sırasında değil");
+        ) throw new IllegalStateException("The course is not awaiting review");
         validateCurriculum(course);
         if (
             course
@@ -126,7 +126,7 @@ public class CourseService {
                     s -> s.getLessons() != null && !s.getLessons().isEmpty()
                 )
         ) {
-            throw new IllegalStateException("En az bir ders gerekli");
+            throw new IllegalStateException("At least one lesson is required");
         }
         course.setStatus(CourseStatus.PUBLISHED);
         course.setReviewFeedback(null);
@@ -144,7 +144,7 @@ public class CourseService {
             )
         );
 
-        log.info("Kurs yayınlandı: {}", courseId);
+        log.info("Course published: {}", courseId);
         return courseMapper.toResponse(course);
     }
 
@@ -200,7 +200,7 @@ public class CourseService {
             response
                 .getSections()
                 .forEach(section ->
-                    accessPolicy.filterLessons(section.getLessons(), fullAccess)
+                    accessPolicy.filterCourseLessons(course, section.getLessons(), fullAccess, viewer)
                 );
         }
         return enrichDurations(response);
@@ -254,7 +254,7 @@ public class CourseService {
                 } catch (
                     org.springframework.web.client.RestClientException ex
                 ) {
-                    log.warn("Video süresi henüz alınamadı: {}", id);
+                    log.warn("Video duration is not available yet: {}", id);
                 }
             }
         return response;
@@ -280,7 +280,7 @@ public class CourseService {
                         ) {
                             throw new org.springframework.web.server.ResponseStatusException(
                                 org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-                                "Video durumu doğrulanamadı; içerik servisini kontrol edin",
+                                "Video status could not be verified; check the content service",
                                 ex
                             );
                         }
@@ -290,7 +290,7 @@ public class CourseService {
                             result.data() == null ||
                             !"READY".equals(result.data().status())
                         ) throw new IllegalStateException(
-                            "Video işleme tamamlanmalı: " + lesson.getTitle()
+                            "Video processing must finish: " + lesson.getTitle()
                         );
                         duration = result.data().durationSeconds();
                     }
@@ -300,7 +300,7 @@ public class CourseService {
                         duration == null ||
                         duration <= 0
                     ) throw new IllegalStateException(
-                        "Video adresi ve süresi gerekli: " + lesson.getTitle()
+                        "A video URL and duration are required: " + lesson.getTitle()
                     );
                 }
                 if (
@@ -315,7 +315,7 @@ public class CourseService {
                     if (
                         count == null || count == 0
                     ) throw new IllegalStateException(
-                        "Test soruları hazırlanmalı: " + lesson.getTitle()
+                        "Prepare the quiz questions: " + lesson.getTitle()
                     );
                 }
                 if (
@@ -326,7 +326,7 @@ public class CourseService {
                     (lesson.getContent() == null ||
                         lesson.getContent().isBlank())
                 ) throw new IllegalStateException(
-                    "Ders içeriği gerekli: " + lesson.getTitle()
+                    "Lesson content is required: " + lesson.getTitle()
                 );
             }
     }
@@ -358,7 +358,7 @@ public class CourseService {
             query.length() > 200 ||
             (language != null && language.length() > 50) ||
             (rating != null && (rating < 0 || rating > 5))
-        ) throw new IllegalArgumentException("Filtre geçersiz");
+        ) throw new IllegalArgumentException("Invalid filter");
         var sort = org.springframework.data.domain.Sort.by(
             org.springframework.data.domain.Sort.Direction.DESC,
             switch (order) {
@@ -508,11 +508,11 @@ public class CourseService {
     @Transactional
     public void incrementEnrollmentCount(UUID courseId, UUID enrollmentId) {
         if (courseId == null || enrollmentId == null) {
-            throw new IllegalArgumentException("Geçersiz kayıt olayı");
+            throw new IllegalArgumentException("Invalid enrollment event");
         }
         if (courseRepository.claimEnrollment(enrollmentId, courseId) == 1) {
             if (courseRepository.incrementEnrollmentCount(courseId) != 1) {
-                throw new CourseNotFoundException("Kurs bulunamadı");
+                throw new CourseNotFoundException("Course not found");
             }
         }
     }
@@ -528,7 +528,7 @@ public class CourseService {
                 (discount.signum() < 0 || discount.compareTo(price) > 0))
         ) {
             throw new IllegalArgumentException(
-                "Kurs fiyatı veya indirimli fiyat geçersiz"
+                "Invalid course price or discounted price"
             );
         }
     }
@@ -537,13 +537,13 @@ public class CourseService {
         return courseRepository
             .findById(courseId)
             .orElseThrow(() ->
-                new CourseNotFoundException("Kurs bulunamadı: " + courseId)
+                new CourseNotFoundException("Course not found: " + courseId)
             );
     }
 
     private void validateInstructor(Course course, UUID instructorId) {
         if (!course.getInstructorId().equals(instructorId)) {
-            throw new UnauthorizedException("Bu kursu düzenleme yetkiniz yok");
+            throw new UnauthorizedException("You do not have permission to edit this course");
         }
     }
 

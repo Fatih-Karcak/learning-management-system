@@ -41,54 +41,52 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     <div className="auth-layout">
       <div className="auth-story">
         <span className="eyebrow">
-          <Sparkles size={15} /> MERAKININ PEŞİNDEN GİT
+          <Sparkles size={15} /> FOLLOW YOUR CURIOSITY
         </span>
         <h1>
-          Bir sonraki
+          Your next
           <br />
-          adımın, <em>ileri.</em>
+          step <em>starts here.</em>
         </h1>
-        <p>Yeni beceriler, yeni bakış açıları. Kendi hızında öğren, hedeflerine yaklaş.</p>
+        <p>New skills and new perspectives. Learn at your own pace and move toward your goals.</p>
         <div className="auth-art">
           <BookOpen size={100} strokeWidth={1} />
-          <div className="floating-tag">Her gün yeni bir başlangıç ↗</div>
+          <div className="floating-tag">Every day is a new beginning ↗</div>
         </div>
         <div className="story-footer">
-          <span>01 — Keşfet</span>
-          <span>02 — Öğren</span>
-          <span>03 — Geliş</span>
+          <span>01 — Explore</span>
+          <span>02 — Learn</span>
+          <span>03 — Grow</span>
         </div>
       </div>
       <section className="auth-form panel">
-        <span className="eyebrow">İLERİ AKADEMİ</span>
-        <h2>{register ? 'Yeni bir başlangıç yap.' : 'Yeniden hoş geldin.'}</h2>
+        <span className="eyebrow">ILERI ACADEMY</span>
+        <h2>{register ? 'Make a new beginning.' : 'Welcome back.'}</h2>
         <p>
-          {register
-            ? 'Öğrenme yolculuğun burada başlıyor.'
-            : 'Kaldığın yerden devam etmeye hazır mısın?'}
+          {register ? 'Your learning journey starts here.' : 'Ready to pick up where you left off?'}
         </p>
         {error ? <ErrorBox error={error} /> : null}
         <form onSubmit={submit} key={String(register)}>
           {register && (
             <div className="form-grid">
-              <Field label="Ad">
+              <Field label="First name">
                 <input name="firstName" required autoComplete="given-name" />
               </Field>
-              <Field label="Soyad">
+              <Field label="Last name">
                 <input name="lastName" required autoComplete="family-name" />
               </Field>
             </div>
           )}
-          <Field label="E-posta adresi">
+          <Field label="Email address">
             <input
               name="email"
               type="email"
               required
               autoComplete="email"
-              placeholder="sen@ornek.com"
+              placeholder="you@example.com"
             />
           </Field>
-          <Field label="Şifre" hint={register ? 'En az 12 karakter kullanın.' : undefined}>
+          <Field label="Password" hint={register ? 'Use at least 12 characters.' : undefined}>
             <input
               name="password"
               type="password"
@@ -99,7 +97,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           </Field>
           {!register && (
             <>
-              <Field label="Doğrulama kodu (etkinleştirdiysen)">
+              <Field label="Verification code (if enabled)">
                 <input
                   name="otp"
                   inputMode="numeric"
@@ -108,23 +106,23 @@ export function AuthPage({ register = false }: { register?: boolean }) {
                   maxLength={6}
                 />
               </Field>
-              <Link to="/forgot-password">Parolamı unuttum</Link>
+              <Link to="/forgot-password">Forgot password</Link>
             </>
           )}
           {register && (
-            <Field label="Nasıl katılmak istersin?">
+            <Field label="How would you like to join?">
               <select name="role">
-                <option value="STUDENT">Öğrenci — yeni şeyler öğrenmek istiyorum</option>
-                <option value="INSTRUCTOR">Eğitmen — bilgimi paylaşmak istiyorum</option>
+                <option value="STUDENT">Learner — I want to learn something new</option>
+                <option value="INSTRUCTOR">Instructor — I want to share my knowledge</option>
               </select>
             </Field>
           )}
-          <Submit busy={busy}>{register ? 'Hesabımı oluştur' : 'Giriş yap'}</Submit>
+          <Submit busy={busy}>{register ? 'Create my account' : 'Sign in'}</Submit>
         </form>
         <div className="auth-switch">
-          {register ? 'Zaten hesabın var mı?' : 'Henüz hesabın yok mu?'}{' '}
+          {register ? 'Already have an account?' : 'New here?'}{' '}
           <Link to={register ? '/login' : '/register'} state={location.state}>
-            {register ? 'Giriş yap' : 'Ücretsiz katıl'} <ArrowRight size={14} />
+            {register ? 'Sign in' : 'Join for free'} <ArrowRight size={14} />
           </Link>
         </div>
       </section>
@@ -157,20 +155,20 @@ export function VerifyEmail() {
   return (
     <section className="panel narrow centered">
       <MailCheck size={48} />
-      <h1>E-posta doğrulama</h1>
+      <h1>Email verification</h1>
       {!token ? (
         <ErrorBox
-          error={new Error('Doğrulama bağlantısı eksik. E-postanızdaki bağlantıyı kullanın.')}
+          error={new Error('The verification link is missing. Use the link in your email.')}
         />
       ) : error ? (
         <ErrorBox error={error} />
       ) : done ? (
-        <Success>E-posta adresiniz doğrulandı. Hesabınıza giriş yapabilirsiniz.</Success>
+        <Success>Your email address has been verified. You can sign in.</Success>
       ) : (
         <Loading />
       )}
       <Link className="button primary" to="/login">
-        Giriş yap
+        Sign in
       </Link>
     </section>
   );
@@ -183,7 +181,7 @@ export function RecoverPassword({ reset = false }: { reset?: boolean }) {
     [error, setError] = useState<unknown>();
   return (
     <section className="panel narrow">
-      <h1>{reset ? 'Yeni parola belirle' : 'Parolamı unuttum'}</h1>
+      <h1>{reset ? 'Set a new password' : 'Forgot password'}</h1>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -208,7 +206,7 @@ export function RecoverPassword({ reset = false }: { reset?: boolean }) {
         }}
       >
         {reset ? (
-          <Field label="Yeni parola — en az 12 karakter">
+          <Field label="New password — at least 12 characters">
             <input
               name="password"
               type="password"
@@ -219,21 +217,21 @@ export function RecoverPassword({ reset = false }: { reset?: boolean }) {
             />
           </Field>
         ) : (
-          <Field label="E-posta adresi">
+          <Field label="Email address">
             <input name="email" type="email" required autoComplete="email" />
           </Field>
         )}
-        <Submit busy={busy}>{reset ? 'Parolayı yenile' : 'Sıfırlama bağlantısı gönder'}</Submit>
+        <Submit busy={busy}>{reset ? 'Reset password' : 'Send reset link'}</Submit>
       </form>
       {done && (
         <Success>
           {reset
-            ? 'Parolan yenilendi. Tekrar giriş yapabilirsin.'
-            : 'Adres uygunsa sıfırlama bağlantısı e-posta ile gönderilecek.'}
+            ? 'Your password has been reset. You can sign in again.'
+            : 'If the address is eligible, a reset link will be sent by email.'}
         </Success>
       )}
       {!!error && <ErrorBox error={error} />}
-      <Link to="/login">Giriş yap</Link>
+      <Link to="/login">Sign in</Link>
     </section>
   );
 }

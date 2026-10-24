@@ -9,18 +9,18 @@ import lombok.Data;
 @Data
 public class RegisterRequest {
 
-    @NotBlank(message = "Ad boş olamaz")
+    @NotBlank(message = "First name is required")
     private String firstName;
 
-    @NotBlank(message = "Soyad boş olamaz")
+    @NotBlank(message = "Last name is required")
     private String lastName;
 
-    @Email(message = "Geçerli bir e-posta girin")
-    @NotBlank(message = "E-posta boş olamaz")
+    @Email(message = "Enter a valid email address")
+    @NotBlank(message = "Email address is required")
     private String email;
 
-    @Size(min = 12, max = 72, message = "Şifre 12–72 karakter olmalı")
-    @NotBlank(message = "Şifre boş olamaz")
+    @Size(min = 12, max = 72, message = "Password must contain 12–72 characters")
+    @NotBlank(message = "Password is required")
     private String password;
 
     private UserRole role = UserRole.STUDENT;

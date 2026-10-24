@@ -38,7 +38,7 @@ public class UserService {
         User user = StringUtils.hasText(request.getNewPassword())
             ? userRepository
                   .findByIdForUpdate(id)
-                  .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı"))
+                  .orElseThrow(() -> new UserNotFoundException("No users found"))
             : findUserById(id);
 
         if (StringUtils.hasText(request.getFirstName())) {
@@ -61,14 +61,14 @@ public class UserService {
         // Şifre güncelleme
         if (StringUtils.hasText(request.getNewPassword())) {
             if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-                throw new IllegalArgumentException("Mevcut şifre yanlış");
+                throw new IllegalArgumentException("Your current password is incorrect");
             }
             user.setPassword(passwordEncoder.encode(request.getNewPassword()));
             jdbc.update("update user_sessions set revoked=true where user_id=?", id);
         }
 
         user = userRepository.save(user);
-        log.info("Kullanıcı profili güncellendi: {}", id);
+        log.info("User profile updated: {}", id);
         return userMapper.toResponse(user);
     }
 
@@ -76,17 +76,17 @@ public class UserService {
     public void verifyEmail(String token) {
         User user = userRepository
             .findByEmailVerificationToken(token)
-            .orElseThrow(() -> new IllegalArgumentException("Geçersiz doğrulama token'ı"));
+            .orElseThrow(() -> new IllegalArgumentException("Invalid verification token"));
 
         if (
             user.getVerificationExpiresAt() != null &&
             user.getVerificationExpiresAt().isBefore(java.time.LocalDateTime.now(java.time.Clock.systemUTC()))
-        ) throw new IllegalArgumentException("Doğrulama bağlantısının süresi doldu");
+        ) throw new IllegalArgumentException("The verification link has expired");
         user.setEmailVerified(true);
         if (user.getStatus() == UserStatus.PENDING_VERIFICATION) user.setStatus(UserStatus.ACTIVE);
         user.setEmailVerificationToken(null);
         userRepository.save(user);
-        log.info("E-posta doğrulandı: {}", user.getEmail());
+        log.info("Email verified: {}", user.getEmail());
     }
 
     public Page<UserResponse> searchUsers(String query, Pageable pageable) {
@@ -98,7 +98,7 @@ public class UserService {
         User user = findUserById(id);
         if (user.getRole() == com.lms.userservice.domain.enums.UserRole.ADMIN) {
             throw new IllegalArgumentException(
-                "Yönetici hesabını başka bir yönetici devre dışı bırakmalıdır"
+                "Another administrator must deactivate an administrator account"
             );
         }
         user.setStatus(UserStatus.INACTIVE);
@@ -108,6 +108,6 @@ public class UserService {
     private User findUserById(UUID id) {
         return userRepository
             .findById(id)
-            .orElseThrow(() -> new UserNotFoundException("Kullanıcı bulunamadı: " + id));
+            .orElseThrow(() -> new UserNotFoundException("User not found: " + id));
     }
 }

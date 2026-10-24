@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { AlertCircle, ArrowLeft, ArrowRight, BookOpen, Check, LoaderCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { money, levels, safeUrl, statusLabels } from './api';
+import { money, levels, safeUrl, statusLabels, apiUrl } from './api';
 import type { Course } from './types';
 
 export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void }) {
@@ -18,11 +18,11 @@ export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void 
     <div className="notice error" role="alert">
       <AlertCircle size={19} />
       <div>
-        <strong>İşlem tamamlanamadı</strong>
-        <p>{error instanceof Error ? error.message : 'Beklenmeyen bir hata oluştu.'}</p>
+        <strong>Action could not be completed</strong>
+        <p>{error instanceof Error ? error.message : 'An unexpected error occurred.'}</p>
         {retry && (
           <button className="text-button" type="button" onClick={retry}>
-            Tekrar dene
+            Try again
           </button>
         )}
       </div>
@@ -32,7 +32,7 @@ export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void 
 export function Loading() {
   return (
     <div className="loading" role="status">
-      <LoaderCircle className="spin" size={24} /> Yükleniyor…
+      <LoaderCircle className="spin" size={24} /> Loading…
     </div>
   );
 }
@@ -125,9 +125,9 @@ export function Pagination({
 }) {
   if (pages < 2) return null;
   return (
-    <nav className="pagination" aria-label="Sayfalar">
+    <nav className="pagination" aria-label="Pages">
       <button className="button secondary" disabled={page === 0} onClick={() => onChange(page - 1)}>
-        <ArrowLeft size={16} /> Önceki
+        <ArrowLeft size={16} /> Previous
       </button>
       <span>
         {page + 1} / {pages}
@@ -137,7 +137,7 @@ export function Pagination({
         disabled={page + 1 >= pages}
         onClick={() => onChange(page + 1)}
       >
-        Sonraki <ArrowRight size={16} />
+        Next <ArrowRight size={16} />
       </button>
     </nav>
   );
@@ -146,11 +146,23 @@ export function Cover({
   course,
   className = '',
 }: {
-  course: Pick<Course, 'title' | 'thumbnailUrl' | 'categoryName'>;
+  course: Pick<Course, 'title' | 'thumbnailUrl' | 'categoryName'> & {
+    id?: string;
+    status?: string;
+  };
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  const src = safeUrl(course.thumbnailUrl);
+  let src = course.thumbnailUrl?.startsWith('/api/')
+    ? apiUrl(course.thumbnailUrl)
+    : safeUrl(course.thumbnailUrl);
+  if (src && course.id) {
+    const url = new URL(src, window.location.origin);
+    const legacy = url.pathname.match(/^\/lms-images\/images\/([a-f0-9-]{36})\//i);
+    if (legacy && url.searchParams.has('X-Amz-Signature'))
+      src = apiUrl(`/media/${legacy[1]}/cover?courseId=${course.id}`);
+  }
+  useEffect(() => setFailed(false), [src, course.status]);
   return (
     <div className={`course-cover ${className}`}>
       {src && !failed ? (
@@ -160,7 +172,7 @@ export function Cover({
           <span className="cover-orbit" />
           <span className="cover-shape" />
           <BookOpen size={44} strokeWidth={1.2} />
-          <span className="cover-label">{course.categoryName || 'Yeni bir bakış açısı'}</span>
+          <span className="cover-label">{course.categoryName || 'A new perspective'}</span>
         </>
       )}
     </div>
@@ -172,7 +184,7 @@ export function CourseCard({ course }: { course: Course }) {
       <Cover course={course} />
       <div className="course-card-body">
         <div className="card-meta">
-          <span>{course.categoryName || 'Genel'}</span>
+          <span>{course.categoryName || 'General'}</span>
           <span>{levels[course.level]}</span>
         </div>
         <h3>{course.title}</h3>
@@ -184,7 +196,7 @@ export function CourseCard({ course }: { course: Course }) {
           </span>
           <strong>
             {(course.discountPrice ?? course.price) === 0
-              ? 'Ücretsiz'
+              ? 'Free'
               : money(course.discountPrice ?? course.price)}
           </strong>
         </div>
@@ -220,7 +232,7 @@ export function Submit({ busy, children }: { busy: boolean; children: ReactNode 
   return (
     <button className="button primary" type="submit" disabled={busy}>
       {busy ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}{' '}
-      {busy ? 'İşleniyor…' : children}
+      {busy ? 'Processing…' : children}
     </button>
   );
 }
@@ -263,7 +275,7 @@ export function Modal({
     >
       <div className="modal-heading">
         <h2>{title}</h2>
-        <button className="icon-button" aria-label="Kapat" onClick={onClose}>
+        <button className="icon-button" aria-label="Close" onClick={onClose}>
           <X />
         </button>
       </div>

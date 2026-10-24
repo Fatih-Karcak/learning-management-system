@@ -13,7 +13,7 @@ public class UserEventConsumer {
     private final NotificationService notificationService;
     @KafkaListener(topics = "user-registered",groupId = "notification-service",containerFactory = "userRegisteredContainerFactory")
     public void handleUserRegistered(UserRegisteredEvent event){
-        log.info("kullanıcı kaydı eventi alındı: {}",event.userId());
+        log.info("User registration event received: {}",event.userId());
         notificationService.sendWelcomeEmail(event);
     }
 

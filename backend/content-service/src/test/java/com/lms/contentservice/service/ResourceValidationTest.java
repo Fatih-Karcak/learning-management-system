@@ -46,7 +46,7 @@ class ResourceValidationTest {
         );
         assertEquals(
             "text/plain",
-            ResourceService.validate("Ödev".getBytes(StandardCharsets.UTF_8), "project.txt")
+            ResourceService.validate("Assignment".getBytes(StandardCharsets.UTF_8), "project.txt")
         );
         assertThrows(ResponseStatusException.class, () -> ResourceService.validate(new byte[0], "empty.txt"));
     }

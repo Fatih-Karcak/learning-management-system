@@ -40,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (
                     sid == null ||
                     !sessions.active(java.util.UUID.fromString(userId), java.util.UUID.fromString(sid))
-                ) throw new IllegalArgumentException("Oturum iptal edildi");
+                ) throw new IllegalArgumentException("Session revoked");
                 UserDetails userDetails = userDetailsService.loadUserByUsername(userId);
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -52,7 +52,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (Exception e) {
-                log.error("Authentication hatası: {}", e.getMessage());
+                log.error("Authentication error: {}", e.getMessage());
             }
         }
 

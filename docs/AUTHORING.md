@@ -1,44 +1,32 @@
-# Eğitmen içerik araçları
+# Course authoring
 
-## Metin hazırlama
+The workspace is a revision-controlled draft. Saving, autosaving or recovering a draft does not change published lessons. Only administrator approval promotes the submitted document and its assessment policies.
 
-Kurs açıklaması ve ders/ödev metninde kalın, italik, başlık, liste, alıntı, kod ve HTTPS bağlantısı için düğmeler vardır. Metni seçip biçim uygulayın; **Metni ön izle** ile öğrenciye nasıl görüneceğini kontrol edin. İçerik mevcut kurslarla uyumlu Markdown biçiminde saklanır. Ön izleme ham HTML çalıştırmaz.
+## Editing safely
 
-## Ders kopyalama
+- Changes autosave after three seconds of idle time. Saving temporarily locks editing controls.
+- Leaving with pending changes opens Save and leave, Discard changes and Keep editing actions. Closing/reloading the tab uses the browser's unsaved-change prompt.
+- The same browser tab keeps a recovery draft for up to seven days. Matching revisions can be restored. If the server revision changed, download the local draft for comparison; recovery cannot overwrite the newer server document.
+- Server revision checks reject concurrent stale saves. Resolve the conflict before resubmitting.
 
-Müfredatta **Dersi kopyala** düğmesi aynı bölüme bağımsız bir ders ekler. Metin, test ayarları, kaynaklar ve aynı kursun videosu korunur; ders ve test sorusu kimlikleri yeniden üretilir. Kopya herkese açık ön izlemeye kendiliğinden açılmaz. Öğrenci yanıtları, ödev teslimleri ve ilerlemeler kopyalanmaz. Değişikliği **Taslağı kaydet** ile saklayıp mevcut inceleme sürecinden geçirin.
+## Lessons and media
 
-## Kurs şablonları
+Use Markdown formatting and its sanitized preview for lesson text. Duplicate lessons receive new identities and independently copied assessment definitions. Course templates create new course/section/lesson/question identities; assignment deadlines are cleared so old deadlines are not inherited.
 
-Eğitmen stüdyosunda **Şablondan kurs oluştur** ile temel eğitim, uygulamalı atölye veya test/değerlendirme yapısını seçin. Başlık ve kategori verildiğinde yeni, ücretsiz bir kurs ve çalışma taslağı oluşur. Örnek metinleri ve soruları kendi içeriğinizle değiştirin.
+Upload videos through the media library. Interrupted videos resume from confirmed checksummed chunks when the original file and course are selected again. Cancel unfinished uploads to free a quota slot. Select READY videos using the course editor's search and pagination controls, then save and submit the draft.
 
-Kaydedilmiş çalışma taslağını **Şablon olarak kaydet** ile kişisel listenize ekleyebilirsiniz. Kişisel şablonlar diğer hesaplara görünmez; en fazla 25 tane saklanabilir. Şablon sonraki kurs düzenlemelerinden bağımsız bir anlık kopyadır. Şablonu silmek oluşturulmuş kursları değiştirmez.
+Published cover images use a durable application URL. Signed legacy image links are resolved through the referenced course cover rather than being relied on after expiration. A bound published cover cannot be deleted from the library.
 
-Yeni kursta bölüm, ders ve soru kimlikleri yenidir. Üyeler, öğrenciler, ilerlemeler, sertifikalar ve değerlendirme geçmişi taşınmaz. Videolar, kapak görseli ve korunan kaynak dosyaları yeni kursa yeniden yüklenir; harici HTTPS kaynak bağlantıları korunur. Şablondan oluşan taslak kendiliğinden yayımlanmaz.
+## Assessments and learning rules
 
-## Ortak eğitmenler
+Quiz questions support single or multiple correct options and individual weights. Multiple answer questions award their weight only for the exact correct set. Answer keys are never included in learner question responses.
 
-Kurs sahibi **Kurs ekibi** bölümünden kayıtlı, e-posta adresini doğrulamış aktif eğitmeni e-posta adresiyle davet eder. Davet edilen kişi stüdyosundaki daveti kabul edene kadar kursa erişemez. Bir kursta bekleyenler dahil en fazla 20 ortak eğitmen olabilir.
+Assignment deadlines, late submission settings and rubrics are part of the approved workspace. Rubric grades are calculated from awarded criterion points, and each submitted revision retains its grading policy snapshot. Change requests allow resubmission without losing earlier versions.
 
-Kabul eden eğitmen kursu kendi stüdyosunda görür; taslak metinlerini, müfredatı, soru bankasını ve kaynakları düzenleyebilir. Kursun ortak medya kitaplığını kullanıp bu kursa video/dosya yükleyebilir. Aynı anda düzenlemede eski taslak sürümünü kaydetmeye çalışan kişi 409 hatası alır; diğerinin değişikliği ezilmez.
+The owner can configure prerequisite courses, sequential lessons and release intervals in Learning rules. These settings enforce access immediately for applicable enrollments; review the grandfathering rules in [product behavior](PRODUCT_FEATURES.md). Learning paths organize published courses but do not automatically enroll learners.
 
-Yayın başvurusu, arşivleme, ekip yönetimi, öğrenci listeleri, notlandırma ve öğrenci raporları kurs sahibinde kalır. Yetkili yönetici mevcut inceleme görevlerini sürdürür. Sınırlı destek/moderasyon yöneticileri ekip veya kişisel şablon yönetemez.
+## Collaboration and review
 
-Kurs sahibi üyeliği kaldırabilir; ortak eğitmen ekipten ayrılabilir. Sonraki istekten itibaren düzenleme izni kaldırılır. Ortak hesabın güncel eğitmen rolü ve aktif/doğrulanmış durumu da kontrol edilir. Daha önce kursta kullanılan ortak yüklemeler öğrencilerin erişimi bozulmasın diye kurs sahibi tarafından kullanılmaya devam edebilir.
+Owners invite registered, verified instructors. Access begins after the invitation is accepted. Accepted co-instructors edit drafts and shared course media; the owner retains publication, team management, grading and learner reports. Leaving or removing a team member revokes editing access.
 
-## API
-
-Yollar `/api/v1/courses` altındadır:
-
-| İşlem                  | Yol                                                         |
-| ---------------------- | ----------------------------------------------------------- |
-| Ekip / davet           | `GET /{id}/team`, `POST /{id}/team` (`email`)               |
-| Davetlerim             | `GET /invitations`                                          |
-| Davet yanıtı           | `POST /{id}/team/reply` (`accept`)                          |
-| Üye kaldırma / ayrılma | `DELETE /{id}/team/{user}`                                  |
-| Şablonlarım            | `GET /templates`                                            |
-| Taslaktan şablon       | `POST /{id}/templates` (`name`, `revision`)                 |
-| Şablondan kurs         | `POST /templates/{template}/create` (`title`, `categoryId`) |
-| Kişisel şablon silme   | `DELETE /templates/{template}`                              |
-
-Ortak medya kitaplığı: `GET /api/v1/media/my?courseId={id}`. Üyelik ve kurs erişimi sunucuda doğrulanır.
+The owner submits a saved revision. Reviewers inspect that revision and either approve or request changes with a reason. Public previews are enabled explicitly per lesson and intentionally remain accessible without enrollment. Archiving removes new catalog access while preserving existing learners' access according to the application's archive rules.

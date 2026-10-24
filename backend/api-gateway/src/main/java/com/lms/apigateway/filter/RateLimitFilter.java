@@ -46,7 +46,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
                 response.setStatus(429);
                 response.getWriter().write(
-                        "{\"success\":false,\"message\":\"Çok fazla istek, lütfen biraz sonra tekrar deneyin\"}");
+                        "{\"success\":false,\"message\":\"Too many requests. Please try again later\"}");
                 return;
             }
             timestamps.addLast(now);

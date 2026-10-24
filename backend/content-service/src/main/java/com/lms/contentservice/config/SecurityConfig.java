@@ -29,6 +29,8 @@ public class SecurityConfig {
                         org.springframework.http.HttpMethod.GET,
                         "/api/v1/media/*",
                         "/api/v1/media/*/manifest.m3u8",
+                        "/api/v1/media/*/quality-*.m3u8",
+                        "/api/v1/media/*/cover",
                         "/api/v1/media/*/*.ts"
                     )
                     .permitAll()

@@ -12,6 +12,7 @@ public interface MediaAssetMapper {
     // streamUrl ve thumbnailUrl imzalı (presigned) URL gerektirir,
     // bu yüzden mapper'da değil MediaService'te elle dolduruluyor.
     @Mapping(target = "streamUrl", ignore = true)
+    @Mapping(target = "publicUrl", ignore = true)
     @Mapping(target = "thumbnailUrl", ignore = true)
     MediaAssetResponse toResponse(MediaAsset asset);
 }

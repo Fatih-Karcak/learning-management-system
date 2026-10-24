@@ -39,10 +39,10 @@ public class LessonService {
     public LessonResponse createLesson(CreateLessonRequest request, UUID instructorId) {
         Section section = sectionRepository
             .findById(request.getSectionId())
-            .orElseThrow(() -> new CourseNotFoundException("Bölüm bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Section not found"));
 
         if (!section.getCourse().getInstructorId().equals(instructorId)) {
-            throw new UnauthorizedException("Bu bölüme ders ekleme yetkiniz yok");
+            throw new UnauthorizedException("You do not have permission to add lessons to this section");
         }
 
         CourseWorkspaceService.requireDirectEditable(section.getCourse());
@@ -74,14 +74,14 @@ public class LessonService {
     public LessonResponse updateVideo(UUID lessonId, UpdateLessonVideoRequest request, UUID instructorId) {
         Lesson lesson = lessonRepository
             .findById(lessonId)
-            .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Lesson not found"));
         if (!lesson.getSection().getCourse().getInstructorId().equals(instructorId)) {
-            throw new UnauthorizedException("Bu dersin videosunu değiştirme yetkiniz yok");
+            throw new UnauthorizedException("You do not have permission to change this lesson's video");
         }
         CourseWorkspaceService.requireDirectEditable(lesson.getSection().getCourse());
         if (lesson.getType() != LessonType.VIDEO && lesson.getType() != LessonType.ARTICLE) {
             throw new IllegalArgumentException(
-                "Video yalnızca video veya okuma türündeki bir derse eklenebilir"
+                "A video can only be attached to a video or article lesson"
             );
         }
         linkVideo(lesson, request.videoUrl(), request.durationSeconds(), instructorId);
@@ -94,14 +94,14 @@ public class LessonService {
         try {
             uri = URI.create(url.trim());
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Video adresi geçersiz");
+            throw new IllegalArgumentException("Invalid video URL");
         }
         if (
             uri.isAbsolute() &&
             !"https".equalsIgnoreCase(uri.getScheme()) &&
             !"http".equalsIgnoreCase(uri.getScheme())
         ) {
-            throw new IllegalArgumentException("Video adresi http veya https olmalı");
+            throw new IllegalArgumentException("Video URLs must use HTTP or HTTPS");
         }
         var match = java.util.regex.Pattern.compile(
             "^/api/v1/media/([0-9a-fA-F-]{36})/manifest\\.m3u8$"
@@ -120,28 +120,28 @@ public class LessonService {
                 );
             } catch (RestClientResponseException ex) {
                 if (ex.getStatusCode().value() == 403) throw new UnauthorizedException(
-                    "Yalnızca kendi videonuzu kullanabilirsiniz"
+                    "You can only use your own videos"
                 );
-                if (ex.getStatusCode().value() == 404) throw new CourseNotFoundException("Video bulunamadı");
+                if (ex.getStatusCode().value() == 404) throw new CourseNotFoundException("Video not found");
                 if (ex.getStatusCode().value() == 409) throw new IllegalStateException(
-                    "Video işlenemedi veya başka bir kursa bağlı"
+                    "The video failed processing or belongs to another course"
                 );
                 throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "Video derse bağlanamadı; içerik servisini kontrol edin",
+                    "The video could not be attached; check the content service",
                     ex
                 );
             } catch (RestClientException ex) {
                 throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "İçerik servisine ulaşılamadı",
+                    "The content service could not be reached",
                     ex
                 );
             }
             if (result == null || !result.success() || result.data() == null) {
                 throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "Video bağlantısı doğrulanamadı"
+                    "The video attachment could not be verified"
                 );
             }
             // Store a relative gateway URL, independent of an instructor's local host/port.
@@ -152,7 +152,7 @@ public class LessonService {
         } else {
             if (!uri.isAbsolute() || uri.getHost() == null) {
                 throw new IllegalArgumentException(
-                    "Medya kitaplığından bir video veya geçerli bir video adresi seçin"
+                    "Select a video from the media library or provide a valid video URL"
                 );
             }
             lesson.setVideoUrl(url.trim());
@@ -164,7 +164,7 @@ public class LessonService {
     public List<LessonResponse> getLessonsBySection(UUID sectionId, AuthenticatedUser viewer) {
         Section section = sectionRepository
             .findById(sectionId)
-            .orElseThrow(() -> new CourseNotFoundException("Bölüm bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Section not found"));
         accessPolicy.requireVisible(section.getCourse(), viewer);
         boolean fullAccess = accessPolicy.canReadContent(section.getCourse(), viewer);
         List<LessonResponse> responses = lessonRepository
@@ -172,7 +172,7 @@ public class LessonService {
             .stream()
             .map(courseMapper::toLessonResponse)
             .toList();
-        accessPolicy.filterLessons(responses, fullAccess);
+        accessPolicy.filterCourseLessons(section.getCourse(), responses, fullAccess, viewer);
         return responses;
     }
 
@@ -180,7 +180,7 @@ public class LessonService {
     public void deleteLesson(UUID lessonId, UUID instructorId) {
         Lesson lesson = lessonRepository
             .findById(lessonId)
-            .orElseThrow(() -> new CourseNotFoundException("Ders bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Lesson not found"));
 
         if (!lesson.getSection().getCourse().getInstructorId().equals(instructorId)) {
             throw new UnauthorizedException("Bu dersi silme yetkiniz yok");
@@ -190,7 +190,7 @@ public class LessonService {
             lesson.getSection().getCourse().getStatus() == CourseStatus.PUBLISHED &&
             lessonRepository.countBySectionCourseId(lesson.getSection().getCourse().getId()) <= 1
         ) {
-            throw new IllegalStateException("Yayımlanmış kursun son dersi silinemez");
+            throw new IllegalStateException("The last lesson of a published course cannot be deleted");
         }
         CourseWorkspaceService.requireDirectEditable(lesson.getSection().getCourse());
         lessonRepository.delete(lesson);

@@ -41,16 +41,16 @@ public class RefundService {
     public RefundResponse createRefund(RefundRequest request, UUID studentId) {
         Payment payment = paymentRepository.findByIdForUpdate(request.getPaymentId())
                 .orElseThrow(() -> new PaymentNotFoundException(
-                        "Ödeme bulunamadı: " + request.getPaymentId()));
+                        "Payment not found: " + request.getPaymentId()));
 
         // Yetki kontrolü
         if (!payment.getStudentId().equals(studentId)) {
-            throw new PaymentNotFoundException("Bu ödemeye erişim yetkiniz yok");
+            throw new PaymentNotFoundException("You do not have access to this payment");
         }
 
         // Durum kontrolü
         if (payment.getStatus() != PaymentStatus.COMPLETED) {
-            throw new PaymentFailedException("Sadece tamamlanmış ödemeler iade edilebilir");
+            throw new PaymentFailedException("Only completed payments can be refunded");
         }
 
         // 30 gün kontrolü
@@ -59,7 +59,7 @@ public class RefundService {
 
         if (daysSincePayment > REFUND_WINDOW_DAYS) {
             throw new PaymentFailedException(
-                    "İade süresi dolmuş. İade penceresi: " + REFUND_WINDOW_DAYS + " gün");
+                    "The refund window has expired. Refund window: " + REFUND_WINDOW_DAYS + " days");
         }
 
         // Stripe'tan iade işle
@@ -92,7 +92,7 @@ public class RefundService {
                         refund.getId()
                 ));
 
-        log.info("İade tamamlandı: Payment={}, Refund={}",
+        log.info("Refund completed: Payment={}, Refund={}",
                 payment.getId(), refund.getId());
 
         return paymentMapper.toRefundResponse(refund);
@@ -111,8 +111,8 @@ public class RefundService {
                     .setIdempotencyKey("refund-" + paymentId).build());
 
         } catch (StripeException e) {
-            log.error("Stripe iade hatası: {}", e.getMessage());
-            throw new PaymentFailedException("İade işlemi başarısız: " + e.getMessage());
+            log.error("Stripe refund error: {}", e.getMessage());
+            throw new PaymentFailedException("Refund processing failed: " + e.getMessage());
         }
     }
 

@@ -44,7 +44,7 @@ public class NotificationService {
                 .queryParam("token", event.verificationToken())
                 .build().encode().toUriString());
 
-        sendAndLog(event.userId(), event.email(), "LMS'e Hoş Geldiniz!",
+        sendAndLog(event.userId(), event.email(), "Welcome to the LMS!",
                 "welcome-email", ctx, "USER_REGISTERED");
     }
 
@@ -56,7 +56,7 @@ public class NotificationService {
         ctx.setVariable("instructorName", instructor.firstName());
         ctx.setVariable("courseTitle", event.title());
 
-        sendAndLog(event.instructorId(), instructor.email(), "Kursunuz Yayınlandı: " + event.title(),
+        sendAndLog(event.instructorId(), instructor.email(), "Your course is published: " + event.title(),
                 "course-published-email", ctx, "COURSE_PUBLISHED");
     }
 
@@ -75,7 +75,7 @@ public class NotificationService {
         ctx.setVariable("studentName", studentName);
         ctx.setVariable("courseTitle", event.courseTitle());
 
-        sendAndLog(event.studentId(), email, "Kursa Kaydınız Tamamlandı: " + event.courseTitle(),
+        sendAndLog(event.studentId(), email, "Your course enrollment is complete: " + event.courseTitle(),
                 "course-enrolled-email", ctx, "ENROLLMENT_CREATED");
     }
 
@@ -89,7 +89,7 @@ public class NotificationService {
         ctx.setVariable("amount", event.amount());
         ctx.setVariable("instructorName", event.instructorName());
 
-        sendAndLog(event.studentId(), student.email(), "Ödeme Makbuzu: " + event.courseTitle(),
+        sendAndLog(event.studentId(), student.email(), "Payment receipt: " + event.courseTitle(),
                 "payment-receipt-email", ctx, "PAYMENT_RECEIPT");
     }
 
@@ -102,7 +102,7 @@ public class NotificationService {
         ctx.setVariable("courseTitle", event.courseTitle());
         ctx.setVariable("verificationCode", event.verificationCode());
 
-        sendAndLog(event.studentId(), student.email(), "Tebrikler! Sertifikanız Hazır: " + event.courseTitle(),
+        sendAndLog(event.studentId(), student.email(), "Congratulations! Your certificate is ready: " + event.courseTitle(),
                 "certificate-issued-email", ctx, "CERTIFICATE_ISSUED");
     }
 
@@ -117,7 +117,7 @@ public class NotificationService {
             UserInfoResult result = userClient.getUserById(userId);
             return result != null ? result.data() : null;
         } catch (Exception e) {
-            log.error("Kullanıcı bilgisi alınamadı: {} - {}", userId, e.getMessage());
+            log.error("Could not retrieve user details: {} - {}", userId, e.getMessage());
             return null;
         }
     }
@@ -138,7 +138,7 @@ public class NotificationService {
             emailService.sendHtmlEmail(email, subject, template, ctx);
             logEntry.setStatus(NotificationStatus.SENT);
         } catch (Exception e) {
-            log.error("Bildirim gönderilemedi - tip: {}, alıcı: {}, hata: {}",
+            log.error("Notification delivery failed - type: {}, recipient: {}, error: {}",
                     eventType, email, e.getMessage());
             logEntry.setStatus(NotificationStatus.FAILED);
             logEntry.setFailureReason(e.getMessage());

@@ -64,7 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               body: JSON.stringify({ refreshToken: session.refreshToken }),
             });
             if (!response.ok) {
-              if (response.status >= 500) throw new Error('Oturum servisine ulaşılamıyor.');
+              if (response.status >= 500)
+                throw new Error('The session service could not be reached.');
               return false;
             }
             const result = await response.json();

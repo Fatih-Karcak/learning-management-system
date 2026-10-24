@@ -3,14 +3,14 @@
 <head><meta charset="UTF-8"/></head>
 <body style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px;">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;">
-    <h1 style="color:#2563eb;">Hoş Geldin, <span th:text="${firstName}">Ad</span>! 🎉</h1>
-    <p>LMS Platformu'na kaydolduğun için teşekkürler. Hesabını aktifleştirmek için:</p>
+    <h1 style="color:#2563eb;">Welcome, <span th:text="${firstName}">First name</span>! 🎉</h1>
+    <p>Thank you for joining Ileri Academy. Activate your account using the link below:</p>
     <p style="text-align:center;margin:32px 0;">
         <a th:href="${verificationUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">
-            E-postamı Doğrula
+            Verify my email
         </a>
     </p>
-    <p style="color:#94a3b8;font-size:12px;">Bu e-postayı sen istemediysen görmezden gelebilirsin.</p>
+    <p style="color:#94a3b8;font-size:12px;">If you did not request this email, you can ignore it.</p>
 </div>
 </body>
 </html>

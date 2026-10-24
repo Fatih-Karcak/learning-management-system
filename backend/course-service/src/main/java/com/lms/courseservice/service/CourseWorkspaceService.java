@@ -45,8 +45,14 @@ public class CourseWorkspaceService {
         @NotNull CourseResponse course,
         @NotNull Long categoryId,
         @NotNull Map<UUID, AssessmentService.Quiz> quizzes,
-        @NotNull Map<UUID, List<@Valid Material>> materials
-    ) {}
+        @NotNull Map<UUID, List<@Valid Material>> materials,
+        Map<UUID, AssignmentPolicyService.Policy> assignments
+    ) {
+        public Document { assignments=assignments==null?Map.of():Map.copyOf(assignments); }
+        public Document(CourseResponse course,Long categoryId,Map<UUID,AssessmentService.Quiz> quizzes,Map<UUID,List<Material>> materials) {
+            this(course,categoryId,quizzes,materials,Map.of());
+        }
+    }
 
     public record Save(@Min(0) long revision, @NotNull Document document) {}
 
@@ -69,7 +75,7 @@ public class CourseWorkspaceService {
             .orElseThrow(() ->
                 new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "Kurs bulunamadı"
+                    "Course not found"
                 )
             );
         if (
@@ -78,7 +84,7 @@ public class CourseWorkspaceService {
             !authors.canEdit(course, user.id())
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Kurs size ait değil"
+            "This course does not belong to you"
         );
         return course;
     }
@@ -88,7 +94,7 @@ public class CourseWorkspaceService {
             course.getStatus() != CourseStatus.DRAFT
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Yayındaki veya incelemedeki kursu çalışma taslağından düzenleyin"
+            "Edit published or reviewed courses through the workspace"
         );
     }
 
@@ -100,8 +106,11 @@ public class CourseWorkspaceService {
     private Document current(Course course) {
         Map<UUID, AssessmentService.Quiz> quizzes = new LinkedHashMap<>();
         Map<UUID, List<Material>> materials = new LinkedHashMap<>();
+        Map<UUID,AssignmentPolicyService.Policy> assignments=new LinkedHashMap<>();
         for (var section : course.getSections())
             for (var lesson : section.getLessons()) {
+                var policies=jdbc.queryForList("select document from assignment_policies where lesson_id=?",String.class,lesson.getId());
+                if(!policies.isEmpty()) assignments.put(lesson.getId(),json.readValue(policies.getFirst(),AssignmentPolicyService.Policy.class));
                 jdbc.query(
                     "select definition from lesson_quizzes where lesson_id=?",
                     rs -> {
@@ -135,7 +144,8 @@ public class CourseWorkspaceService {
             mapper.toResponse(course),
             course.getCategory().getId(),
             quizzes,
-            materials
+            materials,
+            assignments
         );
     }
 
@@ -169,13 +179,13 @@ public class CourseWorkspaceService {
             previous.revision() != input.revision()
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Taslak başka bir pencerede değişti. Yenileyip değişikliklerinizi yeniden uygulayın"
+            "The draft changed in another window. Reload and reapply your changes"
         );
         if (
             "PENDING_REVIEW".equals(previous.status())
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "İnceleme sürüyor; önce başvuruyu geri çekin"
+            "The draft is under review; withdraw the submission first"
         );
         validate(input.document(), course);
         jdbc.update(
@@ -195,7 +205,7 @@ public class CourseWorkspaceService {
             workspace.revision() != revision || revision == 0
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "Önce güncel taslağı kaydedin"
+            "Save the latest draft first"
         );
         if (
             !workspace.checklist().isEmpty()
@@ -247,12 +257,12 @@ public class CourseWorkspaceService {
             !"PENDING_REVIEW".equals(w.status()) || w.revision() != revision
         ) throw new ResponseStatusException(
             HttpStatus.CONFLICT,
-            "İncelenen taslak değişti"
+            "The draft under review has changed"
         );
         if ("REJECT".equals(decision.action())) {
             if (
                 decision.reason() == null || decision.reason().isBlank()
-            ) throw new IllegalArgumentException("Düzeltme gerekçesi gerekli");
+            ) throw new IllegalArgumentException("A reason for requesting changes is required");
             jdbc.update(
                 "update course_workspaces set status='DRAFT',feedback=?,revision=revision+1 where course_id=?",
                 decision.reason(),
@@ -263,7 +273,7 @@ public class CourseWorkspaceService {
             if (
                 !checklist(w.document()).isEmpty()
             ) throw new IllegalArgumentException(
-                "Yayın kontrol listesini tamamlayın"
+                "Complete the publication checklist"
             );
             verifyMedia(w.document(), course);
             promote(course, w.document());
@@ -272,7 +282,7 @@ public class CourseWorkspaceService {
                     UUID.randomUUID(),
                     course.getInstructorId(),
                     id,
-                    "Kursunuz yayımlandı",
+                    "Your course has been published",
                     w.document().course().getTitle(),
                     "/instructor/" + id,
                     "COURSE_PUBLISHED",
@@ -330,8 +340,9 @@ public class CourseWorkspaceService {
         access.requireVisible(c, user);
         if (!access.canReadContent(c, user)) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Kursa kayıt olun"
+            "Enroll in the course"
         );
+        access.requireLessonAccess(c,lessonId,user);
         if (
             c
                 .getSections()
@@ -357,50 +368,50 @@ public class CourseWorkspaceService {
             d.course() == null ||
             d.quizzes() == null ||
             d.materials() == null
-        ) throw new IllegalArgumentException("Taslak eksik");
+        ) throw new IllegalArgumentException("The draft is incomplete");
         if (
             json.writeValueAsString(d).length() > 10 * 1024 * 1024
-        ) throw new IllegalArgumentException("Taslak 10 MB sınırını aşıyor");
+        ) throw new IllegalArgumentException("The draft exceeds the 10 MB limit");
         var c = d.course();
         if (
             !existing.getId().equals(c.getId())
-        ) throw new IllegalArgumentException("Kurs kimliği uyuşmuyor");
-        text(c.getTitle(), 3, 200, "Kurs başlığı");
+        ) throw new IllegalArgumentException("The course identifier does not match");
+        text(c.getTitle(), 3, 200, "Course title");
         if (
             c.getTargetAudience() != null &&
             c.getTargetAudience().length() > 2000
-        ) throw new IllegalArgumentException("Hedef kitle açıklaması çok uzun");
-        text(c.getDescription(), 1, 100000, "Açıklama");
-        text(c.getShortDescription(), 1, 500, "Kısa açıklama");
-        text(c.getLanguage(), 1, 50, "Dil");
+        ) throw new IllegalArgumentException("The target audience description is too long");
+        text(c.getDescription(), 1, 100000, "Description");
+        text(c.getShortDescription(), 1, 500, "Short description");
+        text(c.getLanguage(), 1, 50, "Language");
         if (
             c.getLevel() == null ||
             c.getPrice() == null ||
             c.getPrice().signum() < 0 ||
             c.getPrice().compareTo(new java.math.BigDecimal("99999999")) > 0
-        ) throw new IllegalArgumentException("Seviye veya fiyat geçersiz");
+        ) throw new IllegalArgumentException("Invalid level or price");
         if (
             c.getDiscountPrice() != null &&
             (c.getDiscountPrice().signum() < 0 ||
                 c.getDiscountPrice().compareTo(c.getPrice()) > 0)
-        ) throw new IllegalArgumentException("İndirimli fiyat geçersiz");
+        ) throw new IllegalArgumentException("Invalid discounted price");
         if (
             !categories.existsById(d.categoryId())
-        ) throw new IllegalArgumentException("Kategori bulunamadı");
+        ) throw new IllegalArgumentException("Category not found");
         if (
             c.getSections() == null || c.getSections().size() > 100
-        ) throw new IllegalArgumentException("En fazla 100 bölüm olabilir");
+        ) throw new IllegalArgumentException("A course can have up to 100 sections");
         var sectionIds = new HashSet<UUID>();
         var lessonIds = new HashSet<UUID>();
         for (var s : c.getSections()) {
             if (
                 s.getId() == null || !sectionIds.add(s.getId())
-            ) throw new IllegalArgumentException("Yinelenen bölüm");
-            text(s.getTitle(), 1, 200, "Bölüm başlığı");
+            ) throw new IllegalArgumentException("Duplicate section");
+            text(s.getTitle(), 1, 200, "Section title");
             if (
                 s.getLessons() == null || s.getLessons().size() > 200
             ) throw new IllegalArgumentException(
-                "Bölümde en fazla 200 ders olabilir"
+                "A section can have up to 200 lessons"
             );
             for (var l : s.getLessons()) {
                 if (
@@ -408,12 +419,12 @@ public class CourseWorkspaceService {
                     !lessonIds.add(l.getId()) ||
                     l.getType() == null
                 ) throw new IllegalArgumentException(
-                    "Ders kimliği veya türü geçersiz"
+                    "Invalid lesson identifier or type"
                 );
-                text(l.getTitle(), 1, 200, "Ders başlığı");
+                text(l.getTitle(), 1, 200, "Lesson title");
                 if (
                     l.getContent() != null && l.getContent().length() > 100000
-                ) throw new IllegalArgumentException("Ders metni çok uzun");
+                ) throw new IllegalArgumentException("The lesson text is too long");
             }
         }
         // Published lesson identities and assessment kinds remain stable: old progress/certificates stay valid.
@@ -431,7 +442,7 @@ public class CourseWorkspaceService {
                     next.isEmpty() || next.get().getType() != l.getType()
                 ) throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Yayımlanmış ders silinemez veya türü değiştirilemez. İçeriği güncelleyebilir ya da kursu arşivleyebilirsiniz"
+                    "Published lessons cannot be deleted or have their types changed. Update the content or archive the course"
                 );
             }
         for (var id : sectionIds) {
@@ -442,7 +453,7 @@ public class CourseWorkspaceService {
             );
             if (
                 !owners.isEmpty() && !owners.getFirst().equals(existing.getId())
-            ) throw new IllegalArgumentException("Bölüm başka bir kursa ait");
+            ) throw new IllegalArgumentException("The section belongs to another course");
         }
         for (var id : lessonIds) {
             var owners = jdbc.queryForList(
@@ -452,7 +463,7 @@ public class CourseWorkspaceService {
             );
             if (
                 !owners.isEmpty() && !owners.getFirst().equals(existing.getId())
-            ) throw new IllegalArgumentException("Ders başka bir kursa ait");
+            ) throw new IllegalArgumentException("The lesson belongs to another course");
         }
         d.quizzes().forEach((id, q) -> {
             if (
@@ -461,31 +472,40 @@ public class CourseWorkspaceService {
                 !validator.validate(q).isEmpty() ||
                 (q.questionCount() != null &&
                     q.questionCount() > q.questions().size())
-            ) throw new IllegalArgumentException("Test tanımı geçersiz");
+            ) throw new IllegalArgumentException("Invalid quiz definition");
             var ids = new HashSet<UUID>();
-            for (var question : q.questions())
+            for (var question : q.questions()) {
+                AssessmentService.validateQuestion(question);
                 if (
                     question.id() == null ||
                     !ids.add(question.id()) ||
                     question.correctOption() >= question.options().size()
-                ) throw new IllegalArgumentException("Test soruları geçersiz");
+                ) throw new IllegalArgumentException("Invalid quiz questions");
+            }
+        });
+        d.assignments().forEach((id,policy)->{
+            if(!lessonIds.contains(id)||policy==null||!validator.validate(policy).isEmpty()||
+                c.getSections().stream().flatMap(section->section.getLessons().stream()).noneMatch(lesson->lesson.getId().equals(id)&&lesson.getType()==LessonType.ASSIGNMENT))
+                throw new IllegalArgumentException("Invalid assignment policy");
+            if(policy.rubric().stream().map(AssignmentPolicyService.Criterion::id).distinct().count()!=policy.rubric().size())
+                throw new IllegalArgumentException("Duplicate rubric criteria");
         });
         d.materials().forEach((id, items) -> {
             if (
                 !lessonIds.contains(id) || items == null || items.size() > 20
-            ) throw new IllegalArgumentException("Kaynak listesi geçersiz");
+            ) throw new IllegalArgumentException("Invalid resource list");
             for (var item : items) {
                 if (
                     !validator.validate(item).isEmpty()
                 ) throw new IllegalArgumentException(
-                    "Kaynak bilgileri geçersiz"
+                    "Invalid resource details"
                 );
                 URI u;
                 try {
                     u = URI.create(item.url());
                 } catch (Exception e) {
                     throw new IllegalArgumentException(
-                        "Kaynak adresi geçersiz"
+                        "Invalid resource URL"
                     );
                 }
                 if (
@@ -498,7 +518,7 @@ public class CourseWorkspaceService {
                         u.getHost() == null ||
                         u.getUserInfo() != null)
                 ) throw new IllegalArgumentException(
-                    "Kaynak adresi HTTPS olmalı"
+                    "Resource URLs must use HTTPS"
                 );
                 if (
                     "SUBTITLE".equals(item.type()) &&
@@ -506,7 +526,7 @@ public class CourseWorkspaceService {
                         !item
                             .language()
                             .matches("[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?"))
-                ) throw new IllegalArgumentException("Altyazı dili gerekli");
+                ) throw new IllegalArgumentException("A subtitle language is required");
             }
         });
     }
@@ -514,7 +534,7 @@ public class CourseWorkspaceService {
     private void text(String s, int min, int max, String name) {
         if (
             s == null || s.trim().length() < min || s.length() > max
-        ) throw new IllegalArgumentException(name + " geçersiz");
+        ) throw new IllegalArgumentException(name + " is invalid");
     }
 
     private void requirePublisher(Course course, AuthenticatedUser user) {
@@ -522,7 +542,7 @@ public class CourseWorkspaceService {
             !user.isAdmin() && !course.getInstructorId().equals(user.id())
         ) throw new ResponseStatusException(
             HttpStatus.FORBIDDEN,
-            "Yayın başvurusunu yalnızca kurs sahibi yönetebilir"
+            "Only the course owner can manage publication submissions"
         );
     }
 
@@ -535,32 +555,32 @@ public class CourseWorkspaceService {
                 .getRequirements()
                 .stream()
                 .noneMatch(x -> x != null && !x.isBlank())
-        ) issues.add("En az bir ön koşul yazın (yoksa 'Ön koşul yok')");
+        ) issues.add("Add at least one requirement (or state that no prior knowledge is required)");
         if (
             c.getOutcomes() == null ||
             c
                 .getOutcomes()
                 .stream()
                 .noneMatch(x -> x != null && !x.isBlank())
-        ) issues.add("En az bir öğrenme kazanımı ekleyin");
+        ) issues.add("Add at least one learning outcome");
         if (
             c.getSections() == null ||
             c
                 .getSections()
                 .stream()
                 .allMatch(s -> s.getLessons().isEmpty())
-        ) issues.add("En az bir ders ekleyin");
+        ) issues.add("Add at least one lesson");
         if (c.getSections() != null) for (var s : c.getSections())
             for (var l : s.getLessons()) {
                 if (
                     l.getType() == LessonType.QUIZ &&
                     !d.quizzes().containsKey(l.getId())
-                ) issues.add(l.getTitle() + ": test soruları eksik");
+                ) issues.add(l.getTitle() + ": quiz questions are missing");
                 if (
                     (l.getType() == LessonType.ARTICLE ||
                         l.getType() == LessonType.ASSIGNMENT) &&
                     (l.getContent() == null || l.getContent().isBlank())
-                ) issues.add(l.getTitle() + ": içerik eksik");
+                ) issues.add(l.getTitle() + ": content is missing");
                 if (
                     l.getType() == LessonType.VIDEO &&
                     (l.getVideoUrl() == null || l.getVideoUrl().isBlank())
@@ -587,13 +607,13 @@ public class CourseWorkspaceService {
                         !course.getId().equals(resource.data().courseId()) ||
                         !"MATERIAL".equals(resource.data().purpose())
                     ) throw new IllegalArgumentException(
-                        "Kaynak bu kursa ve eğitmene ait değil"
+                        "The resource does not belong to this course and instructor"
                     );
                     if (
                         "SUBTITLE".equals(material.type()) &&
                         !"text/vtt".equals(resource.data().contentType())
                     ) throw new IllegalArgumentException(
-                        "Altyazı WebVTT olmalı"
+                        "Subtitles must use WebVTT format"
                     );
                 }
 
@@ -604,7 +624,7 @@ public class CourseWorkspaceService {
                         "^/api/v1/media/([0-9a-fA-F-]{36})/manifest\\.m3u8$"
                     ).matcher(l.getVideoUrl());
                     if (!match.matches()) throw new IllegalArgumentException(
-                        "Videoyu medya kitaplığından seçin"
+                        "Select a video from the media library"
                     );
                     try {
                         var result = content.linkVideo(
@@ -623,7 +643,7 @@ public class CourseWorkspaceService {
                             result.data().durationSeconds() == null ||
                             result.data().durationSeconds() <= 0
                         ) throw new IllegalStateException(
-                            l.getTitle() + ": video henüz hazır değil"
+                            l.getTitle() + ": the video is not ready yet"
                         );
                         l.setDurationSeconds(result.data().durationSeconds());
                     } catch (
@@ -631,7 +651,7 @@ public class CourseWorkspaceService {
                     ) {
                         throw new ResponseStatusException(
                             HttpStatus.SERVICE_UNAVAILABLE,
-                            "Video doğrulanamadı",
+                            "The video could not be verified",
                             e
                         );
                     }
@@ -709,6 +729,9 @@ public class CourseWorkspaceService {
                     l.getId(),
                     json.writeValueAsString(d.quizzes().get(l.getId()))
                 );
+                if(d.assignments().containsKey(l.getId())) jdbc.update(
+                    "insert into assignment_policies(lesson_id,document) values(?,?) on conflict(lesson_id) do update set document=excluded.document,revision=assignment_policies.revision+1,updated_at=now()",
+                    l.getId(),json.writeValueAsString(d.assignments().get(l.getId())));
                 jdbc.update(
                     "insert into lesson_materials(lesson_id,document) values(?,?) on conflict(lesson_id) do update set document=excluded.document",
                     l.getId(),

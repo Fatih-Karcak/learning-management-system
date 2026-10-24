@@ -166,7 +166,7 @@ class GatewaySecurityTest {
         assertEquals(429, response.getStatus());
         assertEquals("UTF-8", response.getCharacterEncoding());
         assertTrue(
-            new String(response.getContentAsByteArray(), StandardCharsets.UTF_8).contains("Çok fazla istek")
+            new String(response.getContentAsByteArray(), StandardCharsets.UTF_8).contains("Too many requests")
         );
     }
 }

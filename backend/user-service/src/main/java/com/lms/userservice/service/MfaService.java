@@ -39,7 +39,7 @@ public class MfaService {
     @Transactional
     public Setup setup(UUID user, String email) {
         jdbc.queryForList("select id from users where id=? for update", user);
-        if (enabled(user)) throw new IllegalStateException("İki aşamalı doğrulama zaten açık");
+        if (enabled(user)) throw new IllegalStateException("Two-factor authentication is already enabled");
         byte[] seed = new byte[20];
         new SecureRandom().nextBytes(seed);
         StringBuilder b = new StringBuilder();
@@ -62,11 +62,11 @@ public class MfaService {
         return new Setup(
             secret,
             "otpauth://totp/" +
-                java.net.URLEncoder.encode("İleri Akademi:" + email, StandardCharsets.UTF_8) +
+                java.net.URLEncoder.encode("Ileri Academy:" + email, StandardCharsets.UTF_8) +
                 "?secret=" +
                 secret +
                 "&issuer=" +
-                java.net.URLEncoder.encode("İleri Akademi", StandardCharsets.UTF_8) +
+                java.net.URLEncoder.encode("Ileri Academy", StandardCharsets.UTF_8) +
                 "&algorithm=SHA1&digits=6&period=30"
         );
     }
@@ -75,7 +75,7 @@ public class MfaService {
     public void verify(UUID user, String code, boolean activation) {
         var rows = jdbc.queryForList("select * from user_mfa where user_id=? for update", user);
         if (rows.isEmpty()) {
-            if (activation) throw new BadCredentialsException("Önce doğrulama kurulumu yapın");
+            if (activation) throw new BadCredentialsException("Set up verification first");
             return;
         }
         var r = rows.getFirst();
@@ -83,7 +83,7 @@ public class MfaService {
         var until = (java.sql.Timestamp) r.get("locked_until");
         if (
             until != null && until.toInstant().isAfter(java.time.Instant.now())
-        ) throw new BadCredentialsException("Çok fazla doğrulama denemesi; daha sonra deneyin");
+        ) throw new BadCredentialsException("Too many verification attempts; try again later");
         long step = System.currentTimeMillis() / 30000,
             last = ((Number) r.get("last_step")).longValue(),
             accepted = -1;
@@ -99,7 +99,7 @@ public class MfaService {
                 "update user_mfa set failed_attempts=failed_attempts+1,locked_until=case when failed_attempts>=4 then now()+interval '5 minutes' else locked_until end where user_id=?",
                 user
             );
-            throw new BadCredentialsException("Doğrulama kodu gerekli, geçersiz veya kullanılmış");
+            throw new BadCredentialsException("The verification code is required, invalid or already used");
         }
         jdbc.update(
             "update user_mfa set enabled=true,last_step=?,failed_attempts=0,locked_until=null where user_id=?",

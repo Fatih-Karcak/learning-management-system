@@ -141,7 +141,7 @@ public class EngagementService {
     @Transactional
     public void moderateReview(UUID review, AuthenticatedUser user, String reason) {
         if (!user.isAdmin()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Gerekçe gerekli");
+        if (reason == null || reason.isBlank()) throw new IllegalArgumentException("A reason is required");
         var rows = jdbc.queryForList("select course_id from reviews where id=?", UUID.class, review);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         jdbc.update("delete from reviews where id=?", review);

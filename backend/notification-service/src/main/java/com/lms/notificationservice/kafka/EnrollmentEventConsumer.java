@@ -18,14 +18,14 @@ public class EnrollmentEventConsumer {
     @KafkaListener(topics = "enrollment-created", groupId = "notification-service",
             containerFactory = "enrollmentCreatedContainerFactory")
     public void handleEnrollmentCreated(EnrollmentCreatedEvent event) {
-        log.info("Kayıt eventi alındı: {}", event.enrollmentId());
+        log.info("Enrollment event received: {}", event.enrollmentId());
         notificationService.sendEnrollmentEmail(event);
     }
 
     @KafkaListener(topics = "certificate-issued", groupId = "notification-service",
             containerFactory = "certificateIssuedContainerFactory")
     public void handleCertificateIssued(CertificateIssuedEvent event) {
-        log.info("Sertifika eventi alındı: {}", event.certificateId());
+        log.info("Certificate event received: {}", event.certificateId());
         notificationService.sendCertificateEmail(event);
     }
 }

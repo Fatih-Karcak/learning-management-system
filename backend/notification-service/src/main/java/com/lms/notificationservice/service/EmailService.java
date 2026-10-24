@@ -22,7 +22,7 @@ public class EmailService {
 
     public void sendHtmlEmail(String to,String subject,String templateName,Context context){
         if(to==null || to.isBlank()){
-        throw new EmailSendException("Alıcı e-posta adresi boş");
+        throw new EmailSendException("Recipient email address is empty");
         }
         try{
             String html= templateEngine.process(templateName,context);
@@ -33,12 +33,12 @@ public class EmailService {
             helper.setSubject(subject);
             helper.setText(html,true);
             mailSender.send(message);
-            log.info("E-posta gönderildi: '{}' ->{} ",subject,to);
+            log.info("Email sent: '{}' ->{} ",subject,to);
 
 
         }
         catch (MessagingException | MailException e){
-            throw new EmailSendException("e-posta gönderilemedi"+e.getMessage());
+            throw new EmailSendException("Email could not be sent"+e.getMessage());
         }
 
 

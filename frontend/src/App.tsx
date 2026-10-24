@@ -57,6 +57,8 @@ const Payments = lazy(() => import('./pages/Account').then((m) => ({ default: m.
 const Profile = lazy(() => import('./pages/Account').then((m) => ({ default: m.Profile })));
 const Checkout = lazy(() => import('./pages/Checkout'));
 
+const LearningPaths = lazy(() => import('./pages/LearningPaths'));
+const Organizations = lazy(() => import('./pages/Organizations'));
 const Security = lazy(() => import('./pages/Security'));
 const Support = lazy(() => import('./pages/Support'));
 const Operations = lazy(() => import('./pages/Support').then((m) => ({ default: m.Operations })));
@@ -70,9 +72,9 @@ class Boundary extends Component<{ children: ReactNode }, { error: Error | null 
   render() {
     return this.state.error ? (
       <main className="fatal">
-        <ErrorBox error={new Error('Sayfa gösterilemiyor. Lütfen sayfayı yenileyin.')} />
+        <ErrorBox error={new Error('This page could not be displayed. Please reload the page.')} />
         <button className="button primary" onClick={() => window.location.reload()}>
-          Sayfayı yenile
+          Reload page
         </button>
       </main>
     ) : (
@@ -88,11 +90,11 @@ function Guard({ roles }: { roles?: Role[] }) {
   if (roles && !roles.includes(session.user.role))
     return (
       <Empty
-        title="Bu sayfaya erişiminiz yok"
-        text="Hesabınızın erişebildiği sayfalara menüden ulaşabilirsiniz."
+        title="You do not have access to this page"
+        text="Use the menu to open a page available to your account."
       >
         <Link className="button primary" to="/">
-          Ana sayfaya dön
+          Back to home
         </Link>
       </Empty>
     );
@@ -112,21 +114,23 @@ function Layout() {
   const links = [
     ...(user
       ? [
-          { to: '/', label: 'Genel bakış', icon: LayoutDashboard },
-          { to: '/my-learning', label: 'Öğrenim alanım', icon: BookOpen },
-          { to: '/study-plan', label: 'Çalışma planım', icon: LayoutDashboard },
-          { to: '/wishlist', label: 'İstek listem', icon: Compass },
+          { to: '/', label: 'Overview', icon: LayoutDashboard },
+          { to: '/my-learning', label: 'My learning', icon: BookOpen },
+          { to: '/organizations', label: 'Training groups', icon: GraduationCap },
+          { to: '/study-plan', label: 'My study plan', icon: LayoutDashboard },
+          { to: '/wishlist', label: 'My wishlist', icon: Compass },
         ]
       : []),
-    { to: '/catalog', label: 'Kursları keşfet', icon: Compass },
-    { to: '/certificates', label: 'Sertifikalar', icon: Award },
+    { to: '/learning-paths', label: 'Learning paths', icon: Compass },
+    { to: '/catalog', label: 'Explore courses', icon: Compass },
+    { to: '/certificates', label: 'Certificates', icon: Award },
   ];
   return (
     <div className="app-shell">
       {open && (
         <button
           className="sidebar-overlay"
-          aria-label="Menüyü kapat"
+          aria-label="Close menu"
           onClick={() => setOpen(false)}
         />
       )}
@@ -135,10 +139,10 @@ function Layout() {
           <span className="brand-mark">
             <GraduationCap size={25} />
           </span>
-          ileri<span className="brand-dot">.</span>
+          Ileri<span className="brand-dot">.</span>
         </Link>
-        <div className="sidebar-label">ÖĞRENME YOLCULUĞUN</div>
-        <nav aria-label="Ana menü">
+        <div className="sidebar-label">YOUR LEARNING JOURNEY</div>
+        <nav aria-label="Main navigation">
           {links.map(({ to, label, icon: Icon }) => (
             <NavLink
               end={to === '/'}
@@ -148,53 +152,53 @@ function Layout() {
             >
               <Icon size={20} />
               <span>{label}</span>
-              {to === '/catalog' && <span className="nav-new">KEŞFET</span>}
+              {to === '/catalog' && <span className="nav-new">EXPLORE</span>}
             </NavLink>
           ))}
         </nav>
         {teacher && (
           <>
-            <div className="sidebar-label">EĞİTMEN STÜDYOSU</div>
-            <nav aria-label="Eğitmen menüsü">
+            <div className="sidebar-label">INSTRUCTOR STUDIO</div>
+            <nav aria-label="Instructor navigation">
               <NavLink className="nav-link" to="/instructor">
                 <PanelTop size={20} />
-                Kurslarım
+                My courses
               </NavLink>
               <NavLink className="nav-link" to="/media">
                 <Upload size={20} />
-                Medya kitaplığı
+                Media library
               </NavLink>
             </nav>
           </>
         )}
         {user && (
           <>
-            <div className="sidebar-label">HESABIM</div>
-            <nav aria-label="Hesap menüsü">
+            <div className="sidebar-label">MY ACCOUNT</div>
+            <nav aria-label="Account navigation">
               <NavLink className="nav-link" to="/payments">
                 <CreditCard size={20} />
-                Ödemeler
+                Payments
               </NavLink>
               <NavLink className="nav-link" to="/notifications">
                 <Bell size={20} />
-                Bildirimler
+                Notifications
               </NavLink>
               <NavLink className="nav-link" to="/profile">
                 <Settings size={20} />
-                Hesap ayarları
+                Account settings
               </NavLink>
               <NavLink className="nav-link" to="/security">
                 <Shield size={20} />
-                Güvenlik ve tercihler
+                Security and preferences
               </NavLink>
               <NavLink className="nav-link" to="/support">
                 <Bell size={20} />
-                Destek
+                Support
               </NavLink>
               {user.role === 'ADMIN' && (
                 <NavLink className="nav-link" to="/admin">
                   <Shield size={20} />
-                  Yönetici paneli
+                  Administration
                 </NavLink>
               )}
             </nav>
@@ -204,17 +208,17 @@ function Layout() {
           <div className="sidebar-note">
             <Sprout size={26} />
             <strong>
-              Küçük adımlar.
+              Small steps.
               <br />
-              Büyük değişimler.
+              Meaningful progress.
             </strong>
-            <p>Bugün kendine yeni bir şey kat.</p>
+            <p>Learn something new today.</p>
             <Link to="/catalog">
-              Öğrenmeye başla <ArrowUpRight size={16} />
+              Start learning <ArrowUpRight size={16} />
             </Link>
           </div>
           <div className="sidebar-footer">
-            İleri Akademi <span>© {new Date().getFullYear()}</span>
+            Ileri Academy <span>© {new Date().getFullYear()}</span>
           </div>
         </div>
       </aside>
@@ -224,26 +228,26 @@ function Layout() {
             <button
               className="icon-button mobile-menu"
               onClick={() => setOpen(!open)}
-              aria-label={open ? 'Menüyü kapat' : 'Menüyü aç'}
+              aria-label={open ? 'Close menu' : 'Open menu'}
             >
               {open ? <X /> : <Menu />}
             </button>
             <span className="breadcrumb">
-              İleri Akademi <ChevronRight size={14} />
+              Ileri Academy <ChevronRight size={14} />
               <b>
                 {location.pathname.startsWith('/instructor')
-                  ? 'Eğitmen stüdyosu'
-                  : 'Öğrenme alanın'}
+                  ? 'Instructor studio'
+                  : 'Your learning space'}
               </b>
             </span>
           </div>
           <div className="topbar-actions">
-            <Link className="icon-button" to="/catalog" aria-label="Kurs ara">
+            <Link className="icon-button" to="/catalog" aria-label="Search courses">
               <Search size={20} />
             </Link>
             {user ? (
               <>
-                <Link className="icon-button" to="/notifications" aria-label="Bildirimler">
+                <Link className="icon-button" to="/notifications" aria-label="Notifications">
                   <Bell size={20} />
                 </Link>
                 <span className="topbar-divider" />
@@ -255,24 +259,24 @@ function Layout() {
                     </b>
                     <small>
                       {user.role === 'STUDENT'
-                        ? 'Öğrenci'
+                        ? 'Learner'
                         : user.role === 'ADMIN'
-                          ? 'Yönetici'
-                          : 'Eğitmen'}
+                          ? 'Administrator'
+                          : 'Instructor'}
                     </small>
                   </span>
                 </Link>
-                <button className="icon-button" onClick={signOut} aria-label="Çıkış yap">
+                <button className="icon-button" onClick={signOut} aria-label="Sign out">
                   <LogOut size={18} />
                 </button>
               </>
             ) : (
               <>
                 <Link className="text-button" to="/login">
-                  Giriş yap
+                  Sign in
                 </Link>
                 <Link className="button primary small" to="/register">
-                  Ücretsiz katıl <ArrowUpRight size={15} />
+                  Join for free <ArrowUpRight size={15} />
                 </Link>
               </>
             )}
@@ -281,7 +285,7 @@ function Layout() {
         <main id="main" className="page-content">
           {user && !user.emailVerified && (
             <div className="notice warning">
-              E-posta adresinizi doğrulamak için gelen kutunuzdaki bağlantıyı kullanın.
+              Use the link in your inbox to verify your email address.
             </div>
           )}
           <Suspense fallback={<Loading />}>
@@ -289,9 +293,9 @@ function Layout() {
           </Suspense>
         </main>
         <footer className="main-footer">
-          <span>Her gün bir adım ileri.</span>
+          <span>One step forward every day.</span>
           <Link to="/certificates">
-            Sertifika doğrula <ArrowUpRight size={14} />
+            Verify a certificate <ArrowUpRight size={14} />
           </Link>
         </footer>
       </div>
@@ -302,12 +306,13 @@ export default function App() {
   return (
     <Boundary>
       <a className="skip-link" href="#main">
-        İçeriğe geç
+        Skip to content
       </a>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="catalog" element={<Catalog />} />
+          <Route path="learning-paths" element={<LearningPaths />} />
           <Route path="courses/:courseId" element={<CourseDetail />} />
           <Route path="instructors/:instructorId" element={<InstructorCourses />} />
           <Route path="login" element={<AuthPage />} />
@@ -327,6 +332,7 @@ export default function App() {
             <Route path="security" element={<Security />} />
             <Route path="support" element={<Support />} />
             <Route path="study-plan" element={<StudyPlan />} />
+            <Route path="organizations" element={<Organizations />} />
             <Route path="wishlist" element={<Wishlist />} />
           </Route>
           <Route element={<Guard roles={['INSTRUCTOR', 'ADMIN']} />}>
@@ -349,11 +355,11 @@ export default function App() {
             path="*"
             element={
               <Empty
-                title="Bu sayfa bulunamadı"
-                text="Bağlantı değişmiş olabilir. Öğrenme yolculuğuna ana sayfadan devam edebilirsin."
+                title="Page not found"
+                text="This link may have changed. Continue your learning journey from the home page."
               >
                 <Link className="button primary" to="/">
-                  Ana sayfaya dön
+                  Back to home
                 </Link>
               </Empty>
             }

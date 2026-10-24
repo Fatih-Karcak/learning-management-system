@@ -33,6 +33,6 @@ public class InternalResourceController {
                 supplied.getBytes(java.nio.charset.StandardCharsets.UTF_8)
             )
         ) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        return ApiResponse.success(service.metadata(id), "Kaynak");
+        return ApiResponse.success(service.metadata(id), "Resource");
     }
 }

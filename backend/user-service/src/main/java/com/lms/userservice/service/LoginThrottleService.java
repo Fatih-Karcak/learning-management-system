@@ -25,7 +25,7 @@ public class LoginThrottleService {
                     hash(email)
                 )
             )
-        ) throw new BadCredentialsException("Çok fazla giriş denemesi. 10 dakika sonra tekrar deneyin");
+        ) throw new BadCredentialsException("Too many sign-in attempts. Try again in 10 minutes");
     }
 
     public void failure(String email) {

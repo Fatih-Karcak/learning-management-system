@@ -50,15 +50,15 @@ public class AdminCourseService {
 
     @Transactional
     public CourseResponse decide(UUID id, Decision request, UUID actor) {
-        var course = courses.findById(id).orElseThrow(() -> new CourseNotFoundException("Kurs bulunamadı"));
+        var course = courses.findById(id).orElseThrow(() -> new CourseNotFoundException("Course not found"));
         if (
             request.action() != Action.APPROVE && (request.reason() == null || request.reason().isBlank())
-        ) throw new IllegalArgumentException("Karar gerekçesi gerekli");
+        ) throw new IllegalArgumentException("A decision reason is required");
         if (request.action() == Action.APPROVE) courseService.approveCourse(id);
         else {
             if (
                 request.action() == Action.REJECT && course.getStatus() != CourseStatus.PENDING_REVIEW
-            ) throw new IllegalStateException("Kurs inceleme sırasında değil");
+            ) throw new IllegalStateException("The course is not awaiting review");
             course.setStatus(request.action() == Action.REJECT ? CourseStatus.DRAFT : CourseStatus.ARCHIVED);
             course.setReviewFeedback(request.reason().trim());
             courses.save(course);
@@ -81,7 +81,7 @@ public class AdminCourseService {
                 ? new Category()
                 : categories
                       .findById(id)
-                      .orElseThrow(() -> new CourseNotFoundException("Kategori bulunamadı"));
+                      .orElseThrow(() -> new CourseNotFoundException("Category not found"));
         if (
             categories
                 .findAll()
@@ -89,7 +89,7 @@ public class AdminCourseService {
                 .anyMatch(
                     c -> c.getName().equalsIgnoreCase(request.name().trim()) && !Objects.equals(c.getId(), id)
                 )
-        ) throw new IllegalStateException("Bu kategori adı zaten var");
+        ) throw new IllegalStateException("A category with this name already exists");
         category.setName(request.name().trim());
         category.setDescription(request.description());
         category = categories.save(category);
@@ -102,10 +102,10 @@ public class AdminCourseService {
 
     @Transactional
     public void deleteCategory(Long id) {
-        if (courses.existsByCategoryId(id)) throw new IllegalStateException("Kurs içeren kategori silinemez");
+        if (courses.existsByCategoryId(id)) throw new IllegalStateException("A category containing courses cannot be deleted");
         var category = categories
             .findById(id)
-            .orElseThrow(() -> new CourseNotFoundException("Kategori bulunamadı"));
+            .orElseThrow(() -> new CourseNotFoundException("Category not found"));
         if (
             category.getSubCategories() != null && !category.getSubCategories().isEmpty()
         ) throw new IllegalStateException("Alt kategorileri olan kategori silinemez");
