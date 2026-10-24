@@ -1,42 +1,43 @@
+
 # Learning Management System
 
-Öğrencilerin kurslara katılıp öğrenme ilerlemelerini takip edebildiği, eğitmenlerin içerik hazırladığı ve yöneticilerin yayınları denetlediği bir eğitim platformudur. Arayüz **React 19 + TypeScript**, backend **Java 25 + Spring Boot** ile geliştirilmiştir. Frontend ve backend ayrı projelerdir.
+An educational platform where students can enroll in courses and track their learning progress, instructors can create content, and administrators can review and approve published materials. The frontend is built with React 19 + TypeScript, and the backend uses Java 25 + Spring Boot. The frontend and backend are separate projects.
 
-Ücretsiz kurs iş akışı ödeme gerektirmez. Depodaki mevcut Stripe ödeme/iade entegrasyonu korunur; yerel deneme dağıtımında ödeme servisi isteğe bağlıdır.
+The free course workflow does not require payment. The existing Stripe payment/refund integration in the repository is preserved; the payment service is optional for local staging deployments.
 
-## Özellikler
+## Features
 
-| Kullanıcı | Yapabildikleri                                                                                                                                                                                                                          |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Öğrenci   | Kurs arama ve filtreleme, ücretsiz kayıt, istek listesi, korumalı video izleme, kaldığı yerden devam etme, ders ve kurs ilerlemesi, çalışma planı, yer imleri ve zaman damgalı kişisel notlar.                                          |
-| Öğrenci   | Süre/deneme sınırı olan testler, dosyalı ödev teslimi ve düzeltme, soru-cevap, yorum/puan, duyurular, bildirimler ve tamamlanan kurs için doğrulanabilir PDF sertifika.                                                                 |
-| Eğitmen   | Bölüm/ders hazırlama, metin ve video dersleri, soru bankası, kaynak ve altyazı ekleme, medya kitaplığı, taslak kaydetme, öğrenci ön izlemesi ve yönetici incelemesine gönderme.                                                         |
-| Eğitmen   | Metin biçimlendirme düğmeleri ve Markdown ön izlemesi, ders kopyalama, hazır/kişisel kurs şablonları, davetle ortak eğitmen düzenlemesi. Kurs sahibi ayrıca öğrenci ilerlemesi, test sonuçları, ödevler ve kurs raporlarını takip eder. |
-| Yönetici  | Kurs onayı veya gerekçeli düzeltme isteği, kullanıcı/rol/durum ve kategori yönetimi, gerekçeli kurs kaydı verme/iptal, destek ve içerik şikâyetleri, işlem geçmişi ve başarısız işlerin takibi.                                         |
-| Hesap     | E-posta doğrulama, parola sıfırlama, oturumları görüntüleme/sonlandırma, isteğe bağlı TOTP doğrulaması, bildirim tercihleri, kişisel veri dışa aktarma ve hesap kapatma talebi.                                                         |
+| User          | Capabilities                                                                                                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Student       | Course search and filtering, free enrollment, wishlists, protected video playback, resuming lessons, lesson and course progress tracking, study plans, bookmarks, and timestamped personal notes.                                                                         |
+| Student       | Timed and attempt-limited quizzes, assignment submissions with file attachments and revisions, Q&A, reviews/ratings, announcements, notifications, and verifiable PDF certificates for completed courses.                                                                 |
+| Instructor    | Creating sections and lessons, text and video lessons, question banks, adding resources and subtitles, media library management, saving drafts, student previews, and submitting courses for administrator review.                                                        |
+| Instructor    | Text formatting buttons and Markdown preview, lesson duplication, predefined and personal course templates, and invitation-based collaborative editing with co-instructors. Course owners can also track student progress, quiz results, assignments, and course reports. |
+| Administrator | Course approval or requesting revisions with explanations, user/role/status and category management, granting/revoking course enrollment with justification, handling support requests and content reports, reviewing activity history, and monitoring failed jobs.       |
+| Account       | Email verification, password reset, viewing/terminating sessions, optional TOTP authentication, notification preferences, personal data export, and account closure requests.                                                                                             |
 
-Hesap kapatma talebi hesabı devre dışı bırakır ve yönetici incelemesine iletir. Fiziksel veri silme/anonimleştirme, [veri saklama prosedürü](docs/PRIVACY_OPERATIONS.md) kapsamında yürütülür.
+An account closure request deactivates the account and forwards it for administrator review. Physical data deletion/anonymization is handled according to the [data retention procedure](https://docs/PRIVACY_OPERATIONS.md?utm_source=chatgpt.com).
 
-### Bir kurs nasıl öğrenciye ulaşır?
+### How does a course become available to students?
 
-1. Eğitmen boş kurs oluşturur veya bir kurs şablonu seçer.
-2. Çalışma taslağına bölümler, dersler, metinler, videolar, testler ve kaynaklar ekler. Ortak çalışacaksa kayıtlı ve doğrulanmış eğitmenleri davet eder; erişim davet kabul edilince açılır.
-3. **Taslağı kaydet** ile değişiklikleri saklar. Bu işlem yayındaki öğrenci içeriğini değiştirmez.
-4. Kurs sahibi **İncelemeye gönder** işlemini yapar. Yönetici içeriği ön izler, onaylar veya gerekçeyle düzeltme ister. Onaylanan sürüm öğrenciye açılır.
-5. Öğrenci ücretsiz kursa kaydolur; dersleri, testleri ve ödevleri tamamlar. İlerleme backend tarafından hesaplanır; tamamlanan kurs için sertifika üretimi başlatılır.
+1. The instructor creates an empty course or selects a course template.
+2. The instructor adds sections, lessons, text, videos, quizzes, and resources to the working draft. For collaboration, registered and verified instructors can be invited; access is granted once the invitation is accepted.
+3. Changes are saved using Save Draft. This action does not modify the content currently published to students.
+4. The course owner selects Submit for Review. An administrator previews the content and either approves it or requests revisions with an explanation. The approved version becomes available to students.
+5. Students enroll in the free course and complete lessons, quizzes, and assignments. Progress is calculated by the backend, and certificate generation is initiated when the course is completed.
 
-Kabul edilmiş ortak eğitmen taslağı ve kursun medya kitaplığını düzenleyebilir. Yayın başvurusu, ekip yönetimi, öğrenci raporları ve notlandırma kurs sahibinde kalır. Eşzamanlı düzenlemede eski sürümün kaydı diğer kişinin değişikliğini ezmez. Ayrıntılar: [eğitmen içerik araçları](docs/AUTHORING.md).
+An accepted co-instructor can edit the draft and the course's media library. Submission for publication, team management, student reports, and grading remain the responsibility of the course owner. During concurrent editing, saving an outdated version does not overwrite another person's changes. Details: [Instructor authoring tools](https://docs/AUTHORING.md?utm_source=chatgpt.com).
 
-## Klasörlerin görevleri
+## Directory Structure and Responsibilities
 
-```text
+```
 learning-management-system/
-├── frontend/                 # React + TypeScript arayüzü, npm bağımlılıkları ve tarayıcı testleri
-├── backend/                  # Spring servisleri, ortak Maven projesi ve veritabanı migration'ları
+├── frontend/                 # React + TypeScript UI, npm dependencies, and browser tests
+├── backend/                  # Spring services, shared Maven project, and database migrations
 │   ├── pom.xml
-│   ├── docker-compose.yml    # Geliştirme altyapısı: PostgreSQL, Kafka, MinIO, Mailhog
+│   ├── docker-compose.yml    # Development infrastructure: PostgreSQL, Kafka, MinIO, Mailhog
 │   ├── init-db/
-│   ├── scripts/              # Ortam hazırlama ve gerçek API kontrol betikleri
+│   ├── scripts/              # Environment setup and real API validation scripts
 │   ├── api-gateway/
 │   ├── user-service/
 │   ├── course-service/
@@ -44,20 +45,22 @@ learning-management-system/
 │   ├── payment-service/
 │   ├── content-service/
 │   └── notification-service/
-├── deploy/                   # Yerel deneme/VPS dağıtımı, HTTPS, izleme ve yedekleme
-├── docs/                     # Özellik kuralları, pilot planı ve doğrulama kayıtları
-└── .github/workflows/        # GitHub Actions derleme ve otomatik kontrolleri
+├── deploy/                   # Local staging/VPS deployment, HTTPS, monitoring, and backups
+├── docs/                     # Feature rules, pilot plan, and validation records
+└── .github/workflows/        # GitHub Actions builds and automated checks
 ```
 
-`deploy/`, `docs/` ve `.github/` uygulama kodunun kurulum, dokümantasyon ve test yardımcılarıdır. Spring kodu `backend/`, React kodu `frontend/` içinde kalır. Depo kökünde Maven projesi bulunmaz.
+The `deploy/`, `docs/`, and `.github/` directories provide deployment, documentation, and testing support for the application code. Spring code remains in `backend/`, while React code remains in `frontend/`. There is no Maven project at the repository root.
 
-## Sunucu almadan yerel deneme
+## Local Testing Without Renting a Server
 
-Bu yol, uygulamayı kendi bilgisayarınızda ayrı bir Docker projesi olarak denemek içindir. Gereksinimler: **Docker Engine, Docker Compose 2.24.4+, Node.js 22.12+**, ilk derlemeler için internet erişimi ve yeterli boş disk. Başlangıç için 16 GB RAM önerilir. Java ve FFmpeg uygulama imajlarında sağlanır.
+This approach allows you to test the application on your own computer as an isolated Docker project.
 
-Komutları depo kökünden çalıştırın:
+Requirements: Docker Engine, Docker Compose 2.24.4+, Node.js 22.12+, internet access for initial builds, and sufficient free disk space. A minimum of 16 GB RAM is recommended to get started. Java and FFmpeg are provided within the application images.
 
-```bash
+Run the following commands from the repository root:
+
+```
 bash deploy/scripts/staging.sh prepare
 bash deploy/scripts/staging.sh config
 bash deploy/scripts/staging.sh up
@@ -65,92 +68,110 @@ bash deploy/scripts/staging.sh status
 bash deploy/scripts/staging.sh check
 ```
 
-- `prepare`: bağımsız rastgele anahtarları ve ilk yönetici parolasını özel `deploy/.env.staging` dosyasına oluşturur; mevcut dosyanın üzerine yazmaz.
-- `config`: ayarları ve Compose yapılandırmasını denetler.
-- `up`: imajları derler ve servisleri başlatır. İlk çalıştırma indirmeler nedeniyle uzun sürebilir.
-- `status`: servis durumlarını gösterir. `check`: uygulama/API erişimini ve iç yolların dışarıya kapalı olduğunu kontrol eder.
+- `prepare`: Generates independent random secrets and the initial administrator password in the private `deploy/.env.staging` file. It does not overwrite an existing file.
+- `config`: Validates the settings and Docker Compose configuration.
+- `up`: Builds the images and starts the services. The initial startup may take longer due to downloads.
+- `status`: Displays service statuses. `check`: Verifies application/API accessibility and confirms that internal endpoints are not publicly exposed.
 
-| Adres                    | Amaç                                               |
-| ------------------------ | -------------------------------------------------- |
-| `http://127.0.0.1:18088` | Uygulama                                           |
-| `http://127.0.0.1:18025` | Deneme e-postaları; Mailhog gerçek posta göndermez |
-| `http://127.0.0.1:19090` | Prometheus ölçümleri                               |
-| `http://127.0.0.1:19000` | MinIO dosya bağlantılarının adresi                 |
+| Address                  | Purpose                                        |
+| ------------------------ | ---------------------------------------------- |
+| `http://127.0.0.1:18088` | Application                                    |
+| `http://127.0.0.1:18025` | Test emails; Mailhog does not send real emails |
+| `http://127.0.0.1:19090` | Prometheus metrics                             |
+| `http://127.0.0.1:19000` | Address used for MinIO file links              |
 
-İlk yönetici hesabı `admin@academy.localhost` adresidir. Parolayı `deploy/.env.staging` dosyasındaki `APP_BOOTSTRAP_ADMIN_PASSWORD` değerinden okuyun. Bu dosya Git tarafından dışlanır; paylaşmayın. İlk girişten sonra bootstrap yönetici değişkenlerini kaldırma adımı dahil ayrıntılar [yerel deneme rehberindedir](deploy/STAGING.md).
+The initial administrator account is `admin@academy.localhost`. Retrieve the password from the `APP_BOOTSTRAP_ADMIN_PASSWORD` value in `deploy/.env.staging`. This file is excluded from Git and must not be shared. Further details, including removing the bootstrap administrator variables after the first login, are available in the [local staging guide](https://deploy/STAGING.md?utm_source=chatgpt.com).
 
-Bu kurulum HTTP ve yalnızca yerel erişim kullanır; internete açık yayın için [VPS/HTTPS rehberini](deploy/README.md) izleyin. ClamAV ilk açılışta imza indirirken kaynak dosyası yüklemeleri geçici olarak 503 dönebilir.
+This setup uses HTTP and allows local access only. For a publicly accessible deployment, follow the [VPS/HTTPS guide](https://deploy/README.md?utm_source=chatgpt.com).
 
-```bash
+During the initial startup, source file uploads may temporarily return HTTP 503 while ClamAV downloads its signature database.
+
+```
 bash deploy/scripts/staging.sh down
 ```
 
-Bu komut konteynerleri kapatır, veri birimlerini silmez. Deneme ortamı `lms-staging` adı ve ayrı veri birimleriyle çalışır.
+This command stops the containers without deleting data volumes. The staging environment runs under the name `lms-staging` with separate data volumes.
 
-## Geliştirici olarak çalıştırma
+## Running the Application for Development
 
-Kod üzerinde çalışmak için frontend'i ve Spring servislerini ayrı süreçler olarak başlatabilirsiniz. Bu yol yukarıdaki Docker uygulama dağıtımına alternatiftir.
+To work on the code, you can start the frontend and Spring services as separate processes. This approach is an alternative to the Docker application deployment described above.
 
 ### Backend
 
-**Java 25**, Docker Compose, Node.js ve içerik servisinin çalıştığı ortamda **FFmpeg/ffprobe** gerekir. FFmpeg H.264/libx264 ve AAC desteği içermelidir. Maven wrapper depoda bulunur.
+Java 25, Docker Compose, Node.js, and FFmpeg/ffprobe are required in the environment where the content service runs. FFmpeg must include H.264/libx264 and AAC support. The Maven wrapper is included in the repository.
 
-```bash
-# Depo kökünden:
+```
+# From the repository root:
 node backend/scripts/setup-local-env.mjs
 cd backend
 docker compose up -d
 sh user-service/mvnw -B -DskipTests package
 ```
 
-`setup-local-env.mjs`, Git'e eklenmeyen ortak `backend/.env` dosyasını oluşturur. Tüm servisler aynı `JWT_SECRET` ve `INTERNAL_API_KEY` ile çalışmalıdır. Bu yerel ayarlar üretim ayarlarının yerine geçmez.
+`setup-local-env.mjs` creates a shared `backend/.env` file that is excluded from Git. All services must use the same `JWT_SECRET` and `INTERNAL_API_KEY`. These local settings are not substitutes for production configuration.
 
-Buradaki `docker compose up -d` altyapıyı başlatır; Maven komutu JAR dosyalarını üretir. Ardından her Spring servisini ayrı terminalde başlatın. Örneğin `backend/` dizininden:
+Here, `docker compose up -d` starts the infrastructure, while the Maven command generates the JAR files.
 
-```bash
+Next, start each Spring service in a separate terminal. For example, from the `backend/` directory:
+
+```
 java --enable-preview -jar user-service/target/user-service-1.0.0.jar
 ```
 
-Diğer servisler için ilgili modülün JAR dosyasını kullanın veya modül içinde `sh mvnw spring-boot:run` çalıştırın. Ortak POM Maven ile çalıştırmada preview ayarını sağlar. IDE/Windows ve ortam değişkenleri için [backend rehberine](backend/README.md) bakın.
+For other services, use the corresponding module's JAR file or run `sh mvnw spring-boot:run` from within the module.
 
-| Servis               | Geliştirme portu | Sorumluluk                                              |
-| -------------------- | ---------------- | ------------------------------------------------------- |
-| API gateway          | 8080             | Frontend'in kullandığı API girişi ve erişim kontrolleri |
-| user-service         | 8081             | Kullanıcılar, kimlik doğrulama, oturumlar ve destek     |
-| course-service       | 8082             | Kurslar, taslaklar, ekipler, testler ve ödevler         |
-| enrollment-service   | 8083             | Kurs kayıtları, öğrenme ilerlemesi ve sertifikalar      |
-| payment-service      | 8084             | Mevcut ödeme ve iade entegrasyonu                       |
-| content-service      | 8085             | Dosyalar, video dönüştürme ve korumalı medya            |
-| notification-service | 8086             | E-posta ve uygulama içi bildirimler                     |
+The shared POM provides the preview configuration when running through Maven. Refer to the [backend guide](https://backend/README.md?utm_source=chatgpt.com) for IDE/Windows instructions and environment variables.
 
-Frontend API isteklerini gateway'e gönderir. Canlı dağıtımda iç servis ve veritabanı portları özel ağda tutulur.
+| Service              | Development Port | Responsibility                                           |
+| -------------------- | ---------------- | -------------------------------------------------------- |
+| API gateway          | 8080             | API entry point used by the frontend and access controls |
+| user-service         | 8081             | Users, authentication, sessions, and support             |
+| course-service       | 8082             | Courses, drafts, teams, quizzes, and assignments         |
+| enrollment-service   | 8083             | Course enrollments, learning progress, and certificates  |
+| payment-service      | 8084             | Existing payment and refund integration                  |
+| content-service      | 8085             | Files, video transcoding, and protected media            |
+| notification-service | 8086             | Email and in-app notifications                           |
+
+The frontend sends API requests to the gateway. In production deployments, internal service and database ports are kept within a private network.
 
 ### Frontend
 
-Node.js **20.19+ veya 22.12+** gerekir. Node.js 22.12+ kullanmak dağıtım yardımcılarıyla da uyumludur.
+Node.js 20.19+ or 22.12+ is required. Using Node.js 22.12+ also ensures compatibility with the deployment utilities.
 
-```bash
-# Depo kökünden, başka bir terminalde:
+```
+# From the repository root, in another terminal:
 cd frontend
 npm ci
 npm run dev
 ```
 
-Arayüz `http://localhost:5173` adresinde açılır. `/api` istekleri varsayılan olarak `http://127.0.0.1:8080` gateway'ine yönlendirilir; gerekirse `API_TARGET` ile değiştirilir. Diğer ayarlar [frontend rehberindedir](frontend/README.md).
+The interface opens at `http://localhost:5173`.
 
-### Video ve MinIO neden gerekli?
+By default, `/api` requests are forwarded to the gateway at `http://127.0.0.1:8080`. This can be changed using `API_TARGET` if needed.
 
-MinIO, videoları, yüklenen dosyaları ve sertifika PDF'lerini saklayan S3 uyumlu nesne deposudur. Veritabanı bu dosyaların kendisini tutmaz. İçerik servisi yüklenen videoyu FFmpeg ile H.264/AAC HLS biçimine dönüştürür; öğrenci oynatıcısı yetkili manifest/segment istekleriyle izler.
+Additional configuration options are available in the [frontend guide](https://frontend/README.md?utm_source=chatgpt.com).
 
-**Dosya yüklemek, videoyu öğrenciye yayımlamakla aynı işlem değildir.** Videoyu ilgili kursun taslağındaki derse bağlayın, işleme durumunun hazır olmasını bekleyin, taslağı kaydedip incelemeye gönderin ve yöneticiyle onaylayın. Öğrenci yalnızca başlık/metin görüyorsa önce bu bağlantıyı ve onaylanan sürümü kontrol edin.
+### Why are video processing and MinIO required?
 
-Bu geliştirme bulutunda resmî sabit kaynak sürümünden derlenen **gerçek MinIO** ile yükleme, imzalı bağlantılar, yeniden başlatınca dosyanın korunması ve öğrenci video oynatması doğrulandı. Yeni makinede depolamayı ayrıca başlatmanız gerekir. MinIO imaj deposuna erişilemiyorsa [kaynak kodundan imaj oluşturma seçeneğini](deploy/STAGING.md#minio-kayıt-deposuna-erişilemiyorsa) kullanabilirsiniz.
+MinIO is an S3-compatible object storage system used to store videos, uploaded files, and certificate PDFs. The database does not store the actual files.
 
-## Kontroller ve doğrulama durumu
+The content service uses FFmpeg to transcode uploaded videos into H.264/AAC HLS format. The student player accesses the videos through authorized manifest and segment requests.
 
-Frontend kontrolleri:
+Uploading a file is not the same as publishing a video to students.
 
-```bash
+Attach the video to a lesson in the corresponding course draft, wait until processing is complete, save the draft, submit it for review, and obtain administrator approval.
+
+If students can only see the title or text, first check the video attachment and the approved course version.
+
+In this development cloud environment, uploading, signed URLs, file persistence after restarts, and student video playback were verified using real MinIO, built from an official pinned source version.
+
+On a new machine, storage must be started separately. If the MinIO image registry is inaccessible, you can use the [build-image-from-source option](https://deploy/STAGING.md?utm_source=chatgpt.com#minio-kay%C4%B1t-deposuna-eri%C5%9Filemiyorsa).
+
+## Testing and Validation Status
+
+Frontend checks:
+
+```
 cd frontend
 npm test
 npm run build
@@ -159,34 +180,53 @@ npx playwright install chrome
 PLAYWRIGHT_BROWSER_CHANNEL=chrome E2E_VIDEO=1 npm run test:e2e
 ```
 
-Video tarayıcı senaryoları FFmpeg gerektirir. Yukarıdaki tarayıcı komutu kontrollü API yanıtlarıyla çalışan senaryoları yürütür. Gerçek backend senaryoları çalışan servisler ve özel fixture dosyaları ister; ayrıntılar [test rehberinde](backend/TESTING.md) ve [yerel deneme rehberindedir](deploy/STAGING.md).
+Video browser scenarios require FFmpeg.
 
-Java birim/sözleşme kontrolleri ve gerçek FFmpeg testleri:
+The browser command above runs scenarios using controlled API responses. Real backend scenarios require running services and dedicated fixture files. Details are available in the [testing guide](https://backend/TESTING.md?utm_source=chatgpt.com) and [local staging guide](https://deploy/STAGING.md?utm_source=chatgpt.com).
 
-```bash
-# Depo kökünden:
+Java unit/contract checks and real FFmpeg tests:
+
+```
+# From the repository root:
 cd backend
 sh user-service/mvnw -B '-Dtest=*Test' \
   -Dsurefire.failIfNoSpecifiedTests=false -Dlms.ffmpeg.tests=true test
 ```
 
-Bu seçim Spring bağlamı açan `*ApplicationTests` testlerini içermez. Tam `verify` ve gerçek HTTP akışları için gerekli altyapıyı ayrıca çalıştırın.
+This selection excludes `*ApplicationTests`, which initialize the Spring application context.
 
-23 Ekim 2026 yerel doğrulamasında **140 Java testi, 39 gerçek HTTP senaryosu, 12 frontend birim testi ve 37 tarayıcı senaryosu geçti**. Aynı gerçek tarayıcı senaryolarının 7'si ayrıca Caddy üzerinden kontrol edildi; altı veritabanı yedeği geçici veritabanlarına başarıyla geri yüklendi. Bunlar yeni push sonrasındaki GitHub Actions sonucu değildir.
+For a complete `verify` run and real HTTP workflows, the required infrastructure must also be started.
 
-Tam uygulama Compose dağıtımı ve tüm yeni Docker imajları bu ortamda birlikte çalıştırılmadı. Kamuya açık sunucu/DNS/HTTPS, gerçek SMTP teslimi, ClamAV güncellemesi/taraması ve harici medya yedeğinden geri dönüş ayrıca doğrulanmalıdır. Gerçek kullanıcı pilotu henüz yapılmadı. Kapsam ve sınırlamalar [doğrulama kaydında](docs/VALIDATION.md) açıklanır.
+During local validation on October 23, 2026, 140 Java tests, 39 real HTTP scenarios, 12 frontend unit tests, and 37 browser scenarios passed.
 
-## İleri kurulum ve rehberler
+Seven of those same real browser scenarios were also verified through Caddy, and six database backups were successfully restored to temporary databases.
 
-| Belge                                                         | İçerik                                                              |
-| ------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [Platform kuralları](docs/PLATFORM.md)                        | Taslak/yayın, öğrenme, test/ödev, bildirim ve hesap davranışları    |
-| [Eğitmen içerik araçları](docs/AUTHORING.md)                  | Metin editörü, ders kopyalama, şablonlar ve ortak eğitmen yetkileri |
-| [Yerel deneme](deploy/STAGING.md)                             | Sunucu almadan ayrı deneme ortamı ve MinIO kaynak imajı             |
-| [VPS üzerinde yayın](deploy/README.md)                        | Alan adı, HTTPS, SMTP, Docker, izleme, yedek ve güncelleme          |
-| [Backend](backend/README.md) / [Frontend](frontend/README.md) | Ayrı geliştirme projelerinin ayrıntılı ayarları                     |
-| [Backend testleri](backend/TESTING.md)                        | Java ve gerçek API kontrollerinin gereksinimleri                    |
-| [LMS iş kuralları](backend/LMS_FEATURES.md)                   | İlk yönetici, ücretsiz kayıt, ilerleme ve temel API'ler             |
-| [Pilot planı](docs/PILOT.md)                                  | Gerçek öğrenci/eğitmen senaryoları ve izlenecek ölçümler            |
-| [Veri işlemleri](docs/PRIVACY_OPERATIONS.md)                  | Veri dışa aktarma, saklama, hesap kapatma ve yönetici incelemesi    |
-| [Doğrulama kaydı](docs/VALIDATION.md)                         | Yapılan kontroller ve henüz denenmemiş dağıtım adımları             |
+These results do not represent GitHub Actions results after a new push.
+
+The complete application Compose deployment and all newly built Docker images were not run together in this environment.
+
+The following items still require separate validation:
+
+- Public server/DNS/HTTPS configuration
+- Real SMTP email delivery
+- ClamAV updates and scanning
+- Restoration from external media backups
+
+A pilot with real users has not yet been conducted.
+
+The scope and limitations are documented in the [validation record](https://docs/VALIDATION.md?utm_source=chatgpt.com).
+
+## Advanced Setup and Guides
+
+| Document                                                                                                                    | Contents                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [Platform rules](https://docs/PLATFORM.md?utm_source=chatgpt.com)                                                           | Draft/publishing workflows, learning behavior, quizzes/assignments, notifications, and account behavior |
+| [Instructor authoring tools](https://docs/AUTHORING.md?utm_source=chatgpt.com)                                              | Text editor, lesson duplication, templates, and co-instructor permissions                               |
+| [Local staging](https://deploy/STAGING.md?utm_source=chatgpt.com)                                                           | Isolated testing environment without renting a server and building a MinIO image from source            |
+| [VPS deployment](https://deploy/README.md?utm_source=chatgpt.com)                                                           | Domain configuration, HTTPS, SMTP, Docker, monitoring, backups, and updates                             |
+| [Backend](https://backend/README.md?utm_source=chatgpt.com) / [Frontend](https://frontend/README.md?utm_source=chatgpt.com) | Detailed configuration for the separate development projects                                            |
+| [Backend testing](https://backend/TESTING.md?utm_source=chatgpt.com)                                                        | Requirements for Java and real API checks                                                               |
+| [LMS business rules](https://backend/LMS_FEATURES.md?utm_source=chatgpt.com)                                                | Initial administrator, free enrollment, progress tracking, and core APIs                                |
+| [Pilot plan](https://docs/PILOT.md?utm_source=chatgpt.com)                                                                  | Real student/instructor scenarios and metrics to monitor                                                |
+| [Data operations](https://docs/PRIVACY_OPERATIONS.md?utm_source=chatgpt.com)                                                | Data export, retention, account closure, and administrator review                                       |
+| [Validation record](https://docs/VALIDATION.md?utm_source=chatgpt.com)                                                      | Completed checks and deployment steps that have not yet been tested                                     |
